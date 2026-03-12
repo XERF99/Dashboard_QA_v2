@@ -270,7 +270,7 @@ export function UserManagement() {
 
       {/* Modal de crear/editar */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent className="bg-card border-border">
+        <DialogContent className="bg-card border-border sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-foreground">
               {userToEdit ? "Editar Usuario" : "Nuevo Usuario"}
@@ -355,7 +355,7 @@ export function UserManagement() {
 
       {/* Dialogo de confirmacion de eliminacion */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent className="bg-card border-border">
+        <AlertDialogContent className="bg-card border-border sm:max-w-sm">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-foreground">Eliminar Usuario</AlertDialogTitle>
             <AlertDialogDescription>
