@@ -62,3 +62,5 @@ desktop.ini
 *.tmp
 *.temp
 *.bak
+.vercel
+.env*.local
