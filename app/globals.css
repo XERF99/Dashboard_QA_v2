@@ -1,0 +1,184 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --background: oklch(0.97 0.003 250);
+  --foreground: oklch(0.12 0.01 265);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.12 0.01 265);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.12 0.01 265);
+  --primary: oklch(0.48 0.2 255);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.93 0.006 255);
+  --secondary-foreground: oklch(0.22 0.01 265);
+  --muted: oklch(0.91 0.006 255);
+  --muted-foreground: oklch(0.48 0.008 265);
+  --accent: oklch(0.48 0.2 255);
+  --accent-foreground: oklch(0.99 0 0);
+  --destructive: oklch(0.52 0.22 25);
+  --destructive-foreground: oklch(0.99 0 0);
+  --success: oklch(0.52 0.18 145);
+  --success-foreground: oklch(0.99 0 0);
+  --warning: oklch(0.68 0.16 85);
+  --warning-foreground: oklch(0.15 0 0);
+  --border: oklch(0.86 0.008 255);
+  --input: oklch(0.93 0.006 255);
+  --ring: oklch(0.48 0.2 255);
+  --chart-1: oklch(0.48 0.2 255);
+  --chart-2: oklch(0.52 0.18 145);
+  --chart-3: oklch(0.68 0.16 85);
+  --chart-4: oklch(0.52 0.22 25);
+  --chart-5: oklch(0.52 0.16 320);
+  --radius: 0.5rem;
+  --sidebar: oklch(0.95 0.005 255);
+  --sidebar-foreground: oklch(0.12 0.01 265);
+  --sidebar-primary: oklch(0.48 0.2 255);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent: oklch(0.91 0.008 255);
+  --sidebar-accent-foreground: oklch(0.22 0.01 265);
+  --sidebar-border: oklch(0.86 0.008 255);
+  --sidebar-ring: oklch(0.48 0.2 255);
+}
+
+.dark {
+  /* Fondo principal más suave — no tan oscuro para que los elementos se diferencien */
+  --background: oklch(0.16 0.008 265);
+  --foreground: oklch(0.95 0.004 255);
+  /* Cards con contraste real respecto al fondo */
+  --card: oklch(0.21 0.009 265);
+  --card-foreground: oklch(0.95 0.004 255);
+  --popover: oklch(0.21 0.009 265);
+  --popover-foreground: oklch(0.95 0.004 255);
+  /* Primary más brillante y vibrante */
+  --primary: oklch(0.65 0.20 255);
+  --primary-foreground: oklch(0.99 0 0);
+  /* Secondary claramente más claro que el fondo */
+  --secondary: oklch(0.26 0.010 265);
+  --secondary-foreground: oklch(0.92 0.004 255);
+  /* Muted diferenciable del secondary */
+  --muted: oklch(0.29 0.009 265);
+  --muted-foreground: oklch(0.65 0.006 265);
+  --accent: oklch(0.65 0.20 255);
+  --accent-foreground: oklch(0.99 0 0);
+  --destructive: oklch(0.58 0.22 25);
+  --destructive-foreground: oklch(0.99 0 0);
+  /* Bordes más visibles para separar elementos */
+  --border: oklch(0.32 0.010 265);
+  --input: oklch(0.24 0.009 265);
+  --ring: oklch(0.65 0.20 255);
+  /* Charts más vibrantes en oscuro */
+  --chart-1: oklch(0.65 0.20 255);
+  --chart-2: oklch(0.66 0.19 145);
+  --chart-3: oklch(0.76 0.16 85);
+  --chart-4: oklch(0.63 0.22 25);
+  --chart-5: oklch(0.63 0.18 320);
+  --sidebar: oklch(0.18 0.009 265);
+  --sidebar-foreground: oklch(0.95 0.004 255);
+  --sidebar-primary: oklch(0.65 0.20 255);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent: oklch(0.26 0.010 265);
+  --sidebar-accent-foreground: oklch(0.92 0.004 255);
+  --sidebar-border: oklch(0.32 0.010 265);
+  --sidebar-ring: oklch(0.65 0.20 255);
+}
+
+@theme inline {
+  --font-sans: 'Geist', 'Geist Fallback';
+  --font-mono: 'Geist Mono', 'Geist Mono Fallback';
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  /* Sombra sutil en cards modo claro */
+  :root .rounded-lg.border,
+  :root [data-slot="card"] {
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04);
+  }
+  .dark .rounded-lg.border,
+  .dark [data-slot="card"] {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  }
+}
+
+/* Modal detalle cambio - ancho forzado sin interferencia de Tailwind */
+.cambio-detail-modal {
+  width: min(880px, calc(100vw - 32px)) !important;
+  max-width: min(880px, calc(100vw - 32px)) !important;
+  max-height: 88vh !important;
+  overflow-y: auto !important;
+  padding: 0 !important;
+}
+
+/* Modal formulario cambio */
+.cambio-form-modal {
+  width: min(900px, calc(100vw - 32px)) !important;
+  max-width: min(900px, calc(100vw - 32px)) !important;
+  max-height: 90vh !important;
+  overflow-y: auto !important;
+  padding: 0 !important;
+}
+
+/* ── Scrollbars invisibles globalmente (scroll sigue funcionando) ── */
+* {
+  scrollbar-width: none;       /* Firefox */
+  -ms-overflow-style: none;   /* IE/Edge */
+}
+*::-webkit-scrollbar {
+  display: none;               /* Chrome/Safari */
+}
+/* Clase utilitaria por si se necesita aplicar puntualmente */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
