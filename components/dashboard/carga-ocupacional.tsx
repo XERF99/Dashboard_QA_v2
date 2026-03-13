@@ -4,22 +4,25 @@ import { useMemo } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts"
-import { AlertTriangle, CheckCircle, Clock, User, Zap, BarChart2 } from "lucide-react"
+import { AlertTriangle, CheckCircle, Clock, User, BarChart2 } from "lucide-react"
 import {
-  calcularCriticidad, calcularEsfuerzo, calcularFechaFinEstimada,
-  TIPO_TAREA_LABEL,
-  type Tarea, type Observacion,
+  TIPO_TAREA_LABEL, calcularFechaFinEstimada,
+  type Tarea, type CasoPrueba, type HistoriaUsuario,
 } from "@/lib/types"
 
 interface CargaOcupacionalProps {
   tareas: Tarea[]
-  observaciones?: Observacion[]
+  casos: CasoPrueba[]
+  historias: HistoriaUsuario[]
 }
 
 type NivelCarga = "disponible" | "normal" | "alto" | "saturado"
 
 interface PersonaCarga {
   nombre: string
+  husAsignadas: number
+  casosTotal: number
+  casosAprobados: number
   tareasTotal: number
   tareasActivas: number
   tareasCompletadas: number
@@ -28,9 +31,8 @@ interface PersonaCarga {
   horasActivas: number
   nivelCarga: NivelCarga
   porcentajeCarga: number
-  tareasCriticasAlta: number
-  tiposUnicos: string[]
   proximaFechaFin: Date | null
+  tiposTarea: string[]
 }
 
 function nivelCarga(activas: number): NivelCarga {
@@ -53,46 +55,61 @@ const NIVEL_CFG: Record<NivelCarga, { label: string; color: string; bg: string; 
 const MESES = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"]
 function fmt(d: Date) { return `${d.getDate().toString().padStart(2,"0")} ${MESES[d.getMonth()]}` }
 
-export function CargaOcupacional({ tareas, observaciones = [] }: CargaOcupacionalProps) {
+export function CargaOcupacional({ tareas, casos, historias }: CargaOcupacionalProps) {
   const personas: PersonaCarga[] = useMemo(() => {
-    const mapa = new Map<string, Tarea[]>()
-    tareas.forEach(t => {
-      if (!t.asignado) return
-      if (!mapa.has(t.asignado)) mapa.set(t.asignado, [])
-      mapa.get(t.asignado)!.push(t)
+    // Agrupar por responsable de HU
+    const mapa = new Map<string, { hus: HistoriaUsuario[]; casos: CasoPrueba[]; tareas: Tarea[] }>()
+
+    historias.forEach(hu => {
+      if (!hu.responsable) return
+      if (!mapa.has(hu.responsable)) mapa.set(hu.responsable, { hus: [], casos: [], tareas: [] })
+      const entry = mapa.get(hu.responsable)!
+      entry.hus.push(hu)
+
+      const casosHU = casos.filter(c => hu.casosIds.includes(c.id))
+      entry.casos.push(...casosHU)
+
+      const tareasHU = tareas.filter(t => t.huId === hu.id)
+      entry.tareas.push(...tareasHU)
     })
 
-    return Array.from(mapa.entries()).map(([nombre, tareasP]) => {
-      const activas    = tareasP.filter(t => t.estado === "en_progreso" || t.estado === "pendiente")
-      const completadas = tareasP.filter(t => t.estado === "completada")
-      const bloqueadas  = tareasP.filter(t => t.estado === "bloqueada")
-      const criticas    = tareasP.filter(t => calcularCriticidad(t) === "alta")
-      const tiposUnicos = [...new Set(tareasP.map(t => t.tipo))]
+    return Array.from(mapa.entries()).map(([nombre, data]) => {
+      const activas     = data.tareas.filter(t => t.estado === "en_progreso" || t.estado === "pendiente")
+      const completadas = data.tareas.filter(t => t.estado === "completada")
+      const bloqueadas  = data.tareas.filter(t => t.estado === "bloqueada")
+      const tiposTarea  = [...new Set(data.tareas.map(t => t.tipo))]
 
-      // Próxima fecha fin entre tareas activas
-      const fechasActivas = activas
-        .map(t => calcularFechaFinEstimada(t, observaciones))
+      const casosAprobados = data.casos.filter(c => c.estadoAprobacion === "aprobado")
+
+      // Próxima fecha fin entre HUs activas
+      const husActivas = data.hus.filter(h => h.estado === "en_progreso")
+      const fechas = husActivas
+        .map(h => calcularFechaFinEstimada(h, casos))
         .sort((a,b) => a.getTime()-b.getTime())
-      const proximaFechaFin = fechasActivas[0] || null
+      const proximaFechaFin = fechas[0] || null
 
-      const horasTotales = tareasP.reduce((s,t) => s+t.horasEstimadas, 0)
-      const horasActivas = activas.reduce((s,t) => s+t.horasEstimadas, 0)
+      const horasTotales = data.casos.reduce((s,c) => s+c.horasEstimadas, 0)
+      const horasActivas = data.casos
+        .filter(c => c.resultadosPorEtapa.some(r => r.estado === "en_ejecucion"))
+        .reduce((s,c) => s+c.horasEstimadas, 0)
 
       return {
         nombre,
-        tareasTotal: tareasP.length,
+        husAsignadas: data.hus.length,
+        casosTotal: data.casos.length,
+        casosAprobados: casosAprobados.length,
+        tareasTotal: data.tareas.length,
         tareasActivas: activas.length,
         tareasCompletadas: completadas.length,
         tareasBloqueadas: bloqueadas.length,
         horasTotales, horasActivas,
         nivelCarga: nivelCarga(activas.length),
         porcentajeCarga: porcentajeCarga(activas.length),
-        tareasCriticasAlta: criticas.length,
-        tiposUnicos,
         proximaFechaFin,
+        tiposTarea,
       }
     }).sort((a,b) => b.tareasActivas - a.tareasActivas)
-  }, [tareas, observaciones])
+  }, [tareas, casos, historias])
 
   const chartData = personas.map(p => ({
     nombre: p.nombre.split(" ")[0],
@@ -111,7 +128,7 @@ export function CargaOcupacional({ tareas, observaciones = [] }: CargaOcupaciona
     return (
       <div style={{ textAlign:"center", padding:48, color:"var(--muted-foreground)" }}>
         <BarChart2 size={32} style={{ margin:"0 auto 12px", opacity:0.4 }}/>
-        <p>Sin tareas asignadas para mostrar carga</p>
+        <p>Sin HUs asignadas para mostrar carga</p>
       </div>
     )
   }
@@ -170,7 +187,7 @@ export function CargaOcupacional({ tareas, observaciones = [] }: CargaOcupaciona
           <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
             <thead>
               <tr style={{ borderBottom:"1px solid var(--border)" }}>
-                {["Recurso","Nivel","Activas","Completadas","Bloqueadas","Horas activas","Crit. Alta","Próx. entrega","Tipos de tarea"].map(h => (
+                {["Recurso","Nivel","HUs","Casos","Activas","Completadas","Bloqueadas","Horas","Próx. entrega","Tipos de tarea"].map(h => (
                   <th key={h} style={{ padding:"8px 10px", fontSize:10, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.07em", color:"var(--muted-foreground)", textAlign:"left", whiteSpace:"nowrap" }}>{h}</th>
                 ))}
               </tr>
@@ -196,6 +213,15 @@ export function CargaOcupacional({ tareas, observaciones = [] }: CargaOcupaciona
                         <p style={{ fontSize:10, color:"var(--muted-foreground)" }}>{p.porcentajeCarga}% capacidad</p>
                       </div>
                     </td>
+                    {/* HUs */}
+                    <td style={{ padding:"10px 10px", textAlign:"center" }}>
+                      <span style={{ fontSize:16, fontWeight:700, color:"var(--primary)" }}>{p.husAsignadas}</span>
+                    </td>
+                    {/* Casos */}
+                    <td style={{ padding:"10px 10px", textAlign:"center" }}>
+                      <span style={{ fontSize:16, fontWeight:700, color:"var(--foreground)" }}>{p.casosTotal}</span>
+                      <p style={{ fontSize:10, color:"var(--muted-foreground)" }}>{p.casosAprobados} aprob.</p>
+                    </td>
                     {/* Activas */}
                     <td style={{ padding:"10px 10px", textAlign:"center" }}>
                       <span style={{ fontSize:16, fontWeight:700, color:ncfg.color }}>{p.tareasActivas}</span>
@@ -208,16 +234,10 @@ export function CargaOcupacional({ tareas, observaciones = [] }: CargaOcupaciona
                     <td style={{ padding:"10px 10px", textAlign:"center" }}>
                       <span style={{ fontSize:16, fontWeight:700, color:p.tareasBloqueadas>0?"var(--chart-4)":"var(--muted-foreground)" }}>{p.tareasBloqueadas}</span>
                     </td>
-                    {/* Horas activas */}
+                    {/* Horas */}
                     <td style={{ padding:"10px 10px" }}>
                       <p style={{ fontFamily:"monospace", fontWeight:600, color:"var(--foreground)" }}>{p.horasActivas}h</p>
                       <p style={{ fontSize:10, color:"var(--muted-foreground)" }}>{p.horasTotales}h total</p>
-                    </td>
-                    {/* Criticidad alta */}
-                    <td style={{ padding:"10px 10px", textAlign:"center" }}>
-                      {p.tareasCriticasAlta > 0
-                        ? <span style={{ fontSize:14, fontWeight:700, color:"var(--chart-4)" }}>{p.tareasCriticasAlta}</span>
-                        : <span style={{ color:"var(--muted-foreground)" }}>—</span>}
                     </td>
                     {/* Próxima entrega */}
                     <td style={{ padding:"10px 10px" }}>
@@ -235,12 +255,12 @@ export function CargaOcupacional({ tareas, observaciones = [] }: CargaOcupaciona
                     {/* Tipos */}
                     <td style={{ padding:"10px 10px" }}>
                       <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
-                        {p.tiposUnicos.slice(0,3).map(tipo => (
+                        {p.tiposTarea.slice(0,3).map(tipo => (
                           <Badge key={tipo} variant="outline" className="text-[9px]" style={{ padding:"1px 5px" }}>
                             {TIPO_TAREA_LABEL[tipo as keyof typeof TIPO_TAREA_LABEL]}
                           </Badge>
                         ))}
-                        {p.tiposUnicos.length>3 && <Badge variant="outline" className="text-[9px]">+{p.tiposUnicos.length-3}</Badge>}
+                        {p.tiposTarea.length>3 && <Badge variant="outline" className="text-[9px]">+{p.tiposTarea.length-3}</Badge>}
                       </div>
                     </td>
                   </tr>

@@ -4,32 +4,36 @@ import { useState, useEffect } from "react"
 import { useAuth } from "@/lib/auth-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { AlertCircle, Lock, Mail, ArrowRight, Loader2, Sun, Moon } from "lucide-react"
+import { AlertCircle, Lock, Mail, ArrowRight, Loader2, Sun, Moon, KeyRound } from "lucide-react"
 
 export function LoginScreen() {
-  const { login } = useAuth()
+  const { login, pendientePassword, cambiarPassword } = useAuth()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
-  const [focused, setFocused] = useState<"email" | "password" | null>(null)
-  // Lee el tema actual del html para inicializar
+  const [focused, setFocused] = useState<"email" | "password" | "newpass" | "confirmpass" | null>(null)
   const [isDark, setIsDark] = useState(true)
+
+  // ── Estado para cambio de contraseña ──
+  const [showChangePassword, setShowChangePassword] = useState(false)
+  const [currentPass, setCurrentPass] = useState("")
+  const [newPass, setNewPass] = useState("")
+  const [confirmPass, setConfirmPass] = useState("")
 
   useEffect(() => {
     const html = document.documentElement
     setIsDark(html.classList.contains("dark"))
   }, [])
 
+  useEffect(() => {
+    if (pendientePassword) setShowChangePassword(true)
+  }, [pendientePassword])
+
   const toggleTheme = () => {
     const html = document.documentElement
-    if (isDark) {
-      html.classList.remove("dark")
-      setIsDark(false)
-    } else {
-      html.classList.add("dark")
-      setIsDark(true)
-    }
+    if (isDark) { html.classList.remove("dark"); setIsDark(false) }
+    else { html.classList.add("dark"); setIsDark(true) }
   }
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -41,11 +45,24 @@ export function LoginScreen() {
     await new Promise(resolve => setTimeout(resolve, 600))
     const result = login(email, password)
     if (!result.success) setError(result.error || "Credenciales incorrectas")
+    else if (result.debeCambiar) {
+      setCurrentPass(password)
+      setShowChangePassword(true)
+    }
     setIsLoading(false)
   }
 
-  // ---- TOKENS DE COLOR según tema ----
-  const bg          = isDark ? "#0a0a0f"                    : "#f4f6fa"
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError("")
+    if (!newPass.trim()) { setError("Ingresa la nueva contraseña"); return }
+    if (newPass !== confirmPass) { setError("Las contraseñas no coinciden"); return }
+    const result = cambiarPassword(currentPass, newPass)
+    if (!result.success) setError(result.error || "Error al cambiar contraseña")
+    else setShowChangePassword(false)
+  }
+
+  // ── Tokens de color ──
   const cardBg      = isDark ? "rgba(15,17,23,0.92)"        : "rgba(255,255,255,0.95)"
   const cardBorder  = isDark ? "rgba(255,255,255,0.07)"     : "rgba(0,0,0,0.08)"
   const cardShadow  = isDark
@@ -69,6 +86,18 @@ export function LoginScreen() {
   const toggleBorder = isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"
   const toggleColor  = isDark ? "#94a3b8"  : "#64748b"
 
+  const inputStyle = (field: string): React.CSSProperties => ({
+    paddingLeft: "38px", background: inputBg,
+    border: `1px solid ${focused === field ? inputBorderFocused : inputBorderNormal}`,
+    borderRadius: "8px", color: inputColor, fontSize: "14px", height: "44px", transition: "border-color 0.2s",
+  })
+
+  const iconStyle = (field: string): React.CSSProperties => ({
+    position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)",
+    width: "15px", height: "15px", pointerEvents: "none",
+    color: focused === field ? iconColorFocused : iconColorNormal, transition: "color 0.2s",
+  })
+
   return (
     <div
       className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden"
@@ -77,40 +106,25 @@ export function LoginScreen() {
         : "linear-gradient(135deg, #eef2f9 0%, #f4f6fa 40%, #e8ecf5 100%)"
       }}
     >
-      {/* Grid */}
       <div className="absolute inset-0 opacity-[0.03]" style={{
         backgroundImage: `linear-gradient(${gridColor} 1px, transparent 1px), linear-gradient(90deg, ${gridColor} 1px, transparent 1px)`,
         backgroundSize: "40px 40px",
       }} />
-      {/* Glow top-right */}
       <div className="absolute top-0 right-0 w-96 h-96 pointer-events-none"
         style={{ background: `radial-gradient(circle at center, ${glow1} 0%, transparent 70%)` }} />
-      {/* Glow bottom-left */}
       <div className="absolute bottom-0 left-0 w-80 h-80 pointer-events-none"
         style={{ background: `radial-gradient(circle at center, ${glow2} 0%, transparent 70%)` }} />
 
-      {/* Theme toggle — esquina superior derecha */}
-      <button
-        onClick={toggleTheme}
-        aria-label="Cambiar tema"
-        style={{
-          position: "absolute", top: "20px", right: "20px",
-          width: "36px", height: "36px",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          background: toggleBg,
-          border: `1px solid ${toggleBorder}`,
-          borderRadius: "50%",
-          cursor: "pointer",
-          color: toggleColor,
-          transition: "all 0.2s",
-          zIndex: 20,
-        }}
-      >
+      <button onClick={toggleTheme} aria-label="Cambiar tema" style={{
+        position: "absolute", top: "20px", right: "20px", width: "36px", height: "36px",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        background: toggleBg, border: `1px solid ${toggleBorder}`, borderRadius: "50%",
+        cursor: "pointer", color: toggleColor, transition: "all 0.2s", zIndex: 20,
+      }}>
         {isDark ? <Sun style={{ width: "15px", height: "15px" }} /> : <Moon style={{ width: "15px", height: "15px" }} />}
       </button>
 
       <div className="relative w-full max-w-sm z-10">
-        {/* Header */}
         <div className="text-center mb-10">
           <div className="flex justify-center mb-6">
             <div className="flex h-14 w-14 items-center justify-center" style={{
@@ -131,93 +145,126 @@ export function LoginScreen() {
           </p>
         </div>
 
-        {/* Card */}
         <div style={{ background: cardBg, border: `1px solid ${cardBorder}`, borderRadius: "16px", padding: "36px 32px", backdropFilter: "blur(20px)", boxShadow: cardShadow }}>
-          <form onSubmit={handleLogin}>
-            <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
 
-              {/* Email */}
-              <div>
-                <label style={{ display: "block", fontSize: "11px", letterSpacing: "0.12em", textTransform: "uppercase", color: labelColor, marginBottom: "8px", fontFamily: "monospace" }}>
-                  Correo electrónico
-                </label>
-                <div style={{ position: "relative" }}>
-                  <Mail style={{
-                    position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)",
-                    width: "15px", height: "15px", pointerEvents: "none",
-                    color: focused === "email" ? iconColorFocused : iconColorNormal, transition: "color 0.2s",
-                  }} />
-                  <Input
-                    type="email" placeholder="usuario@empresa.com"
-                    value={email} onChange={(e) => setEmail(e.target.value)}
-                    onFocus={() => setFocused("email")} onBlur={() => setFocused(null)}
-                    autoComplete="email" className="border-0"
-                    style={{
-                      paddingLeft: "38px", background: inputBg,
-                      border: `1px solid ${focused === "email" ? inputBorderFocused : inputBorderNormal}`,
-                      borderRadius: "8px", color: inputColor, fontSize: "14px", height: "44px", transition: "border-color 0.2s",
-                    }}
-                  />
+          {/* ── Formulario de cambio de contraseña ── */}
+          {showChangePassword ? (
+            <form onSubmit={handleChangePassword}>
+              <div style={{ textAlign:"center", marginBottom:20 }}>
+                <div style={{ width:48, height:48, borderRadius:"50%", margin:"0 auto 12px",
+                  background:"rgba(59,130,246,0.12)", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                  <KeyRound style={{ width:22, height:22, color:"#3b82f6" }}/>
                 </div>
+                <p style={{ fontSize:15, fontWeight:600, color:titleColor }}>Cambiar contraseña</p>
+                <p style={{ fontSize:12, color:subtitleColor, marginTop:4 }}>
+                  Debes establecer una nueva contraseña para continuar
+                </p>
               </div>
 
-              {/* Password */}
-              <div>
-                <label style={{ display: "block", fontSize: "11px", letterSpacing: "0.12em", textTransform: "uppercase", color: labelColor, marginBottom: "8px", fontFamily: "monospace" }}>
-                  Contraseña
-                </label>
-                <div style={{ position: "relative" }}>
-                  <Lock style={{
-                    position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)",
-                    width: "15px", height: "15px", pointerEvents: "none",
-                    color: focused === "password" ? iconColorFocused : iconColorNormal, transition: "color 0.2s",
-                  }} />
-                  <Input
-                    type="password" placeholder="••••••••"
-                    value={password} onChange={(e) => setPassword(e.target.value)}
-                    onFocus={() => setFocused("password")} onBlur={() => setFocused(null)}
-                    autoComplete="current-password" className="border-0"
-                    style={{
-                      paddingLeft: "38px", background: inputBg,
-                      border: `1px solid ${focused === "password" ? inputBorderFocused : inputBorderNormal}`,
-                      borderRadius: "8px", color: inputColor, fontSize: "14px", height: "44px", transition: "border-color 0.2s",
-                    }}
-                  />
+              <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                <div>
+                  <label style={{ display: "block", fontSize: "11px", letterSpacing: "0.12em", textTransform: "uppercase", color: labelColor, marginBottom: "8px", fontFamily: "monospace" }}>
+                    Nueva contraseña
+                  </label>
+                  <div style={{ position: "relative" }}>
+                    <Lock style={iconStyle("newpass")} />
+                    <Input type="password" placeholder="Mínimo 6 caracteres"
+                      value={newPass} onChange={e => setNewPass(e.target.value)}
+                      onFocus={() => setFocused("newpass")} onBlur={() => setFocused(null)}
+                      className="border-0" style={inputStyle("newpass")} />
+                  </div>
                 </div>
-              </div>
+                <div>
+                  <label style={{ display: "block", fontSize: "11px", letterSpacing: "0.12em", textTransform: "uppercase", color: labelColor, marginBottom: "8px", fontFamily: "monospace" }}>
+                    Confirmar contraseña
+                  </label>
+                  <div style={{ position: "relative" }}>
+                    <Lock style={iconStyle("confirmpass")} />
+                    <Input type="password" placeholder="Repetir contraseña"
+                      value={confirmPass} onChange={e => setConfirmPass(e.target.value)}
+                      onFocus={() => setFocused("confirmpass")} onBlur={() => setFocused(null)}
+                      className="border-0" style={inputStyle("confirmpass")} />
+                  </div>
+                </div>
 
-              {/* Error */}
-              {error && (
-                <div style={{
-                  display: "flex", alignItems: "center", gap: "8px",
-                  padding: "10px 14px", background: "rgba(239,68,68,0.08)",
-                  border: "1px solid rgba(239,68,68,0.2)", borderRadius: "8px",
-                  color: isDark ? "#fca5a5" : "#dc2626", fontSize: "13px",
+                {error && (
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 14px",
+                    background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: "8px",
+                    color: isDark ? "#fca5a5" : "#dc2626", fontSize: "13px" }}>
+                    <AlertCircle style={{ width: "15px", height: "15px", color: isDark ? "#f87171" : "#ef4444", flexShrink: 0 }} />
+                    {error}
+                  </div>
+                )}
+
+                <Button type="submit" style={{
+                  width: "100%", height: "44px",
+                  background: "linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%)",
+                  border: "none", borderRadius: "8px", color: "#fff",
+                  fontSize: "12px", letterSpacing: "0.1em", fontFamily: "monospace",
+                  cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
+                  boxShadow: "0 4px 20px rgba(37,99,235,0.35)", marginTop: "4px", textTransform: "uppercase",
                 }}>
-                  <AlertCircle style={{ width: "15px", height: "15px", color: isDark ? "#f87171" : "#ef4444", flexShrink: 0 }} />
-                  {error}
+                  <KeyRound style={{ width: "15px", height: "15px" }} /> Cambiar contraseña
+                </Button>
+              </div>
+            </form>
+          ) : (
+            /* ── Formulario de login normal ── */
+            <form onSubmit={handleLogin}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+                <div>
+                  <label style={{ display: "block", fontSize: "11px", letterSpacing: "0.12em", textTransform: "uppercase", color: labelColor, marginBottom: "8px", fontFamily: "monospace" }}>
+                    Correo electrónico
+                  </label>
+                  <div style={{ position: "relative" }}>
+                    <Mail style={iconStyle("email")} />
+                    <Input type="email" placeholder="usuario@empresa.com"
+                      value={email} onChange={e => setEmail(e.target.value)}
+                      onFocus={() => setFocused("email")} onBlur={() => setFocused(null)}
+                      autoComplete="email" className="border-0" style={inputStyle("email")} />
+                  </div>
                 </div>
-              )}
+                <div>
+                  <label style={{ display: "block", fontSize: "11px", letterSpacing: "0.12em", textTransform: "uppercase", color: labelColor, marginBottom: "8px", fontFamily: "monospace" }}>
+                    Contraseña
+                  </label>
+                  <div style={{ position: "relative" }}>
+                    <Lock style={iconStyle("password")} />
+                    <Input type="password" placeholder="••••••••"
+                      value={password} onChange={e => setPassword(e.target.value)}
+                      onFocus={() => setFocused("password")} onBlur={() => setFocused(null)}
+                      autoComplete="current-password" className="border-0" style={inputStyle("password")} />
+                  </div>
+                </div>
 
-              {/* Submit */}
-              <Button type="submit" disabled={isLoading} style={{
-                width: "100%", height: "44px",
-                background: isLoading ? "rgba(30,64,175,0.5)" : "linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%)",
-                border: "none", borderRadius: "8px", color: "#fff",
-                fontSize: "12px", letterSpacing: "0.1em", fontFamily: "monospace",
-                cursor: isLoading ? "not-allowed" : "pointer",
-                display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
-                transition: "opacity 0.2s",
-                boxShadow: isLoading ? "none" : "0 4px 20px rgba(37,99,235,0.35)",
-                marginTop: "4px", textTransform: "uppercase",
-              }}>
-                {isLoading
-                  ? <><Loader2 style={{ width: "15px", height: "15px" }} className="animate-spin" /> Verificando...</>
-                  : <><ArrowRight style={{ width: "15px", height: "15px" }} /> Ingresar</>
-                }
-              </Button>
-            </div>
-          </form>
+                {error && (
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 14px",
+                    background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: "8px",
+                    color: isDark ? "#fca5a5" : "#dc2626", fontSize: "13px" }}>
+                    <AlertCircle style={{ width: "15px", height: "15px", color: isDark ? "#f87171" : "#ef4444", flexShrink: 0 }} />
+                    {error}
+                  </div>
+                )}
+
+                <Button type="submit" disabled={isLoading} style={{
+                  width: "100%", height: "44px",
+                  background: isLoading ? "rgba(30,64,175,0.5)" : "linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%)",
+                  border: "none", borderRadius: "8px", color: "#fff",
+                  fontSize: "12px", letterSpacing: "0.1em", fontFamily: "monospace",
+                  cursor: isLoading ? "not-allowed" : "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
+                  transition: "opacity 0.2s",
+                  boxShadow: isLoading ? "none" : "0 4px 20px rgba(37,99,235,0.35)",
+                  marginTop: "4px", textTransform: "uppercase",
+                }}>
+                  {isLoading
+                    ? <><Loader2 style={{ width: "15px", height: "15px" }} className="animate-spin" /> Verificando...</>
+                    : <><ArrowRight style={{ width: "15px", height: "15px" }} /> Ingresar</>
+                  }
+                </Button>
+              </div>
+            </form>
+          )}
 
           <p style={{ marginTop: "24px", textAlign: "center", fontSize: "12px", color: footerColor, fontFamily: "monospace", letterSpacing: "0.04em" }}>
             ¿Sin acceso? Contacta al administrador

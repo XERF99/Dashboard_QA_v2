@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { useAuth, roleDescriptions, type User, type UserRole } from "@/lib/auth-context"
+import { useAuth, roleDescriptions, PASSWORD_GENERICA, type User, type UserRole } from "@/lib/auth-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -46,24 +46,28 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { FieldGroup, Field, FieldLabel } from "@/components/ui/field"
-import { 
-  Users, 
-  Plus, 
-  MoreHorizontal, 
-  Edit, 
-  Trash2, 
-  Shield, 
+import {
+  Users,
+  Plus,
+  MoreHorizontal,
+  Edit,
+  Trash2,
+  Shield,
   Eye,
-  Edit as EditIcon,
-  UserPlus
+  FlaskConical,
+  UserPlus,
+  KeyRound,
+  Info,
 } from "lucide-react"
 
 export function UserManagement() {
-  const { users, user: currentUser, addUser, updateUser, deleteUser } = useAuth()
+  const { users, user: currentUser, addUser, updateUser, deleteUser, resetPassword } = useAuth()
   const [formOpen, setFormOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [resetDialogOpen, setResetDialogOpen] = useState(false)
   const [userToEdit, setUserToEdit] = useState<User | null>(null)
   const [userToDelete, setUserToDelete] = useState<User | null>(null)
+  const [userToReset, setUserToReset] = useState<User | null>(null)
 
   // Form state
   const [nombre, setNombre] = useState("")
@@ -92,7 +96,7 @@ export function UserManagement() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (userToEdit) {
       updateUser({
         ...userToEdit,
@@ -103,7 +107,7 @@ export function UserManagement() {
     } else {
       addUser({ nombre, email, rol })
     }
-    
+
     setFormOpen(false)
     resetForm()
   }
@@ -121,10 +125,23 @@ export function UserManagement() {
     setDeleteDialogOpen(true)
   }
 
+  const confirmResetPassword = (user: User) => {
+    setUserToReset(user)
+    setResetDialogOpen(true)
+  }
+
+  const handleResetPassword = () => {
+    if (userToReset) {
+      resetPassword(userToReset.id)
+      setResetDialogOpen(false)
+      setUserToReset(null)
+    }
+  }
+
   const getRoleIcon = (userRol: UserRole) => {
     switch (userRol) {
       case "admin": return <Shield className="h-4 w-4" />
-      case "editor": return <EditIcon className="h-4 w-4" />
+      case "qa": return <FlaskConical className="h-4 w-4" />
       case "viewer": return <Eye className="h-4 w-4" />
     }
   }
@@ -132,7 +149,7 @@ export function UserManagement() {
   const getRoleBadgeStyle = (userRol: UserRole) => {
     switch (userRol) {
       case "admin": return "bg-chart-4/20 text-chart-4 border-chart-4/30"
-      case "editor": return "bg-chart-1/20 text-chart-1 border-chart-1/30"
+      case "qa": return "bg-chart-1/20 text-chart-1 border-chart-1/30"
       case "viewer": return "bg-chart-2/20 text-chart-2 border-chart-2/30"
     }
   }
@@ -141,7 +158,7 @@ export function UserManagement() {
   const stats = {
     total: users.length,
     admins: users.filter(u => u.rol === "admin").length,
-    editors: users.filter(u => u.rol === "editor").length,
+    qas: users.filter(u => u.rol === "qa").length,
     viewers: users.filter(u => u.rol === "viewer").length
   }
 
@@ -166,9 +183,9 @@ export function UserManagement() {
         <Card className="bg-card border-border">
           <CardHeader className="pb-2">
             <CardDescription className="flex items-center gap-1">
-              <EditIcon className="h-3 w-3" /> Editores
+              <FlaskConical className="h-3 w-3" /> QA
             </CardDescription>
-            <CardTitle className="text-3xl text-chart-1">{stats.editors}</CardTitle>
+            <CardTitle className="text-3xl text-chart-1">{stats.qas}</CardTitle>
           </CardHeader>
         </Card>
         <Card className="bg-card border-border">
@@ -181,11 +198,22 @@ export function UserManagement() {
         </Card>
       </div>
 
+      {/* Info contraseña genérica */}
+      <div style={{ display:"flex", gap:10, alignItems:"center", padding:"12px 16px",
+        borderRadius:10, background:"color-mix(in oklch, var(--primary) 8%, transparent)",
+        border:"1px solid color-mix(in oklch, var(--primary) 25%, transparent)" }}>
+        <Info size={16} style={{ color:"var(--primary)", flexShrink:0 }} />
+        <p style={{ fontSize:12, color:"var(--foreground)" }}>
+          Los nuevos usuarios se crean con la contraseña genérica <strong>{PASSWORD_GENERICA}</strong>.
+          Deben cambiarla en su primer inicio de sesión.
+        </p>
+      </div>
+
       {/* Header con boton */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Users className="h-5 w-5 text-muted-foreground" />
-          <h2 className="text-lg font-semibold text-foreground">Gestion de Usuarios</h2>
+          <h2 className="text-lg font-semibold text-foreground">Gestión de Usuarios</h2>
         </div>
         <Button onClick={handleOpenCreate} className="bg-primary hover:bg-primary/90">
           <UserPlus className="h-4 w-4 mr-2" />
@@ -203,6 +231,7 @@ export function UserManagement() {
                 <TableHead className="text-muted-foreground">Email</TableHead>
                 <TableHead className="text-muted-foreground">Rol</TableHead>
                 <TableHead className="text-muted-foreground">Permisos</TableHead>
+                <TableHead className="text-muted-foreground">Contraseña</TableHead>
                 <TableHead className="text-muted-foreground w-[50px]"></TableHead>
               </TableRow>
             </TableHeader>
@@ -220,7 +249,7 @@ export function UserManagement() {
                         <p className="font-medium text-foreground">
                           {u.nombre}
                           {u.id === currentUser?.id && (
-                            <span className="ml-2 text-xs text-muted-foreground">(Tu)</span>
+                            <span className="ml-2 text-xs text-muted-foreground">(Tú)</span>
                           )}
                         </p>
                         <p className="text-xs text-muted-foreground">{u.id}</p>
@@ -238,6 +267,17 @@ export function UserManagement() {
                     {roleDescriptions[u.rol].description}
                   </TableCell>
                   <TableCell>
+                    {u.debeCambiarPassword ? (
+                      <Badge variant="outline" className="bg-chart-3/20 text-chart-3 border-chart-3/30 text-[10px]">
+                        Pendiente cambio
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="bg-chart-2/20 text-chart-2 border-chart-2/30 text-[10px]">
+                        Configurada
+                      </Badge>
+                    )}
+                  </TableCell>
+                  <TableCell>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -250,7 +290,13 @@ export function UserManagement() {
                           Editar
                         </DropdownMenuItem>
                         {u.id !== currentUser?.id && (
-                          <DropdownMenuItem 
+                          <DropdownMenuItem onClick={() => confirmResetPassword(u)}>
+                            <KeyRound className="mr-2 h-4 w-4" />
+                            Resetear contraseña
+                          </DropdownMenuItem>
+                        )}
+                        {u.id !== currentUser?.id && (
+                          <DropdownMenuItem
                             onClick={() => confirmDelete(u)}
                             className="text-destructive focus:text-destructive"
                           >
@@ -276,13 +322,13 @@ export function UserManagement() {
               {userToEdit ? "Editar Usuario" : "Nuevo Usuario"}
             </DialogTitle>
             <DialogDescription>
-              {userToEdit 
-                ? "Modifica los datos del usuario" 
-                : "Agrega un nuevo usuario al sistema"
+              {userToEdit
+                ? "Modifica los datos del usuario"
+                : `Se creará con la contraseña genérica: ${PASSWORD_GENERICA}`
               }
             </DialogDescription>
           </DialogHeader>
-          
+
           <form onSubmit={handleSubmit}>
             <FieldGroup className="py-4">
               <Field>
@@ -290,7 +336,7 @@ export function UserManagement() {
                 <Input
                   value={nombre}
                   onChange={(e) => setNombre(e.target.value)}
-                  placeholder="Juan Perez"
+                  placeholder="Juan Pérez"
                   className="bg-secondary border-border"
                   required
                 />
@@ -321,10 +367,10 @@ export function UserManagement() {
                         Administrador
                       </div>
                     </SelectItem>
-                    <SelectItem value="editor">
+                    <SelectItem value="qa">
                       <div className="flex items-center gap-2">
-                        <EditIcon className="h-4 w-4" />
-                        Editor
+                        <FlaskConical className="h-4 w-4" />
+                        QA
                       </div>
                     </SelectItem>
                     <SelectItem value="viewer">
@@ -359,8 +405,8 @@ export function UserManagement() {
           <AlertDialogHeader>
             <AlertDialogTitle className="text-foreground">Eliminar Usuario</AlertDialogTitle>
             <AlertDialogDescription>
-              Estas seguro que deseas eliminar a <strong>{userToDelete?.nombre}</strong>?
-              Esta accion no se puede deshacer.
+              ¿Estás seguro que deseas eliminar a <strong>{userToDelete?.nombre}</strong>?
+              Esta acción no se puede deshacer.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -370,6 +416,29 @@ export function UserManagement() {
               className="bg-destructive hover:bg-destructive/90"
             >
               Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Dialogo de confirmacion de reset de contraseña */}
+      <AlertDialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
+        <AlertDialogContent className="bg-card border-border sm:max-w-sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-foreground">Resetear Contraseña</AlertDialogTitle>
+            <AlertDialogDescription>
+              La contraseña de <strong>{userToReset?.nombre}</strong> será cambiada a la
+              genérica (<strong>{PASSWORD_GENERICA}</strong>). Deberá cambiarla en su próximo inicio de sesión.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleResetPassword}
+              className="bg-primary hover:bg-primary/90"
+            >
+              <KeyRound className="h-4 w-4 mr-2" />
+              Resetear
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

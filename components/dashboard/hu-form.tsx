@@ -6,105 +6,108 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Badge } from "@/components/ui/badge"
-import { Plus, Trash2, Info, AlertTriangle } from "lucide-react"
 import {
-  TIPO_TAREA_LABEL, TIPO_TAREA_COLOR, fasesParaTipo,
-  TIPO_PRUEBA_LABEL, TIPO_PRUEBA_COLOR,
-  type HistoriaUsuario, type Tarea, type EstadoHU,
-  type TipoTarea, type EntornoPruebas, type FaseTarea, type TipoPrueba,
+  TIPO_APLICACION_LABEL, AMBIENTE_LABEL, PRIORIDAD_CFG,
+  crearEvento,
+  type HistoriaUsuario, type TipoAplicacion, type AmbientePrueba, type PrioridadHU,
 } from "@/lib/types"
 
 interface HUFormProps {
   open: boolean
   onClose: () => void
-  onSubmit: (hu: HistoriaUsuario, tareas: Tarea[]) => void
+  onSubmit: (hu: HistoriaUsuario) => void
   huEditar?: HistoriaUsuario | null
-  tareasExistentes?: Tarea[]
   currentUser?: string
 }
 
-const ASIGNADOS = ["Maria Garcia","Carlos Lopez","Ana Martinez","Pedro Sanchez","Laura Jimenez","Juan Rodriguez"]
-
-function tareaVacia(huId: string, idx: number): Tarea {
-  return {
-    id: `T-NEW-${Date.now()}-${idx}`,
-    huId,
-    titulo: "", descripcion: "",
-    tipo: "aplicacion",
-    tipoPrueba: "funcional",
-    asignado: "",
-    entorno: "desarrollo",
-    faseActual: "despliegue",
-    estado: "pendiente",
-    resultado: "pendiente",
-    fechaInicio: new Date(), fechaFin: null,
-    impactoUsuarios: 5, complejidadTecnica: 5, urgencia: 5,
-    horasEstimadas: 8, cantidadArchivos: 3,
-    historialFases: [],
-    eventosBloqueo: [],
-  }
-}
+const QA_USERS = ["Maria Garcia", "Carlos Lopez", "Ana Martinez", "Pedro Sanchez", "Laura Jimenez", "Juan Rodriguez"]
 
 const FL: React.CSSProperties = { fontSize:11, fontWeight:600, color:"var(--foreground)", marginBottom:5, display:"block" }
 const PNL: React.CSSProperties = { padding:"14px 16px", borderRadius:10, border:"1px solid var(--border)", background:"var(--background)" }
 
-export function HUForm({ open, onClose, onSubmit, huEditar, tareasExistentes=[], currentUser }: HUFormProps) {
-  const huId = huEditar?.id || `hu-${Date.now()}`
-
-  const [confirmDeleteIdx, setConfirmDeleteIdx] = useState<number | null>(null)
-
+export function HUForm({ open, onClose, onSubmit, huEditar, currentUser }: HUFormProps) {
   const [hu, setHu] = useState({
-    titulo:"", descripcion:"", criteriosAceptacion:"",
-    asignado:"", estado:"pendiente" as EstadoHU,
-    prioridad:"media" as "alta"|"media"|"baja", puntos:5,
+    titulo: "",
+    descripcion: "",
+    criteriosAceptacion: "",
+    responsable: "",
+    prioridad: "media" as PrioridadHU,
+    puntos: 5,
+    aplicacion: "",
+    tipoAplicacion: "aplicacion" as TipoAplicacion,
+    requiriente: "",
+    areaSolicitante: "",
+    ambiente: "test" as AmbientePrueba,
   })
-  const [tareas, setTareas] = useState<Tarea[]>([tareaVacia(huId, 0)])
 
   useEffect(() => {
     if (!open) return
     if (huEditar) {
-      setHu({ titulo:huEditar.titulo, descripcion:huEditar.descripcion,
-        criteriosAceptacion:huEditar.criteriosAceptacion,
-        asignado:huEditar.asignado, estado:huEditar.estado,
-        prioridad:huEditar.prioridad, puntos:huEditar.puntos })
-      const t = tareasExistentes.filter(t => huEditar.tareas.includes(t.id))
-      setTareas(t.length ? t : [tareaVacia(huEditar.id, 0)])
+      setHu({
+        titulo: huEditar.titulo,
+        descripcion: huEditar.descripcion,
+        criteriosAceptacion: huEditar.criteriosAceptacion,
+        responsable: huEditar.responsable,
+        prioridad: huEditar.prioridad,
+        puntos: huEditar.puntos,
+        aplicacion: huEditar.aplicacion,
+        tipoAplicacion: huEditar.tipoAplicacion,
+        requiriente: huEditar.requiriente,
+        areaSolicitante: huEditar.areaSolicitante,
+        ambiente: huEditar.ambiente,
+      })
     } else {
-      setHu({ titulo:"", descripcion:"", criteriosAceptacion:"", asignado:"", estado:"pendiente", prioridad:"media", puntos:5 })
-      setTareas([tareaVacia(huId, 0)])
+      setHu({
+        titulo: "", descripcion: "", criteriosAceptacion: "",
+        responsable: "", prioridad: "media", puntos: 5,
+        aplicacion: "", tipoAplicacion: "aplicacion",
+        requiriente: "", areaSolicitante: "", ambiente: "test",
+      })
     }
   }, [open, huEditar])
-
-  const updT = (idx: number, patch: Partial<Tarea>) => setTareas(prev => prev.map((t, i) => {
-    if (i !== idx) return t
-    const next = { ...t, ...patch }
-    // Si cambia el tipo, verificar que la fase siga siendo válida
-    const fases = fasesParaTipo(next.tipo)
-    if (!fases.includes(next.faseActual)) next.faseActual = fases[0]
-    return next
-  }))
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     const ahora = new Date()
+    const id = huEditar?.id || `hu-${Date.now()}`
+    const usuario = currentUser || "Sistema"
+
     const huFinal: HistoriaUsuario = {
-      id: huId, codigo: huEditar?.codigo || `HU-${Date.now().toString().slice(-4)}`,
-      ...hu,
+      id,
+      codigo: huEditar?.codigo || `HU-${Date.now().toString().slice(-4)}`,
+      titulo: hu.titulo,
+      descripcion: hu.descripcion,
+      criteriosAceptacion: hu.criteriosAceptacion,
+      responsable: hu.responsable,
+      prioridad: hu.prioridad,
+      estado: huEditar?.estado || "sin_iniciar",
+      puntos: hu.puntos,
+      aplicacion: hu.aplicacion,
+      tipoAplicacion: hu.tipoAplicacion,
+      requiriente: hu.requiriente,
+      areaSolicitante: hu.areaSolicitante,
       fechaCreacion: huEditar?.fechaCreacion || ahora,
-      fechaCierre: ["exitoso","fallido"].includes(hu.estado) ? (huEditar?.fechaCierre || ahora) : null,
+      fechaFinEstimada: huEditar?.fechaFinEstimada,
+      fechaCierre: huEditar?.fechaCierre,
+      etapa: huEditar?.etapa || "sin_iniciar",
+      ambiente: hu.ambiente,
+      casosIds: huEditar?.casosIds || [],
       bloqueos: huEditar?.bloqueos || [],
-      tareas: tareas.map(t => t.id),
+      historial: [
+        ...(huEditar?.historial || []),
+        crearEvento(
+          huEditar ? "hu_editada" : "hu_creada",
+          huEditar ? `HU editada por ${usuario}` : `Historia de usuario creada`,
+          usuario
+        ),
+      ],
+      creadoPor: huEditar?.creadoPor || usuario,
+      delegadoPor: huEditar?.delegadoPor || usuario,
+      permitirCasosAdicionales: huEditar?.permitirCasosAdicionales || false,
+      motivoCasosAdicionales: huEditar?.motivoCasosAdicionales,
+      motivoCancelacion: huEditar?.motivoCancelacion,
     }
-    const tareasFinales = tareas.map((t, i) => ({
-      ...t, huId,
-      historialFases: t.historialFases.length ? t.historialFases : [{
-        id: `ef-${Date.now()}-${i}`, tareaId: t.id, tareaTitulo: t.titulo,
-        faseAnterior: null, faseNueva: t.faseActual,
-        fecha: ahora, usuario: currentUser || "Sistema",
-      }],
-    }))
-    onSubmit(huFinal, tareasFinales)
+    onSubmit(huFinal)
     onClose()
   }
 
@@ -119,18 +122,18 @@ export function HUForm({ open, onClose, onSubmit, huEditar, tareasExistentes=[],
                 {huEditar ? `Editar ${huEditar.codigo}` : "Nueva Historia de Usuario"}
               </DialogTitle>
               <p style={{ fontSize:12, color:"var(--muted-foreground)" }}>
-                Define el cambio y las pruebas (tareas) que lo componen
+                {huEditar ? "Modifica los datos de la historia de usuario" : "Define el cambio que será asignado a un QA para pruebas"}
               </p>
             </div>
 
             {/* BODY */}
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:24 }}>
 
-              {/* ── COL IZQ: datos HU ── */}
+              {/* ── COL IZQ: datos principales ── */}
               <div style={{ display:"flex", flexDirection:"column", gap:16, minWidth:0 }}>
 
                 <div style={PNL}>
-                  <p style={{ fontSize:10, textTransform:"uppercase", letterSpacing:"0.1em", fontWeight:700, color:"var(--muted-foreground)", marginBottom:12 }}>Historia de Usuario</p>
+                  <p style={{ fontSize:10, textTransform:"uppercase", letterSpacing:"0.1em", fontWeight:700, color:"var(--muted-foreground)", marginBottom:12 }}>Datos del Cambio</p>
 
                   <div style={{ marginBottom:11 }}>
                     <label style={FL}>Título *</label>
@@ -154,38 +157,33 @@ export function HUForm({ open, onClose, onSubmit, huEditar, tareasExistentes=[],
                 </div>
 
                 <div style={PNL}>
-                  <p style={{ fontSize:10, textTransform:"uppercase", letterSpacing:"0.1em", fontWeight:700, color:"var(--muted-foreground)", marginBottom:12 }}>Configuración</p>
+                  <p style={{ fontSize:10, textTransform:"uppercase", letterSpacing:"0.1em", fontWeight:700, color:"var(--muted-foreground)", marginBottom:12 }}>Solicitante</p>
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
                     <div>
-                      <label style={FL}>Responsable *</label>
-                      <Select value={hu.asignado} onValueChange={v => setHu(p => ({...p, asignado:v}))}>
-                        <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
-                        <SelectContent>{ASIGNADOS.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
-                      </Select>
+                      <label style={FL}>Requiriente *</label>
+                      <Input value={hu.requiriente} required placeholder="Nombre del solicitante"
+                        onChange={e => setHu(p => ({...p, requiriente:e.target.value}))} />
                     </div>
                     <div>
-                      <label style={FL}>Estado</label>
-                      <Select value={hu.estado} onValueChange={(v: EstadoHU) => setHu(p => ({...p, estado:v}))}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="pendiente">Pendiente</SelectItem>
-                          <SelectItem value="en_progreso">En Progreso</SelectItem>
-                          <SelectItem value="bloqueado">Bloqueado</SelectItem>
-                          <SelectItem value="stand_by">Stand By</SelectItem>
-                          <SelectItem value="exitoso">✅ Exitoso</SelectItem>
-                          <SelectItem value="fallido">❌ Fallido</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <label style={FL}>Área Solicitante *</label>
+                      <Input value={hu.areaSolicitante} required placeholder="Departamento/área"
+                        onChange={e => setHu(p => ({...p, areaSolicitante:e.target.value}))} />
                     </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* ── COL DER: configuración ── */}
+              <div style={{ display:"flex", flexDirection:"column", gap:16, minWidth:0 }}>
+
+                <div style={PNL}>
+                  <p style={{ fontSize:10, textTransform:"uppercase", letterSpacing:"0.1em", fontWeight:700, color:"var(--muted-foreground)", marginBottom:12 }}>Asignación</p>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
                     <div>
-                      <label style={FL}>Prioridad</label>
-                      <Select value={hu.prioridad} onValueChange={(v: any) => setHu(p => ({...p, prioridad:v}))}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="alta">Alta</SelectItem>
-                          <SelectItem value="media">Media</SelectItem>
-                          <SelectItem value="baja">Baja</SelectItem>
-                        </SelectContent>
+                      <label style={FL}>QA Responsable *</label>
+                      <Select value={hu.responsable} onValueChange={v => setHu(p => ({...p, responsable:v}))}>
+                        <SelectTrigger><SelectValue placeholder="Seleccionar QA" /></SelectTrigger>
+                        <SelectContent>{QA_USERS.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
                     <div>
@@ -195,154 +193,61 @@ export function HUForm({ open, onClose, onSubmit, huEditar, tareasExistentes=[],
                     </div>
                   </div>
                 </div>
-              </div>
 
-              {/* ── COL DER: Tareas ── */}
-              <div style={{ display:"flex", flexDirection:"column", gap:10, minWidth:0 }}>
-                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-                  <p style={{ fontSize:10, textTransform:"uppercase", letterSpacing:"0.1em", fontWeight:700, color:"var(--muted-foreground)" }}>
-                    Tareas / Pruebas ({tareas.length})
-                  </p>
-                  <Button type="button" variant="outline" size="sm"
-                    onClick={() => setTareas(p => [...p, tareaVacia(huId, p.length)])}>
-                    <Plus size={12} className="mr-1" /> Tarea
-                  </Button>
+                <div style={PNL}>
+                  <p style={{ fontSize:10, textTransform:"uppercase", letterSpacing:"0.1em", fontWeight:700, color:"var(--muted-foreground)", marginBottom:12 }}>Configuración Técnica</p>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                    <div>
+                      <label style={FL}>Aplicación / Sistema *</label>
+                      <Input value={hu.aplicacion} required placeholder="Nombre del sistema"
+                        onChange={e => setHu(p => ({...p, aplicacion:e.target.value}))} />
+                    </div>
+                    <div>
+                      <label style={FL}>Tipo de Aplicación *</label>
+                      <Select value={hu.tipoAplicacion} onValueChange={(v: TipoAplicacion) => setHu(p => ({...p, tipoAplicacion:v}))}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {(Object.keys(TIPO_APLICACION_LABEL) as TipoAplicacion[]).map(k => (
+                            <SelectItem key={k} value={k}>{TIPO_APLICACION_LABEL[k]}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label style={FL}>Ambiente</label>
+                      <Select value={hu.ambiente} onValueChange={(v: AmbientePrueba) => setHu(p => ({...p, ambiente:v}))}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {(Object.keys(AMBIENTE_LABEL) as AmbientePrueba[]).map(k => (
+                            <SelectItem key={k} value={k}>{AMBIENTE_LABEL[k]}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label style={FL}>Prioridad</label>
+                      <Select value={hu.prioridad} onValueChange={(v: PrioridadHU) => setHu(p => ({...p, prioridad:v}))}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {(Object.keys(PRIORIDAD_CFG) as PrioridadHU[]).map(k => (
+                            <SelectItem key={k} value={k}>{PRIORIDAD_CFG[k].label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
                 </div>
 
-                <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-                  {tareas.map((tarea, idx) => {
-                    const fases = fasesParaTipo(tarea.tipo)
-                    const soloDespliegue = fases.length === 1
-                    return (
-                      <div key={tarea.id} style={PNL}>
-                        {/* Tipo + eliminar */}
-                        <div style={{ display:"flex", gap:6, marginBottom:10, flexWrap:"wrap", alignItems:"center" }}>
-                          <Select value={tarea.tipo} onValueChange={(v: TipoTarea) => updT(idx, { tipo:v })}>
-                            <SelectTrigger style={{ height:28, fontSize:11, flex:1, minWidth:120 }}>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {(Object.keys(TIPO_TAREA_LABEL) as TipoTarea[]).map(k => (
-                                <SelectItem key={k} value={k}>
-                                  <span style={{ fontSize:12 }}>{TIPO_TAREA_LABEL[k]}</span>
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <Badge variant="outline" className={`${TIPO_TAREA_COLOR[tarea.tipo]} text-[10px]`} style={{ flexShrink:0 }}>
-                            {TIPO_TAREA_LABEL[tarea.tipo]}
-                          </Badge>
-                          {tareas.length > 1 && (
-                            <button type="button" onClick={() => setConfirmDeleteIdx(idx)}
-                              style={{ background:"none", border:"none", cursor:"pointer", color:"var(--chart-4)", padding:3, flexShrink:0, marginLeft:"auto" }}>
-                              <Trash2 size={13} />
-                            </button>
-                          )}
-                        </div>
-
-                        {/* Título */}
-                        <Input value={tarea.titulo} required
-                          onChange={e => updT(idx, { titulo:e.target.value })}
-                          placeholder={`Tarea ${idx+1}: descripción corta...`}
-                          style={{ fontSize:12, marginBottom:8 }} />
-
-                        {/* Grid: asignado, entorno, fase */}
-                        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:7 }}>
-                          <div>
-                            <label style={{ ...FL, fontSize:10 }}>Asignado</label>
-                            <Select value={tarea.asignado} onValueChange={v => updT(idx, { asignado:v })}>
-                              <SelectTrigger style={{ height:30, fontSize:11 }}><SelectValue placeholder="Persona" /></SelectTrigger>
-                              <SelectContent>{ASIGNADOS.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
-                            </Select>
-                          </div>
-                          <div>
-                            <label style={{ ...FL, fontSize:10 }}>Entorno</label>
-                            <Select value={tarea.entorno} onValueChange={(v: EntornoPruebas) => updT(idx, { entorno:v })}>
-                              <SelectTrigger style={{ height:30, fontSize:11 }}><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="desarrollo">Desarrollo</SelectItem>
-                                <SelectItem value="qa">QA</SelectItem>
-                                <SelectItem value="staging">Staging</SelectItem>
-                                <SelectItem value="produccion">Producción</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div>
-                            <label style={{ ...FL, fontSize:10 }}>
-                              Fase actual
-                              {soloDespliegue && <span style={{ color:"var(--chart-3)", marginLeft:4, fontSize:10 }}>(solo Despliegue)</span>}
-                            </label>
-                            <Select value={tarea.faseActual} disabled={soloDespliegue}
-                              onValueChange={(v: FaseTarea) => updT(idx, { faseActual:v })}>
-                              <SelectTrigger style={{ height:30, fontSize:11 }}><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                {fases.map(f => (
-                                  <SelectItem key={f} value={f}>
-                                    {{ despliegue:"Despliegue", rollback:"Rollback", redespliegue:"Redespliegue", validacion:"Validación" }[f]}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div>
-                            <label style={{ ...FL, fontSize:10 }}>Tipo de prueba</label>
-                            <Select value={tarea.tipoPrueba} onValueChange={(v: TipoPrueba) => updT(idx, { tipoPrueba:v })}>
-                              <SelectTrigger style={{ height:30, fontSize:11 }}><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="funcional">Funcional</SelectItem>
-                                <SelectItem value="no_funcional">No Funcional</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
-
-                        {/* Horas */}
-                        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:7, marginTop:7 }}>
-                          <div>
-                            <label style={{ ...FL, fontSize:10 }}>Horas est.</label>
-                            <Input type="number" min={1} value={tarea.horasEstimadas} style={{ height:30, fontSize:11 }}
-                              onChange={e => updT(idx, { horasEstimadas:parseInt(e.target.value)||1 })} />
-                          </div>
-                          <div>
-                            <label style={{ ...FL, fontSize:10 }}>Archivos</label>
-                            <Input type="number" min={0} value={tarea.cantidadArchivos} style={{ height:30, fontSize:11 }}
-                              onChange={e => updT(idx, { cantidadArchivos:parseInt(e.target.value)||0 })} />
-                          </div>
-                        </div>
-
-                        {soloDespliegue && (
-                          <div style={{ marginTop:8, display:"flex", gap:5, alignItems:"center", padding:"5px 8px",
-                            borderRadius:6, background:"color-mix(in oklch, var(--chart-3) 10%, transparent)",
-                            border:"1px solid color-mix(in oklch, var(--chart-3) 25%, transparent)" }}>
-                            <Info size={11} style={{ color:"var(--chart-3)", flexShrink:0 }} />
-                            <p style={{ fontSize:10, color:"var(--chart-3)" }}>
-                              Tipo <strong>{TIPO_TAREA_LABEL[tarea.tipo]}</strong>: solo fase de Despliegue disponible
-                            </p>
-                          </div>
-                        )}
-
-                        {confirmDeleteIdx === idx && (
-                          <div style={{ marginTop:10, display:"flex", alignItems:"center", gap:8, padding:"8px 10px",
-                            borderRadius:7, background:"color-mix(in oklch, var(--chart-4) 10%, transparent)",
-                            border:"1px solid color-mix(in oklch, var(--chart-4) 30%, transparent)" }}>
-                            <AlertTriangle size={13} style={{ color:"var(--chart-4)", flexShrink:0 }} />
-                            <p style={{ fontSize:11, color:"var(--chart-4)", flex:1 }}>¿Eliminar esta tarea?</p>
-                            <button type="button" onClick={() => setConfirmDeleteIdx(null)}
-                              style={{ fontSize:11, padding:"2px 8px", borderRadius:5, border:"1px solid var(--border)",
-                                background:"var(--background)", color:"var(--foreground)", cursor:"pointer" }}>
-                              Cancelar
-                            </button>
-                            <button type="button"
-                              onClick={() => { setTareas(p => p.filter((_,i) => i!==idx)); setConfirmDeleteIdx(null) }}
-                              style={{ fontSize:11, padding:"2px 8px", borderRadius:5, border:"none",
-                                background:"var(--chart-4)", color:"#fff", cursor:"pointer", fontWeight:600 }}>
-                              Eliminar
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
+                {/* Nota informativa sobre etapas */}
+                <div style={{ padding:"10px 14px", borderRadius:8,
+                  background:"color-mix(in oklch, var(--chart-3) 8%, transparent)",
+                  border:"1px solid color-mix(in oklch, var(--chart-3) 25%, transparent)" }}>
+                  <p style={{ fontSize:11, color:"var(--chart-3)", lineHeight:1.5 }}>
+                    {hu.tipoAplicacion === "base_de_datos" || hu.tipoAplicacion === "batch"
+                      ? "Este tipo solo tiene etapa de Despliegue."
+                      : "Este tipo tiene 3 etapas: Despliegue → Rollback → Redespliegue."}
+                    {" "}El QA asignado creará los casos de prueba una vez inicie la HU.
+                  </p>
                 </div>
               </div>
             </div>
@@ -350,7 +255,7 @@ export function HUForm({ open, onClose, onSubmit, huEditar, tareasExistentes=[],
             {/* FOOTER */}
             <div style={{ display:"flex", justifyContent:"flex-end", gap:10, marginTop:22, paddingTop:16, borderTop:"1px solid var(--border)" }}>
               <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
-              <Button type="submit" disabled={!hu.titulo || !hu.asignado}>
+              <Button type="submit" disabled={!hu.titulo || !hu.responsable || !hu.aplicacion || !hu.requiriente || !hu.areaSolicitante}>
                 {huEditar ? "Guardar cambios" : "Crear Historia de Usuario"}
               </Button>
             </div>

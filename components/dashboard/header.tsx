@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Search, Bell, LogOut, Shield, Edit, Eye } from "lucide-react"
+import { Search, Bell, LogOut, Shield, FlaskConical, Eye } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import {
@@ -39,7 +39,7 @@ export function Header({ busqueda, onBusquedaChange }: HeaderProps) {
   const getRoleIcon = (rol: UserRole) => {
     switch (rol) {
       case "admin": return <Shield className="h-3 w-3" />
-      case "editor": return <Edit className="h-3 w-3" />
+      case "qa": return <FlaskConical className="h-3 w-3" />
       case "viewer": return <Eye className="h-3 w-3" />
     }
   }
@@ -47,7 +47,7 @@ export function Header({ busqueda, onBusquedaChange }: HeaderProps) {
   const getRoleBadgeStyle = (rol: UserRole) => {
     switch (rol) {
       case "admin": return "bg-chart-4/20 text-chart-4 border-chart-4/30"
-      case "editor": return "bg-chart-1/20 text-chart-1 border-chart-1/30"
+      case "qa": return "bg-chart-1/20 text-chart-1 border-chart-1/30"
       case "viewer": return "bg-chart-2/20 text-chart-2 border-chart-2/30"
     }
   }
