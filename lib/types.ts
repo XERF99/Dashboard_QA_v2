@@ -77,8 +77,11 @@ export type TipoEvento =
   | "caso_creado" | "caso_enviado_aprobacion" | "caso_aprobado" | "caso_rechazado"
   | "caso_ejecucion_iniciada" | "caso_completado"
   | "caso_retesteo_solicitado" | "caso_retesteo_ejecutado"
+  | "caso_editado" | "caso_eliminado"
+  | "caso_modificacion_solicitada" | "caso_modificacion_habilitada"
   | "casos_adicionales_habilitados"
-  | "tarea_creada" | "tarea_completada" | "tarea_bloqueada" | "tarea_desbloqueada"
+  | "tarea_creada" | "tarea_completada" | "tarea_editada" | "tarea_eliminada"
+  | "tarea_bloqueada" | "tarea_desbloqueada"
   | "bloqueo_reportado" | "bloqueo_resuelto"
 
 export interface EventoHistorial {
@@ -88,6 +91,30 @@ export interface EventoHistorial {
   fecha: Date
   usuario: string
   detalles?: Record<string, string>
+}
+
+// ── Notificaciones del sistema ────────────────────────────
+export type TipoNotificacion =
+  | "aprobacion_enviada"       // QA → Admin: caso enviado para aprobación
+  | "modificacion_solicitada"  // QA → Admin: solicitud de modificar caso aprobado
+  | "caso_aprobado"            // Admin → QA: caso aprobado
+  | "caso_rechazado"           // Admin → QA: caso rechazado
+  | "modificacion_habilitada"  // Admin → QA: modificación habilitada
+
+export type RolDestinatario = "admin" | "qa"
+
+export interface Notificacion {
+  id: string
+  tipo: TipoNotificacion
+  titulo: string
+  descripcion: string
+  fecha: Date
+  leida: boolean
+  destinatario: RolDestinatario   // quién debe ver esta notificación
+  casoId?: string
+  huId?: string
+  huTitulo?: string
+  casoTitulo?: string
 }
 
 // ── Bloqueo (aplica a HU, caso de prueba o tarea) ───────
@@ -167,6 +194,7 @@ export interface CasoPrueba {
   // ── Excepción: admin habilita modificación post-despliegue ──
   modificacionHabilitada: boolean
   motivoModificacion?: string
+  modificacionSolicitada?: boolean   // QA solicitó modificar este caso aprobado
 }
 
 // ═══════════════════════════════════════════════════════════

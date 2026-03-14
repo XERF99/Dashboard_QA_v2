@@ -232,7 +232,7 @@ export function UserManagement() {
                 <TableHead className="text-muted-foreground">Rol</TableHead>
                 <TableHead className="text-muted-foreground">Permisos</TableHead>
                 <TableHead className="text-muted-foreground">Contraseña</TableHead>
-                <TableHead className="text-muted-foreground w-[50px]"></TableHead>
+                <TableHead className="text-muted-foreground w-12.5"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

@@ -58,7 +58,6 @@ const MESES = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov"
 function fmt(d: Date) { return `${d.getDate().toString().padStart(2,"0")} ${MESES[d.getMonth()]}` }
 
 export function CargaOcupacional({ tareas, casos, historias, currentUserName, isQA }: CargaOcupacionalProps) {
-  // Si el usuario es QA, solo ve su propia carga
   const historiasVistas = isQA && currentUserName
     ? historias.filter(h => h.responsable.toLowerCase() === currentUserName.toLowerCase())
     : historias
@@ -140,16 +139,124 @@ export function CargaOcupacional({ tareas, casos, historias, currentUserName, is
     )
   }
 
+  // ── Vista personal (rol QA) ──
+  if (isQA && personas.length > 0) {
+    const p = personas[0]
+    const ncfg = NIVEL_CFG[p.nivelCarga]
+    const husActivas = historiasVistas.filter(h => h.estado === "en_progreso")
+    const totalCasosAprobados = p.casosAprobados
+    const pct = p.tareasTotal > 0 ? Math.round((p.tareasCompletadas / p.tareasTotal) * 100) : 0
+
+    return (
+      <div style={{ display:"flex", flexDirection:"column", gap:16, maxWidth:720, margin:"0 auto" }}>
+
+        {/* Tarjeta hero personal */}
+        <div style={{ padding:"20px 24px", borderRadius:14, border:`1px solid ${ncfg.color}`, background:ncfg.bg, display:"flex", alignItems:"center", gap:20 }}>
+          <div style={{ width:52, height:52, borderRadius:"50%", background:ncfg.color, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+            <User size={22} style={{ color:"#fff" }}/>
+          </div>
+          <div style={{ flex:1, minWidth:0 }}>
+            <p style={{ fontSize:10, textTransform:"uppercase", letterSpacing:"0.1em", color:ncfg.color, fontWeight:700, marginBottom:2 }}>Tu carga de trabajo</p>
+            <p style={{ fontSize:18, fontWeight:700, color:"var(--foreground)", marginBottom:6 }}>{p.nombre}</p>
+            <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+              <Progress value={p.porcentajeCarga} className="h-2" style={{ flex:1, background:`color-mix(in oklch, ${ncfg.color} 20%, transparent)` }}/>
+              <span style={{ fontSize:12, fontWeight:700, color:ncfg.color, flexShrink:0 }}>{p.porcentajeCarga}%</span>
+            </div>
+          </div>
+          <div style={{ textAlign:"center", flexShrink:0 }}>
+            <span style={{ display:"inline-block", padding:"4px 14px", borderRadius:8, fontSize:12, fontWeight:700, background:`color-mix(in oklch, ${ncfg.color} 20%, transparent)`, color:ncfg.color, border:`1px solid ${ncfg.color}` }}>
+              {ncfg.label}
+            </span>
+          </div>
+        </div>
+
+        {/* Stats grid */}
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12 }}>
+          {[
+            { label:"HUs Asignadas", value:p.husAsignadas, sub:`${husActivas.length} en progreso`, color:"var(--primary)", icon:<User size={15}/> },
+            { label:"Casos de Prueba", value:p.casosTotal, sub:`${totalCasosAprobados} aprobados`, color:"var(--chart-1)", icon:<CheckCircle size={15}/> },
+            { label:"Tareas Activas", value:p.tareasActivas, sub:"en progreso o pendientes", color:ncfg.color, icon:<Clock size={15}/> },
+          ].map((m,i) => (
+            <div key={i} style={{ padding:"16px", borderRadius:12, border:"1px solid var(--border)", background:"var(--card)" }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8 }}>
+                <p style={{ fontSize:10, textTransform:"uppercase", letterSpacing:"0.08em", color:"var(--muted-foreground)", fontWeight:700 }}>{m.label}</p>
+                <div style={{ color:m.color, opacity:0.6 }}>{m.icon}</div>
+              </div>
+              <p style={{ fontSize:30, fontWeight:700, color:m.color, lineHeight:1, marginBottom:4 }}>{m.value}</p>
+              <p style={{ fontSize:11, color:"var(--muted-foreground)" }}>{m.sub}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Progreso de tareas */}
+        <div style={{ padding:"18px 20px", borderRadius:12, border:"1px solid var(--border)", background:"var(--card)" }}>
+          <p style={{ fontSize:13, fontWeight:700, color:"var(--foreground)", marginBottom:14 }}>Progreso de tareas</p>
+          <div style={{ display:"flex", gap:16, alignItems:"center", marginBottom:14 }}>
+            <div style={{ flex:1 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", marginBottom:5 }}>
+                <span style={{ fontSize:11, color:"var(--muted-foreground)" }}>Completadas</span>
+                <span style={{ fontSize:11, fontWeight:700, color:"var(--foreground)" }}>{p.tareasCompletadas} / {p.tareasTotal}</span>
+              </div>
+              <Progress value={pct} className="h-2.5" style={{ background:"var(--secondary)" }}/>
+            </div>
+            <p style={{ fontSize:22, fontWeight:700, color:"var(--chart-2)", flexShrink:0 }}>{pct}%</p>
+          </div>
+          <div style={{ display:"flex", gap:10 }}>
+            {[
+              { label:"Completadas", value:p.tareasCompletadas, color:"var(--chart-2)" },
+              { label:"Activas", value:p.tareasActivas, color:ncfg.color },
+              { label:"Bloqueadas", value:p.tareasBloqueadas, color:"var(--chart-4)" },
+            ].map((s,i) => (
+              <div key={i} style={{ flex:1, padding:"10px 14px", borderRadius:8, border:"1px solid var(--border)", textAlign:"center" }}>
+                <p style={{ fontSize:20, fontWeight:700, color:s.color, lineHeight:1, marginBottom:3 }}>{s.value}</p>
+                <p style={{ fontSize:10, color:"var(--muted-foreground)" }}>{s.label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Horas + próxima entrega + tipos */}
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+          <div style={{ padding:"16px 18px", borderRadius:12, border:"1px solid var(--border)", background:"var(--card)" }}>
+            <p style={{ fontSize:10, textTransform:"uppercase", letterSpacing:"0.08em", color:"var(--muted-foreground)", fontWeight:700, marginBottom:10 }}>Horas estimadas</p>
+            <p style={{ fontSize:28, fontWeight:700, color:"var(--foreground)", lineHeight:1 }}>{p.horasTotales}<span style={{ fontSize:14, fontWeight:400, color:"var(--muted-foreground)" }}>h</span></p>
+            <p style={{ fontSize:11, color:"var(--muted-foreground)", marginTop:4 }}>{p.horasActivas}h en ejecución activa</p>
+          </div>
+          <div style={{ padding:"16px 18px", borderRadius:12, border:"1px solid var(--border)", background:"var(--card)" }}>
+            <p style={{ fontSize:10, textTransform:"uppercase", letterSpacing:"0.08em", color:"var(--muted-foreground)", fontWeight:700, marginBottom:10 }}>Próxima entrega</p>
+            {p.proximaFechaFin ? (() => {
+              const dias = Math.ceil((p.proximaFechaFin.getTime()-Date.now())/86400000)
+              const color = dias<=2?"var(--chart-4)":dias<=5?"var(--chart-3)":"var(--chart-2)"
+              return (
+                <>
+                  <p style={{ fontSize:22, fontWeight:700, color:"var(--foreground)", lineHeight:1, marginBottom:4 }}>{fmt(p.proximaFechaFin)}</p>
+                  <p style={{ fontSize:12, fontWeight:600, color }}>{dias<=0?"Vencido":dias===1?"Mañana":`En ${dias} día${dias!==1?"s":""}`}</p>
+                </>
+              )
+            })() : <p style={{ fontSize:13, color:"var(--muted-foreground)", fontStyle:"italic", marginTop:6 }}>Sin entregas programadas</p>}
+          </div>
+        </div>
+
+        {/* Tipos de tarea */}
+        {p.tiposTarea.length > 0 && (
+          <div style={{ padding:"14px 18px", borderRadius:12, border:"1px solid var(--border)", background:"var(--card)", display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
+            <p style={{ fontSize:10, textTransform:"uppercase", letterSpacing:"0.08em", color:"var(--muted-foreground)", fontWeight:700 }}>Tipos de tarea</p>
+            <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+              {p.tiposTarea.map(tipo => (
+                <Badge key={tipo} variant="outline" style={{ fontSize:11, padding:"2px 10px" }}>
+                  {TIPO_TAREA_LABEL[tipo as keyof typeof TIPO_TAREA_LABEL]}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ── Vista general (admin / viewer) ──
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
-
-      {/* Banner de vista personal QA */}
-      {isQA && currentUserName && (
-        <div style={{ padding:"10px 16px", borderRadius:10, background:"color-mix(in oklch, var(--primary) 8%, transparent)", border:"1px solid color-mix(in oklch, var(--primary) 25%, transparent)", display:"flex", alignItems:"center", gap:8 }}>
-          <User size={14} style={{ color:"var(--primary)", flexShrink:0 }}/>
-          <p style={{ fontSize:12, color:"var(--primary)", fontWeight:600 }}>Vista personal — mostrando solo tu carga de trabajo ({currentUserName})</p>
-        </div>
-      )}
 
       {/* ── Resumen ejecutivo ── */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12 }}>

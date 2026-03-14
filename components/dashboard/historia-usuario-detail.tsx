@@ -9,10 +9,11 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Progress } from "@/components/ui/progress"
 import {
-  CheckSquare, Calendar, Star, TrendingUp,
+  CheckSquare, Star, TrendingUp,
   AlertTriangle, Plus, CheckCircle2, ShieldAlert, Layers,
   User, Play, XCircle, Send, ThumbsUp, ThumbsDown,
   ChevronDown, ChevronUp, Lock, Unlock, FileText, RefreshCw,
+  Pencil, Trash2, Bell,
 } from "lucide-react"
 import {
   ESTADO_HU_CFG, ETAPA_HU_CFG, PRIORIDAD_CFG, TIPO_APLICACION_LABEL,
@@ -21,7 +22,7 @@ import {
   etapasParaTipo, fmtCorto, fmtHora,
   type HistoriaUsuario, type CasoPrueba, type Tarea, type Bloqueo,
   type EtapaEjecucion, type TipoPrueba, type ComplejidadCaso, type EntornoCaso,
-  type TipoTarea, type PrioridadTarea, type IntentoEjecucion,
+  type TipoTarea, type PrioridadTarea,
 } from "@/lib/types"
 
 interface Props {
@@ -36,13 +37,20 @@ interface Props {
   onIniciarHU: (huId: string) => void
   onCancelarHU: (huId: string, motivo: string) => void
   onAddCaso: (caso: CasoPrueba) => void
+  onEditarCaso: (caso: CasoPrueba) => void
+  onEliminarCaso: (casoId: string, huId: string) => void
+  onEnviarCasoAprobacion: (casoId: string, huId: string) => void
   onEnviarAprobacion: (huId: string) => void
+  onSolicitarModificacionCaso: (casoId: string, huId: string) => void
+  onHabilitarModificacionCaso: (casoId: string, huId: string) => void
   onAprobarCasos: (huId: string) => void
   onRechazarCasos: (huId: string, motivo: string) => void
   onIniciarEjecucion: (huId: string, etapa: EtapaEjecucion) => void
   onCompletarCasoEtapa: (casoId: string, etapa: EtapaEjecucion, resultado: "exitoso" | "fallido", comentarioFallo?: string) => void
   onRetestearCaso: (casoId: string, etapa: EtapaEjecucion, comentarioCorreccion: string) => void
   onAddTarea: (tarea: Tarea) => void
+  onEditarTarea: (tarea: Tarea) => void
+  onEliminarTarea: (tareaId: string, casoId: string) => void
   onCompletarTarea: (tareaId: string, resultado: "exitoso" | "fallido") => void
   onBloquearTarea: (tareaId: string, bloqueo: Bloqueo) => void
   onDesbloquearTarea: (tareaId: string, bloqueoId: string) => void
@@ -69,14 +77,16 @@ function fmt(d: Date): string {
 // ══════════════════════════════════════════════════════════════
 export function HistoriaUsuarioDetail({
   open, onClose, hu, casos, tareas, currentUser, isAdmin, isQA,
-  onIniciarHU, onCancelarHU, onAddCaso, onEnviarAprobacion,
+  onIniciarHU, onCancelarHU, onAddCaso, onEditarCaso, onEliminarCaso,
+  onEnviarCasoAprobacion, onEnviarAprobacion,
+  onSolicitarModificacionCaso, onHabilitarModificacionCaso,
   onAprobarCasos, onRechazarCasos, onIniciarEjecucion, onCompletarCasoEtapa, onRetestearCaso,
-  onAddTarea, onCompletarTarea, onBloquearTarea, onDesbloquearTarea,
+  onAddTarea, onEditarTarea, onEliminarTarea, onCompletarTarea, onBloquearTarea, onDesbloquearTarea,
   onAddBloqueo, onResolverBloqueo, onPermitirCasosAdicionales,
 }: Props) {
-  // Form states
+  // Form visibility
   const [showCasoForm, setShowCasoForm] = useState(false)
-  const [showTareaForm, setShowTareaForm] = useState<string | null>(null) // casoId
+  const [showTareaForm, setShowTareaForm] = useState<string | null>(null)       // casoId
   const [showBloqueoForm, setShowBloqueoForm] = useState(false)
   const [showCancelarForm, setShowCancelarForm] = useState(false)
   const [showRechazoForm, setShowRechazoForm] = useState(false)
@@ -84,7 +94,11 @@ export function HistoriaUsuarioDetail({
   const [showBloqueoTareaForm, setShowBloqueoTareaForm] = useState<string | null>(null)
   const [expandedCaso, setExpandedCaso] = useState<string | null>(null)
 
-  // Caso form
+  // Edit states
+  const [editandoCaso, setEditandoCaso] = useState<CasoPrueba | null>(null)
+  const [editandoTarea, setEditandoTarea] = useState<Tarea | null>(null)
+
+  // Caso form (create / edit)
   const [casoTitulo, setCasoTitulo] = useState("")
   const [casoDesc, setCasoDesc] = useState("")
   const [casoEntorno, setCasoEntorno] = useState<EntornoCaso>("test")
@@ -93,7 +107,7 @@ export function HistoriaUsuarioDetail({
   const [casoArchivos, setCasoArchivos] = useState("")
   const [casoComplejidad, setCasoComplejidad] = useState<ComplejidadCaso>("media")
 
-  // Tarea form
+  // Tarea form (create / edit)
   const [tareaTitulo, setTareaTitulo] = useState("")
   const [tareaDesc, setTareaDesc] = useState("")
   const [tareaTipo, setTareaTipo] = useState<TipoTarea>("ejecucion")
@@ -108,19 +122,18 @@ export function HistoriaUsuarioDetail({
   const [bloqueoTareaTexto, setBloqueoTareaTexto] = useState("")
 
   // Retesteo / fallo
-  const [showFalloForm, setShowFalloForm] = useState<string | null>(null) // casoId
+  const [showFalloForm, setShowFalloForm] = useState<string | null>(null)
   const [comentarioFallo, setComentarioFallo] = useState("")
-  const [showRetestForm, setShowRetestForm] = useState<string | null>(null) // casoId
+  const [showRetestForm, setShowRetestForm] = useState<string | null>(null)
   const [comentarioCorreccion, setComentarioCorreccion] = useState("")
 
   // Resolver bloqueo HU
-  const [showResolverForm, setShowResolverForm] = useState<string | null>(null) // bloqueoId
+  const [showResolverForm, setShowResolverForm] = useState<string | null>(null)
   const [notaResolucion, setNotaResolucion] = useState("")
 
   if (!hu) return null
 
   const casosHU = casos.filter(c => hu.casosIds.includes(c.id))
-  const tareasHU = tareas.filter(t => t.huId === hu.id)
   const blActivos = hu.bloqueos.filter(b => !b.resuelto)
   const blResueltos = hu.bloqueos.filter(b => b.resuelto)
 
@@ -128,24 +141,26 @@ export function HistoriaUsuarioDetail({
   const etaCfg = ETAPA_HU_CFG[hu.etapa]
   const priCfg = PRIORIDAD_CFG[hu.prioridad]
 
+  // HU cerrada = ya no se puede crear nada
+  const huCerrada = hu.estado === "exitosa" || hu.estado === "cancelada" || hu.estado === "fallida"
+
   // Puede agregar casos?
   const etapasDisponibles = etapasParaTipo(hu.tipoAplicacion)
   const enDespliegue = hu.etapa === "despliegue"
   const pasoPrimeraEtapa = hu.etapa !== "sin_iniciar" && hu.etapa !== "despliegue"
-  const puedeAgregarCasos = hu.estado === "en_progreso" && (enDespliegue || hu.permitirCasosAdicionales)
+  const puedeAgregarCasos = !huCerrada && hu.estado === "en_progreso" && (enDespliegue || hu.permitirCasosAdicionales)
 
   // Casos con estados
   const borradores = casosHU.filter(c => c.estadoAprobacion === "borrador")
   const pendientesAprobacion = casosHU.filter(c => c.estadoAprobacion === "pendiente_aprobacion")
   const aprobados = casosHU.filter(c => c.estadoAprobacion === "aprobado")
-  const rechazados = casosHU.filter(c => c.estadoAprobacion === "rechazado")
 
-  // Etapa ya iniciada (para deshabilitar el botón de inicio)
+  // Etapa ya iniciada
   const etapaYaIniciada = aprobados.some(c =>
     c.resultadosPorEtapa.some(r => r.etapa === hu.etapa && r.estado !== "pendiente")
   )
 
-  // Submit caso
+  // ── Submit caso (crear) ──
   const submitCaso = () => {
     if (!casoTitulo.trim()) return
     const caso: CasoPrueba = {
@@ -167,12 +182,49 @@ export function HistoriaUsuarioDetail({
       modificacionHabilitada: false,
     }
     onAddCaso(caso)
-    setCasoTitulo(""); setCasoDesc(""); setCasoEntorno("test"); setCasoTipo("funcional")
-    setCasoHoras(8); setCasoArchivos(""); setCasoComplejidad("media")
+    resetCasoForm()
     setShowCasoForm(false)
   }
 
-  // Submit tarea
+  // ── Submit caso (editar) ──
+  const submitEditarCaso = () => {
+    if (!editandoCaso || !casoTitulo.trim()) return
+    const actualizado: CasoPrueba = {
+      ...editandoCaso,
+      titulo: casoTitulo.trim(),
+      descripcion: casoDesc.trim(),
+      entorno: casoEntorno,
+      tipoPrueba: casoTipo,
+      horasEstimadas: casoHoras,
+      archivosAnalizados: casoArchivos.split(",").map(s => s.trim()).filter(Boolean),
+      complejidad: casoComplejidad,
+      estadoAprobacion: "borrador",      // vuelve a borrador tras editar
+      modificacionHabilitada: false,
+      modificacionSolicitada: false,
+    }
+    onEditarCaso(actualizado)
+    setEditandoCaso(null)
+    resetCasoForm()
+  }
+
+  const abrirEditarCaso = (caso: CasoPrueba) => {
+    setEditandoCaso(caso)
+    setCasoTitulo(caso.titulo)
+    setCasoDesc(caso.descripcion)
+    setCasoEntorno(caso.entorno)
+    setCasoTipo(caso.tipoPrueba)
+    setCasoHoras(caso.horasEstimadas)
+    setCasoArchivos(caso.archivosAnalizados.join(", "))
+    setCasoComplejidad(caso.complejidad)
+    setShowCasoForm(false)
+  }
+
+  const resetCasoForm = () => {
+    setCasoTitulo(""); setCasoDesc(""); setCasoEntorno("test"); setCasoTipo("funcional")
+    setCasoHoras(8); setCasoArchivos(""); setCasoComplejidad("media")
+  }
+
+  // ── Submit tarea (crear) ──
   const submitTarea = (casoPruebaId: string) => {
     if (!tareaTitulo.trim()) return
     const tarea: Tarea = {
@@ -194,8 +246,37 @@ export function HistoriaUsuarioDetail({
       creadoPor: currentUser || "Sistema",
     }
     onAddTarea(tarea)
-    setTareaTitulo(""); setTareaDesc(""); setTareaTipo("ejecucion"); setTareaPrioridad("media"); setTareaHoras(4)
+    resetTareaForm()
     setShowTareaForm(null)
+  }
+
+  // ── Submit tarea (editar) ──
+  const submitEditarTarea = () => {
+    if (!editandoTarea || !tareaTitulo.trim()) return
+    onEditarTarea({
+      ...editandoTarea,
+      titulo: tareaTitulo.trim(),
+      descripcion: tareaDesc.trim(),
+      tipo: tareaTipo,
+      prioridad: tareaPrioridad,
+      horasEstimadas: tareaHoras,
+    })
+    setEditandoTarea(null)
+    resetTareaForm()
+  }
+
+  const abrirEditarTarea = (tarea: Tarea) => {
+    setEditandoTarea(tarea)
+    setTareaTitulo(tarea.titulo)
+    setTareaDesc(tarea.descripcion)
+    setTareaTipo(tarea.tipo)
+    setTareaPrioridad(tarea.prioridad)
+    setTareaHoras(tarea.horasEstimadas)
+    setShowTareaForm(null)
+  }
+
+  const resetTareaForm = () => {
+    setTareaTitulo(""); setTareaDesc(""); setTareaTipo("ejecucion"); setTareaPrioridad("media"); setTareaHoras(4)
   }
 
   return (
@@ -211,6 +292,11 @@ export function HistoriaUsuarioDetail({
               <p style={{ fontSize:11, fontFamily:"monospace", color:"var(--primary)", letterSpacing:"0.12em" }}>{hu.codigo}</p>
               <Badge variant="outline" className={estCfg.cls}>{estCfg.label}</Badge>
               <Badge variant="outline" className={etaCfg.cls}>{etaCfg.label}</Badge>
+              {huCerrada && (
+                <Badge variant="outline" className="bg-muted text-muted-foreground border-border text-[9px]">
+                  <Lock size={9} className="mr-1"/> Solo lectura
+                </Badge>
+              )}
             </div>
             <p style={{ fontSize:19, fontWeight:700, color:"var(--foreground)", lineHeight:1.3, marginBottom:10 }}>{hu.titulo}</p>
             <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
@@ -223,55 +309,53 @@ export function HistoriaUsuarioDetail({
             </div>
 
             {/* Acciones de cabecera */}
-            <div style={{ display:"flex", gap:8, marginTop:12, flexWrap:"wrap" }}>
-              {/* QA inicia HU */}
-              {isQA && hu.estado === "sin_iniciar" && (
-                <Button size="sm" onClick={() => onIniciarHU(hu.id)}>
-                  <Play size={12} className="mr-1"/> Iniciar HU
-                </Button>
-              )}
-              {/* Admin cancela */}
-              {isAdmin && hu.estado !== "cancelada" && hu.estado !== "exitosa" && (
-                <Button size="sm" variant="outline" style={{ color:"var(--chart-4)", borderColor:"var(--chart-4)" }}
-                  onClick={() => setShowCancelarForm(true)}>
-                  <XCircle size={12} className="mr-1"/> Cancelar HU
-                </Button>
-              )}
-              {/* QA envía a aprobación */}
-              {isQA && borradores.length > 0 && (
-                <Button size="sm" variant="outline" onClick={() => onEnviarAprobacion(hu.id)}>
-                  <Send size={12} className="mr-1"/> Enviar a aprobación ({borradores.length})
-                </Button>
-              )}
-              {/* Admin aprueba/rechaza */}
-              {isAdmin && pendientesAprobacion.length > 0 && (
-                <>
-                  <Button size="sm" onClick={() => onAprobarCasos(hu.id)} className="bg-chart-2 hover:bg-chart-2/90 text-white">
-                    <ThumbsUp size={12} className="mr-1"/> Aprobar ({pendientesAprobacion.length})
+            {!huCerrada && (
+              <div style={{ display:"flex", gap:8, marginTop:12, flexWrap:"wrap" }}>
+                {isQA && hu.estado === "sin_iniciar" && (
+                  <Button size="sm" onClick={() => onIniciarHU(hu.id)}>
+                    <Play size={12} className="mr-1"/> Iniciar HU
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => setShowRechazoForm(true)} style={{ color:"var(--chart-4)" }}>
-                    <ThumbsDown size={12} className="mr-1"/> Rechazar
+                )}
+                {isAdmin && hu.estado !== "cancelada" && hu.estado !== "exitosa" && (
+                  <Button size="sm" variant="outline" style={{ color:"var(--chart-4)", borderColor:"var(--chart-4)" }}
+                    onClick={() => setShowCancelarForm(true)}>
+                    <XCircle size={12} className="mr-1"/> Cancelar HU
                   </Button>
-                </>
-              )}
-              {/* QA inicia ejecución de etapa */}
-              {isQA && hu.estado === "en_progreso" && aprobados.length > 0 && hu.etapa !== "completada" && hu.etapa !== "cambio_cancelado" && hu.etapa !== "sin_iniciar" && (
-                <Button size="sm" variant="outline" disabled={etapaYaIniciada}
-                  style={etapaYaIniciada ? { borderColor:"var(--chart-1)", color:"var(--chart-1)", opacity:0.7, cursor:"not-allowed" } : {}}
-                  onClick={() => !etapaYaIniciada && onIniciarEjecucion(hu.id, hu.etapa as EtapaEjecucion)}>
-                  {etapaYaIniciada
-                    ? <><span style={{ width:7, height:7, borderRadius:"50%", background:"var(--chart-1)", display:"inline-block", marginRight:6 }}/> En progreso — {ETAPA_EXEC_LABEL[hu.etapa]}</>
-                    : <><Play size={12} className="mr-1"/> Iniciar ejecución — {ETAPA_EXEC_LABEL[hu.etapa]}</>
-                  }
-                </Button>
-              )}
-              {/* Admin habilita excepción */}
-              {isAdmin && pasoPrimeraEtapa && !hu.permitirCasosAdicionales && hu.estado === "en_progreso" && (
-                <Button size="sm" variant="outline" onClick={() => setShowExcepcionForm(true)}>
-                  <Unlock size={12} className="mr-1"/> Permitir más casos
-                </Button>
-              )}
-            </div>
+                )}
+                {/* Enviar todos los borradores/rechazados a aprobación */}
+                {isQA && (borradores.length > 0 || casosHU.filter(c => c.estadoAprobacion === "rechazado").length > 0) && (
+                  <Button size="sm" variant="outline" onClick={() => onEnviarAprobacion(hu.id)}>
+                    <Send size={12} className="mr-1"/>
+                    Enviar todos a aprobación ({borradores.length + casosHU.filter(c => c.estadoAprobacion === "rechazado").length})
+                  </Button>
+                )}
+                {isAdmin && pendientesAprobacion.length > 0 && (
+                  <>
+                    <Button size="sm" onClick={() => onAprobarCasos(hu.id)} className="bg-chart-2 hover:bg-chart-2/90 text-white">
+                      <ThumbsUp size={12} className="mr-1"/> Aprobar ({pendientesAprobacion.length})
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setShowRechazoForm(true)} style={{ color:"var(--chart-4)" }}>
+                      <ThumbsDown size={12} className="mr-1"/> Rechazar
+                    </Button>
+                  </>
+                )}
+                {isQA && hu.estado === "en_progreso" && aprobados.length > 0 && hu.etapa !== "completada" && hu.etapa !== "cambio_cancelado" && hu.etapa !== "sin_iniciar" && (
+                  <Button size="sm" variant="outline" disabled={etapaYaIniciada}
+                    style={etapaYaIniciada ? { borderColor:"var(--chart-1)", color:"var(--chart-1)", opacity:0.7, cursor:"not-allowed" } : {}}
+                    onClick={() => !etapaYaIniciada && onIniciarEjecucion(hu.id, hu.etapa as EtapaEjecucion)}>
+                    {etapaYaIniciada
+                      ? <><span style={{ width:7, height:7, borderRadius:"50%", background:"var(--chart-1)", display:"inline-block", marginRight:6 }}/> En progreso — {ETAPA_EXEC_LABEL[hu.etapa]}</>
+                      : <><Play size={12} className="mr-1"/> Iniciar ejecución — {ETAPA_EXEC_LABEL[hu.etapa]}</>
+                    }
+                  </Button>
+                )}
+                {isAdmin && pasoPrimeraEtapa && !hu.permitirCasosAdicionales && hu.estado === "en_progreso" && (
+                  <Button size="sm" variant="outline" onClick={() => setShowExcepcionForm(true)}>
+                    <Unlock size={12} className="mr-1"/> Permitir más casos
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Cancelación form */}
@@ -328,7 +412,7 @@ export function HistoriaUsuarioDetail({
             {/* COL PRINCIPAL */}
             <div style={{ display:"flex", flexDirection:"column", gap:18, minWidth:0 }}>
 
-              {/* Descripción + Criterios + Solicitante */}
+              {/* Descripción + Criterios */}
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
                 <div style={PNL}>
                   <p style={SLBL}>Descripción</p>
@@ -395,11 +479,11 @@ export function HistoriaUsuarioDetail({
                     <FileText size={11}/>Casos de Prueba ({casosHU.length})
                   </p>
                   {(isQA || isAdmin) && puedeAgregarCasos && (
-                    <Button size="sm" variant="outline" onClick={() => setShowCasoForm(true)}>
+                    <Button size="sm" variant="outline" onClick={() => { setShowCasoForm(true); setEditandoCaso(null); resetCasoForm() }}>
                       <Plus size={12} className="mr-1"/> Nuevo Caso
                     </Button>
                   )}
-                  {pasoPrimeraEtapa && !hu.permitirCasosAdicionales && !isAdmin && (
+                  {pasoPrimeraEtapa && !hu.permitirCasosAdicionales && !isAdmin && !huCerrada && (
                     <span style={{ fontSize:10, color:"var(--chart-3)", display:"flex", alignItems:"center", gap:4 }}>
                       <Lock size={10}/> No se pueden agregar más casos
                     </span>
@@ -407,67 +491,72 @@ export function HistoriaUsuarioDetail({
                 </div>
 
                 {/* Formulario nuevo caso */}
-                {showCasoForm && (
+                {showCasoForm && !editandoCaso && (
                   <div style={{ ...PNL, marginBottom:12, borderColor:"var(--primary)" }}>
                     <p style={{ fontSize:12, fontWeight:700, color:"var(--foreground)", marginBottom:10 }}>Nuevo Caso de Prueba</p>
-                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:8 }}>
-                      <div style={{ gridColumn:"1/3" }}>
-                        <Input value={casoTitulo} onChange={e => setCasoTitulo(e.target.value)} placeholder="Título del caso de prueba *" style={{ fontSize:12 }} />
-                      </div>
-                      <div style={{ gridColumn:"1/3" }}>
-                        <Textarea rows={2} value={casoDesc} onChange={e => setCasoDesc(e.target.value)} placeholder="Descripción..." style={{ fontSize:12, resize:"none" }} />
-                      </div>
-                      <div>
-                        <label style={{ fontSize:10, color:"var(--muted-foreground)", display:"block", marginBottom:4 }}>Entorno</label>
-                        <Select value={casoEntorno} onValueChange={(v: EntornoCaso) => setCasoEntorno(v)}>
-                          <SelectTrigger style={{ height:30, fontSize:11 }}><SelectValue/></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="test">Test</SelectItem>
-                            <SelectItem value="preproduccion">Pre-Producción</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <label style={{ fontSize:10, color:"var(--muted-foreground)", display:"block", marginBottom:4 }}>Tipo de prueba</label>
-                        <Select value={casoTipo} onValueChange={(v: TipoPrueba) => setCasoTipo(v)}>
-                          <SelectTrigger style={{ height:30, fontSize:11 }}><SelectValue/></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="funcional">Funcional</SelectItem>
-                            <SelectItem value="no_funcional">No Funcional</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <label style={{ fontSize:10, color:"var(--muted-foreground)", display:"block", marginBottom:4 }}>Complejidad</label>
-                        <Select value={casoComplejidad} onValueChange={(v: ComplejidadCaso) => setCasoComplejidad(v)}>
-                          <SelectTrigger style={{ height:30, fontSize:11 }}><SelectValue/></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="alta">Alta</SelectItem>
-                            <SelectItem value="media">Media</SelectItem>
-                            <SelectItem value="baja">Baja</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <label style={{ fontSize:10, color:"var(--muted-foreground)", display:"block", marginBottom:4 }}>Horas estimadas</label>
-                        <Input type="number" min={1} value={casoHoras} onChange={e => setCasoHoras(parseInt(e.target.value)||1)} style={{ height:30, fontSize:11 }} />
-                      </div>
-                      <div style={{ gridColumn:"1/3" }}>
-                        <label style={{ fontSize:10, color:"var(--muted-foreground)", display:"block", marginBottom:4 }}>Archivos analizados (separados por coma)</label>
-                        <Input value={casoArchivos} onChange={e => setCasoArchivos(e.target.value)} placeholder="archivo1.ts, archivo2.tsx" style={{ fontSize:11 }} />
-                      </div>
-                    </div>
+                    <CasoFormFields
+                      titulo={casoTitulo} onTitulo={setCasoTitulo}
+                      desc={casoDesc} onDesc={setCasoDesc}
+                      entorno={casoEntorno} onEntorno={setCasoEntorno}
+                      tipo={casoTipo} onTipo={setCasoTipo}
+                      horas={casoHoras} onHoras={setCasoHoras}
+                      archivos={casoArchivos} onArchivos={setCasoArchivos}
+                      complejidad={casoComplejidad} onComplejidad={setCasoComplejidad}
+                    />
                     <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
-                      <Button variant="outline" size="sm" onClick={() => setShowCasoForm(false)}>Cancelar</Button>
+                      <Button variant="outline" size="sm" onClick={() => { setShowCasoForm(false); resetCasoForm() }}>Cancelar</Button>
                       <Button size="sm" disabled={!casoTitulo.trim()} onClick={submitCaso}>Crear caso</Button>
                     </div>
                   </div>
                 )}
 
-                {/* Lista de casos */}
-                {casosHU.length === 0 && !showCasoForm && (
+                {/* Formulario editar caso */}
+                {editandoCaso && (
+                  <div style={{ ...PNL, marginBottom:12, borderColor:"var(--chart-1)" }}>
+                    <p style={{ fontSize:12, fontWeight:700, color:"var(--chart-1)", marginBottom:10 }}>
+                      <Pencil size={12} style={{ display:"inline", marginRight:5 }}/>Editando caso: {editandoCaso.id}
+                    </p>
+                    <CasoFormFields
+                      titulo={casoTitulo} onTitulo={setCasoTitulo}
+                      desc={casoDesc} onDesc={setCasoDesc}
+                      entorno={casoEntorno} onEntorno={setCasoEntorno}
+                      tipo={casoTipo} onTipo={setCasoTipo}
+                      horas={casoHoras} onHoras={setCasoHoras}
+                      archivos={casoArchivos} onArchivos={setCasoArchivos}
+                      complejidad={casoComplejidad} onComplejidad={setCasoComplejidad}
+                    />
+                    <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
+                      <Button variant="outline" size="sm" onClick={() => { setEditandoCaso(null); resetCasoForm() }}>Cancelar</Button>
+                      <Button size="sm" disabled={!casoTitulo.trim()} onClick={submitEditarCaso}>Guardar cambios</Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Formulario editar tarea (global — fuera de un caso específico) */}
+                {editandoTarea && (
+                  <div style={{ ...PNL, marginBottom:12, borderColor:"var(--chart-1)" }}>
+                    <p style={{ fontSize:12, fontWeight:700, color:"var(--chart-1)", marginBottom:10 }}>
+                      <Pencil size={12} style={{ display:"inline", marginRight:5 }}/>Editando tarea: {editandoTarea.titulo}
+                    </p>
+                    <TareaFormFields
+                      titulo={tareaTitulo} onTitulo={setTareaTitulo}
+                      desc={tareaDesc} onDesc={setTareaDesc}
+                      tipo={tareaTipo} onTipo={setTareaTipo}
+                      prioridad={tareaPrioridad} onPrioridad={setTareaPrioridad}
+                      horas={tareaHoras} onHoras={setTareaHoras}
+                    />
+                    <div style={{ display:"flex", gap:6, justifyContent:"flex-end" }}>
+                      <Button variant="outline" size="sm" style={{ height:26, fontSize:10 }}
+                        onClick={() => { setEditandoTarea(null); resetTareaForm() }}>Cancelar</Button>
+                      <Button size="sm" style={{ height:26, fontSize:10 }} disabled={!tareaTitulo.trim()}
+                        onClick={submitEditarTarea}>Guardar tarea</Button>
+                    </div>
+                  </div>
+                )}
+
+                {casosHU.length === 0 && !showCasoForm && !editandoCaso && (
                   <div style={{ textAlign:"center", padding:24, color:"var(--muted-foreground)", border:"1px dashed var(--border)", borderRadius:10 }}>
-                    <p style={{ fontSize:13 }}>Sin casos de prueba. {puedeAgregarCasos && "Crea uno con el botón Nuevo Caso."}</p>
+                    <p style={{ fontSize:13 }}>Sin casos de prueba.{puedeAgregarCasos ? " Crea uno con el botón Nuevo Caso." : ""}</p>
                   </div>
                 )}
 
@@ -480,12 +569,37 @@ export function HistoriaUsuarioDetail({
                     const isExpanded = expandedCaso === caso.id
                     const bloqueosActivos = caso.bloqueos.filter(b => !b.resuelto)
 
-                    // Resultado de etapa actual
                     const etapaActual = hu.etapa as EtapaEjecucion
                     const resultadoEtapaActual = caso.resultadosPorEtapa.find(r => r.etapa === etapaActual)
 
+                    // Caso completamente terminado (todas etapas exitosas)
+                    const casoCompletado = caso.resultadosPorEtapa.length > 0 &&
+                      caso.resultadosPorEtapa.every(r => r.resultado === "exitoso")
+
+                    // Puede editar/eliminar este caso (QA o Admin, siempre que no esté aprobado/pendiente)
+                    const puedeEditar = !huCerrada && (isQA || isAdmin) && (
+                      caso.estadoAprobacion === "borrador" ||
+                      caso.estadoAprobacion === "rechazado" ||
+                      caso.modificacionHabilitada
+                    )
+                    const puedeEliminar = !huCerrada && (isQA || isAdmin) && (
+                      caso.estadoAprobacion === "borrador" || caso.estadoAprobacion === "rechazado"
+                    )
+
+                    // Puede QA solicitar modificación de caso aprobado?
+                    const puedeSolicitarMod = !huCerrada && isQA &&
+                      caso.estadoAprobacion === "aprobado" &&
+                      !caso.modificacionSolicitada &&
+                      !caso.modificacionHabilitada
+
+                    // Admin ve solicitud de modificación pendiente?
+                    const adminVeSolicitud = isAdmin && caso.modificacionSolicitada && !caso.modificacionHabilitada
+
+                    // Puede añadir tareas (QA o admin, HU no cerrada, caso no completado)
+                    const puedeAddTarea = !huCerrada && !casoCompletado && (isQA || isAdmin)
+
                     return (
-                      <div key={caso.id} style={{ border:"1px solid var(--border)", borderRadius:10, background:"var(--card)", overflow:"hidden" }}>
+                      <div key={caso.id} style={{ border:`1px solid ${caso.modificacionSolicitada ? "var(--chart-3)" : "var(--border)"}`, borderRadius:10, background:"var(--card)", overflow:"hidden" }}>
                         {/* Cabecera del caso */}
                         <div style={{ display:"flex", alignItems:"center", gap:10, padding:"12px 14px", cursor:"pointer" }}
                           onClick={() => setExpandedCaso(isExpanded ? null : caso.id)} className="hover:bg-secondary/30">
@@ -495,6 +609,11 @@ export function HistoriaUsuarioDetail({
                               <Badge variant="outline" className={`${aprobCfg.cls} text-[9px]`}>{aprobCfg.label}</Badge>
                               <Badge variant="outline" className={`${tpColor} text-[9px]`}>{TIPO_PRUEBA_LABEL[caso.tipoPrueba]}</Badge>
                               <Badge variant="outline" className={`${compCfg.cls} text-[9px]`}>{compCfg.label}</Badge>
+                              {caso.modificacionSolicitada && !caso.modificacionHabilitada && (
+                                <Badge variant="outline" className="bg-chart-3/20 text-chart-3 border-chart-3/30 text-[9px]">
+                                  <Bell size={9} className="mr-1"/>Mod. solicitada
+                                </Badge>
+                              )}
                               {bloqueosActivos.length > 0 && (
                                 <span style={{ display:"flex", alignItems:"center", gap:2 }}>
                                   <AlertTriangle size={11} style={{ color:"var(--chart-4)" }}/>
@@ -502,11 +621,18 @@ export function HistoriaUsuarioDetail({
                               )}
                             </div>
                             <p style={{ fontSize:13, fontWeight:600, color:"var(--foreground)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{caso.titulo}</p>
+                            {caso.estadoAprobacion === "rechazado" && caso.motivoRechazo && (
+                              <div style={{ display:"flex", alignItems:"flex-start", gap:5, marginTop:4, padding:"5px 8px", borderRadius:6, background:"color-mix(in oklch,var(--chart-4) 8%,transparent)", border:"1px solid color-mix(in oklch,var(--chart-4) 25%,transparent)" }}>
+                                <AlertTriangle size={10} style={{ color:"var(--chart-4)", flexShrink:0, marginTop:1 }}/>
+                                <p style={{ fontSize:11, color:"var(--chart-4)", fontWeight:600, lineHeight:1.4 }}>
+                                  Motivo de rechazo: <span style={{ fontWeight:400 }}>{caso.motivoRechazo}</span>
+                                </p>
+                              </div>
+                            )}
                           </div>
                           <div style={{ display:"flex", alignItems:"center", gap:6, flexShrink:0 }}>
                             <span style={{ fontSize:11, color:"var(--muted-foreground)" }}>{caso.horasEstimadas}h</span>
                             <span style={{ fontSize:11, color:"var(--muted-foreground)" }}>{tareasCaso.length} tarea{tareasCaso.length!==1?"s":""}</span>
-                            {/* Resultados por etapa mini */}
                             {caso.resultadosPorEtapa.map(r => {
                               const retests = (r.intentos?.length || 0)
                               const retestLabel = retests > 1 ? ` (${retests})` : ""
@@ -523,6 +649,21 @@ export function HistoriaUsuarioDetail({
                                 </Badge>
                               )
                             })}
+                            {/* Botones editar/eliminar (sin expandir) */}
+                            {puedeEditar && (
+                              <button type="button" title="Editar caso"
+                                onClick={e => { e.stopPropagation(); abrirEditarCaso(caso) }}
+                                style={{ background:"none", border:"none", cursor:"pointer", color:"var(--chart-1)", padding:2 }}>
+                                <Pencil size={13}/>
+                              </button>
+                            )}
+                            {puedeEliminar && (
+                              <button type="button" title="Eliminar caso"
+                                onClick={e => { e.stopPropagation(); onEliminarCaso(caso.id, hu.id) }}
+                                style={{ background:"none", border:"none", cursor:"pointer", color:"var(--chart-4)", padding:2 }}>
+                                <Trash2 size={13}/>
+                              </button>
+                            )}
                             {isExpanded ? <ChevronUp size={14} style={{ color:"var(--muted-foreground)" }}/> : <ChevronDown size={14} style={{ color:"var(--muted-foreground)" }}/>}
                           </div>
                         </div>
@@ -530,18 +671,49 @@ export function HistoriaUsuarioDetail({
                         {/* Detalle expandido del caso */}
                         {isExpanded && (
                           <div style={{ padding:"0 14px 14px", borderTop:"1px solid var(--border)" }}>
-                            {/* Descripción */}
                             {caso.descripcion && (
                               <p style={{ fontSize:12, color:"var(--muted-foreground)", padding:"10px 0 6px", lineHeight:1.5 }}>{caso.descripcion}</p>
                             )}
 
-                            {/* Archivos */}
                             {caso.archivosAnalizados.length > 0 && (
                               <div style={{ display:"flex", gap:4, flexWrap:"wrap", marginBottom:8, marginTop:4 }}>
                                 <span style={{ fontSize:10, color:"var(--muted-foreground)" }}>Archivos:</span>
                                 {caso.archivosAnalizados.map((a,i) => (
                                   <Badge key={i} variant="outline" className="text-[9px] bg-muted text-muted-foreground border-border" style={{ padding:"1px 5px" }}>{a}</Badge>
                                 ))}
+                              </div>
+                            )}
+
+                            {/* Acciones del caso (por caso individual) */}
+                            <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:8, marginTop:6 }}>
+                              {/* QA: enviar este caso a aprobación */}
+                              {!huCerrada && isQA && (caso.estadoAprobacion === "borrador" || caso.estadoAprobacion === "rechazado") && (
+                                <Button size="sm" variant="outline" style={{ height:26, fontSize:10, padding:"0 10px" }}
+                                  onClick={() => onEnviarCasoAprobacion(caso.id, hu.id)}>
+                                  <Send size={10} className="mr-1"/> Enviar a aprobación
+                                </Button>
+                              )}
+                              {/* QA: solicitar modificación de caso aprobado */}
+                              {puedeSolicitarMod && (
+                                <Button size="sm" variant="outline" style={{ height:26, fontSize:10, padding:"0 10px", borderColor:"var(--chart-3)", color:"var(--chart-3)" }}
+                                  onClick={() => onSolicitarModificacionCaso(caso.id, hu.id)}>
+                                  <Bell size={10} className="mr-1"/> Solicitar modificación
+                                </Button>
+                              )}
+                              {/* Admin: habilitar modificación solicitada */}
+                              {adminVeSolicitud && (
+                                <Button size="sm" variant="outline" style={{ height:26, fontSize:10, padding:"0 10px" }}
+                                  onClick={() => onHabilitarModificacionCaso(caso.id, hu.id)}>
+                                  <Unlock size={10} className="mr-1"/> Habilitar modificación
+                                </Button>
+                              )}
+                            </div>
+
+                            {/* Motivo de rechazo */}
+                            {caso.estadoAprobacion === "rechazado" && caso.motivoRechazo && (
+                              <div style={{ padding:"6px 10px", borderRadius:7, background:"color-mix(in oklch, var(--chart-4) 6%, transparent)", border:"1px solid color-mix(in oklch, var(--chart-4) 30%, var(--border))", marginBottom:8, fontSize:11 }}>
+                                <span style={{ fontWeight:600, color:"var(--chart-4)" }}>Rechazo:</span>{" "}
+                                <span style={{ color:"var(--foreground)" }}>{caso.motivoRechazo}</span>
                               </div>
                             )}
 
@@ -564,7 +736,7 @@ export function HistoriaUsuarioDetail({
                                   <div style={{ padding:"10px 12px", borderRadius:8, border:"1px solid var(--chart-4)", background:"color-mix(in oklch, var(--chart-4) 4%, var(--background))" }}>
                                     <p style={{ fontSize:11, fontWeight:600, color:"var(--chart-4)", marginBottom:6 }}>Describe qué falló en la prueba *</p>
                                     <Textarea rows={2} value={comentarioFallo} onChange={e => setComentarioFallo(e.target.value)}
-                                      placeholder="Ej: El endpoint /api/login retorna 500 cuando se envían credenciales con caracteres especiales..."
+                                      placeholder="Ej: El endpoint retorna 500 cuando se envían credenciales con caracteres especiales..."
                                       style={{ fontSize:12, resize:"none", marginBottom:8 }} />
                                     <div style={{ display:"flex", gap:6, justifyContent:"flex-end" }}>
                                       <Button variant="outline" size="sm" style={{ height:26, fontSize:10 }}
@@ -595,7 +767,7 @@ export function HistoriaUsuarioDetail({
                                   <div style={{ padding:"10px 12px", borderRadius:8, border:"1px solid var(--chart-1)", background:"color-mix(in oklch, var(--chart-1) 4%, var(--background))" }}>
                                     <p style={{ fontSize:11, fontWeight:600, color:"var(--chart-1)", marginBottom:6 }}>Describe qué se corrigió para re-probar *</p>
                                     <Textarea rows={2} value={comentarioCorreccion} onChange={e => setComentarioCorreccion(e.target.value)}
-                                      placeholder="Ej: Se corrigió la validación de caracteres especiales en el endpoint /api/login, deploy realizado en branch fix/login-encoding..."
+                                      placeholder="Ej: Se corrigió la validación, deploy realizado en branch fix/login-encoding..."
                                       style={{ fontSize:12, resize:"none", marginBottom:8 }} />
                                     <div style={{ display:"flex", gap:6, justifyContent:"flex-end" }}>
                                       <Button variant="outline" size="sm" style={{ height:26, fontSize:10 }}
@@ -614,7 +786,7 @@ export function HistoriaUsuarioDetail({
                               </div>
                             )}
 
-                            {/* Historial de intentos (retesteos) — todas las etapas */}
+                            {/* Historial de intentos */}
                             {caso.resultadosPorEtapa.some(r => (r.intentos?.length || 0) > 0) && (
                               <div style={{ marginBottom:10, marginTop:4 }}>
                                 <p style={{ fontSize:10, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.1em", color:"var(--muted-foreground)", marginBottom:6 }}>
@@ -638,14 +810,10 @@ export function HistoriaUsuarioDetail({
                                           <span style={{ fontSize:10, color:"var(--muted-foreground)" }}>{fmtCorto(intento.fecha)} · {intento.ejecutadoPor}</span>
                                         </div>
                                         {intento.comentarioFallo && (
-                                          <p style={{ color:"var(--chart-4)", fontSize:11 }}>
-                                            <strong>Fallo:</strong> {intento.comentarioFallo}
-                                          </p>
+                                          <p style={{ color:"var(--chart-4)", fontSize:11 }}><strong>Fallo:</strong> {intento.comentarioFallo}</p>
                                         )}
                                         {intento.comentarioCorreccion && (
-                                          <p style={{ color:"var(--chart-2)", fontSize:11 }}>
-                                            <strong>Corrección:</strong> {intento.comentarioCorreccion}
-                                          </p>
+                                          <p style={{ color:"var(--chart-2)", fontSize:11 }}><strong>Corrección:</strong> {intento.comentarioCorreccion}</p>
                                         )}
                                       </div>
                                     ))
@@ -654,14 +822,14 @@ export function HistoriaUsuarioDetail({
                               </div>
                             )}
 
-                            {/* Tareas del caso */}
+                            {/* ── Tareas del caso ── */}
                             <div style={{ marginTop:8 }}>
                               <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
                                 <p style={{ fontSize:10, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.1em", color:"var(--muted-foreground)" }}>
                                   Tareas ({tareasCaso.length})
                                 </p>
-                                {(isQA || isAdmin) && caso.estadoAprobacion === "aprobado" && (
-                                  <button type="button" onClick={(e) => { e.stopPropagation(); setShowTareaForm(caso.id) }}
+                                {puedeAddTarea && showTareaForm !== caso.id && (
+                                  <button type="button" onClick={e => { e.stopPropagation(); setShowTareaForm(caso.id) }}
                                     style={{ fontSize:10, color:"var(--primary)", background:"none", border:"none", cursor:"pointer", fontWeight:600, display:"flex", alignItems:"center", gap:3 }}>
                                     <Plus size={10}/> Tarea
                                   </button>
@@ -671,38 +839,16 @@ export function HistoriaUsuarioDetail({
                               {/* Formulario nueva tarea */}
                               {showTareaForm === caso.id && (
                                 <div style={{ padding:"10px 12px", borderRadius:8, border:"1px solid var(--primary)", background:"var(--background)", marginBottom:8 }}>
-                                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6, marginBottom:6 }}>
-                                    <div style={{ gridColumn:"1/3" }}>
-                                      <Input value={tareaTitulo} onChange={e => setTareaTitulo(e.target.value)} placeholder="Título de la tarea *" style={{ fontSize:11 }} />
-                                    </div>
-                                    <div>
-                                      <Select value={tareaTipo} onValueChange={(v: TipoTarea) => setTareaTipo(v)}>
-                                        <SelectTrigger style={{ height:28, fontSize:10 }}><SelectValue/></SelectTrigger>
-                                        <SelectContent>
-                                          {(Object.keys(TIPO_TAREA_LABEL) as TipoTarea[]).map(k => (
-                                            <SelectItem key={k} value={k}>{TIPO_TAREA_LABEL[k]}</SelectItem>
-                                          ))}
-                                        </SelectContent>
-                                      </Select>
-                                    </div>
-                                    <div>
-                                      <Select value={tareaPrioridad} onValueChange={(v: PrioridadTarea) => setTareaPrioridad(v)}>
-                                        <SelectTrigger style={{ height:28, fontSize:10 }}><SelectValue/></SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value="alta">Alta</SelectItem>
-                                          <SelectItem value="media">Media</SelectItem>
-                                          <SelectItem value="baja">Baja</SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                    </div>
-                                    <div>
-                                      <Input type="number" min={1} value={tareaHoras} onChange={e => setTareaHoras(parseInt(e.target.value)||1)}
-                                        placeholder="Horas" style={{ height:28, fontSize:10 }} />
-                                    </div>
-                                  </div>
+                                  <TareaFormFields
+                                    titulo={tareaTitulo} onTitulo={setTareaTitulo}
+                                    desc={tareaDesc} onDesc={setTareaDesc}
+                                    tipo={tareaTipo} onTipo={setTareaTipo}
+                                    prioridad={tareaPrioridad} onPrioridad={setTareaPrioridad}
+                                    horas={tareaHoras} onHoras={setTareaHoras}
+                                  />
                                   <div style={{ display:"flex", gap:6, justifyContent:"flex-end" }}>
                                     <Button variant="outline" size="sm" style={{ height:24, fontSize:10 }}
-                                      onClick={() => setShowTareaForm(null)}>Cancelar</Button>
+                                      onClick={() => { setShowTareaForm(null); resetTareaForm() }}>Cancelar</Button>
                                     <Button size="sm" style={{ height:24, fontSize:10 }} disabled={!tareaTitulo.trim()}
                                       onClick={() => submitTarea(caso.id)}>Crear</Button>
                                   </div>
@@ -715,30 +861,50 @@ export function HistoriaUsuarioDetail({
 
                               {tareasCaso.map(tarea => {
                                 const tareaBloqueos = tarea.bloqueos.filter(b => !b.resuelto)
-                                return (
-                                  <div key={tarea.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 10px",
-                                    borderRadius:7, border:"1px solid var(--border)", marginBottom:4, background:"var(--card)" }}>
-                                    <div style={{ flex:1, minWidth:0 }}>
-                                      <div style={{ display:"flex", alignItems:"center", gap:5 }}>
-                                        <Badge variant="outline" className={`${TIPO_TAREA_COLOR[tarea.tipo]} text-[8px]`} style={{ padding:"0px 4px" }}>
-                                          {TIPO_TAREA_LABEL[tarea.tipo]}
-                                        </Badge>
-                                        <p style={{ fontSize:12, fontWeight:500, color:"var(--foreground)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{tarea.titulo}</p>
-                                        {tareaBloqueos.length > 0 && <AlertTriangle size={10} style={{ color:"var(--chart-4)", flexShrink:0 }}/>}
-                                      </div>
-                                      <p style={{ fontSize:10, color:"var(--muted-foreground)", marginTop:2 }}>{tarea.asignado} · {tarea.horasEstimadas}h</p>
-                                    </div>
-                                    <Badge variant="outline" className={`text-[9px] ${
-                                      tarea.estado === "completada" ? "bg-chart-2/20 text-chart-2 border-chart-2/30" :
-                                      tarea.estado === "bloqueada" ? "bg-chart-4/20 text-chart-4 border-chart-4/30" :
-                                      tarea.estado === "en_progreso" ? "bg-chart-1/20 text-chart-1 border-chart-1/30" :
-                                      "bg-muted text-muted-foreground border-border"
-                                    }`}>{tarea.estado === "completada" ? "Completada" : tarea.estado === "bloqueada" ? "Bloqueada" : tarea.estado === "en_progreso" ? "En Progreso" : "Pendiente"}</Badge>
+                                const puedeManejarTarea = !huCerrada && (isQA || isAdmin) && tarea.estado !== "completada"
+                                const puedeEditarTarea = !huCerrada && (isQA || isAdmin) && tarea.estado === "pendiente"
+                                const puedeEliminarTarea = !huCerrada && (isQA || isAdmin) &&
+                                  (tarea.estado === "pendiente" || tarea.estado === "en_progreso")
 
-                                    {/* Acciones de tarea */}
-                                    {(isQA || isAdmin) && tarea.estado !== "completada" && (
+                                return (
+                                  <div key={tarea.id} style={{ padding:"8px 10px", borderRadius:7, border:"1px solid var(--border)", marginBottom:4, background:"var(--card)" }}>
+                                    <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                                      <div style={{ flex:1, minWidth:0 }}>
+                                        <div style={{ display:"flex", alignItems:"center", gap:5 }}>
+                                          <Badge variant="outline" className={`${TIPO_TAREA_COLOR[tarea.tipo]} text-[8px]`} style={{ padding:"0px 4px" }}>
+                                            {TIPO_TAREA_LABEL[tarea.tipo]}
+                                          </Badge>
+                                          <p style={{ fontSize:12, fontWeight:500, color:"var(--foreground)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{tarea.titulo}</p>
+                                          {tareaBloqueos.length > 0 && <AlertTriangle size={10} style={{ color:"var(--chart-4)", flexShrink:0 }}/>}
+                                        </div>
+                                        <p style={{ fontSize:10, color:"var(--muted-foreground)", marginTop:2 }}>{tarea.asignado} · {tarea.horasEstimadas}h</p>
+                                      </div>
+                                      <Badge variant="outline" className={`text-[9px] ${
+                                        tarea.estado === "completada" ? "bg-chart-2/20 text-chart-2 border-chart-2/30" :
+                                        tarea.estado === "bloqueada" ? "bg-chart-4/20 text-chart-4 border-chart-4/30" :
+                                        tarea.estado === "en_progreso" ? "bg-chart-1/20 text-chart-1 border-chart-1/30" :
+                                        "bg-muted text-muted-foreground border-border"
+                                      }`}>
+                                        {tarea.estado === "completada" ? "Completada" : tarea.estado === "bloqueada" ? "Bloqueada" : tarea.estado === "en_progreso" ? "En Progreso" : "Pendiente"}
+                                      </Badge>
+
+                                      {/* Acciones de tarea */}
                                       <div style={{ display:"flex", gap:3, flexShrink:0 }}>
-                                        {tarea.estado !== "bloqueada" && (
+                                        {puedeEditarTarea && (
+                                          <button type="button" title="Editar tarea"
+                                            onClick={() => abrirEditarTarea(tarea)}
+                                            style={{ background:"none", border:"none", cursor:"pointer", color:"var(--chart-1)", padding:2 }}>
+                                            <Pencil size={13}/>
+                                          </button>
+                                        )}
+                                        {puedeEliminarTarea && (
+                                          <button type="button" title="Eliminar tarea"
+                                            onClick={() => onEliminarTarea(tarea.id, caso.id)}
+                                            style={{ background:"none", border:"none", cursor:"pointer", color:"var(--chart-4)", padding:2 }}>
+                                            <Trash2 size={13}/>
+                                          </button>
+                                        )}
+                                        {puedeManejarTarea && tarea.estado !== "bloqueada" && (
                                           <>
                                             <button type="button" title="Completar exitosa" onClick={() => onCompletarTarea(tarea.id, "exitoso")}
                                               style={{ background:"none", border:"none", cursor:"pointer", color:"var(--chart-2)", padding:2 }}>
@@ -754,7 +920,7 @@ export function HistoriaUsuarioDetail({
                                             </button>
                                           </>
                                         )}
-                                        {tarea.estado === "bloqueada" && tarea.bloqueos.filter(b => !b.resuelto).length > 0 && (
+                                        {puedeManejarTarea && tarea.estado === "bloqueada" && tareaBloqueos.length > 0 && (
                                           <button type="button" title="Desbloquear tarea" onClick={() => {
                                             const bl = tarea.bloqueos.find(b => !b.resuelto)
                                             if (bl) onDesbloquearTarea(tarea.id, bl.id)
@@ -764,37 +930,30 @@ export function HistoriaUsuarioDetail({
                                           </button>
                                         )}
                                       </div>
-                                    )}
+                                    </div>
 
-                                    {/* Bloqueo tarea form inline */}
+                                    {/* Formulario bloqueo tarea (inline bajo la tarea) */}
                                     {showBloqueoTareaForm === tarea.id && (
-                                      <div style={{ position:"absolute", right:0, top:"100%", zIndex:10 }}>
-                                        {/* inline below */}
+                                      <div style={{ padding:"8px 10px", borderRadius:7, border:"1px solid var(--chart-3)", background:"var(--background)", marginTop:6 }}>
+                                        <Input value={bloqueoTareaTexto} onChange={e => setBloqueoTareaTexto(e.target.value)}
+                                          placeholder="Descripción del bloqueo..." style={{ fontSize:11, marginBottom:6 }} />
+                                        <div style={{ display:"flex", gap:6, justifyContent:"flex-end" }}>
+                                          <Button variant="outline" size="sm" style={{ height:24, fontSize:10 }}
+                                            onClick={() => setShowBloqueoTareaForm(null)}>Cancelar</Button>
+                                          <Button size="sm" style={{ height:24, fontSize:10 }} disabled={!bloqueoTareaTexto.trim()}
+                                            onClick={() => {
+                                              onBloquearTarea(tarea.id, {
+                                                id: `bl-${Date.now()}`, descripcion: bloqueoTareaTexto.trim(),
+                                                reportadoPor: currentUser || "Sistema", fecha: new Date(), resuelto: false,
+                                              })
+                                              setShowBloqueoTareaForm(null); setBloqueoTareaTexto("")
+                                            }}>Bloquear</Button>
+                                        </div>
                                       </div>
                                     )}
                                   </div>
                                 )
                               })}
-
-                              {/* Formulario bloqueo tarea */}
-                              {showBloqueoTareaForm && tareasCaso.some(t => t.id === showBloqueoTareaForm) && (
-                                <div style={{ padding:"8px 10px", borderRadius:7, border:"1px solid var(--chart-3)", background:"var(--background)", marginTop:4 }}>
-                                  <Input value={bloqueoTareaTexto} onChange={e => setBloqueoTareaTexto(e.target.value)}
-                                    placeholder="Descripción del bloqueo..." style={{ fontSize:11, marginBottom:6 }} />
-                                  <div style={{ display:"flex", gap:6, justifyContent:"flex-end" }}>
-                                    <Button variant="outline" size="sm" style={{ height:24, fontSize:10 }}
-                                      onClick={() => setShowBloqueoTareaForm(null)}>Cancelar</Button>
-                                    <Button size="sm" style={{ height:24, fontSize:10 }} disabled={!bloqueoTareaTexto.trim()}
-                                      onClick={() => {
-                                        onBloquearTarea(showBloqueoTareaForm, {
-                                          id: `bl-${Date.now()}`, descripcion: bloqueoTareaTexto.trim(),
-                                          reportadoPor: currentUser || "Sistema", fecha: new Date(), resuelto: false,
-                                        })
-                                        setShowBloqueoTareaForm(null); setBloqueoTareaTexto("")
-                                      }}>Bloquear</Button>
-                                  </div>
-                                </div>
-                              )}
                             </div>
                           </div>
                         )}
@@ -808,7 +967,7 @@ export function HistoriaUsuarioDetail({
               <div style={PNL}>
                 <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
                   <p style={{ ...SLBL, marginBottom:0 }}><ShieldAlert size={11}/>Bloqueos de la HU</p>
-                  {(isQA || isAdmin) && (
+                  {(isQA || isAdmin) && !huCerrada && (
                     <button onClick={()=>setShowBloqueoForm(v=>!v)} style={{ background:"none", border:"none", cursor:"pointer", fontSize:11, color:"var(--primary)", display:"flex", alignItems:"center", gap:4, fontWeight:600 }}>
                       <Plus size={11}/>Reportar
                     </button>
@@ -877,7 +1036,7 @@ export function HistoriaUsuarioDetail({
               </div>
             </div>
 
-            {/* COL DERECHA: Timeline / Historial */}
+            {/* COL DERECHA: Historial */}
             <div style={{ position:"sticky", top:0 }}>
               <div style={PNL}>
                 <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:14 }}>
@@ -919,5 +1078,114 @@ export function HistoriaUsuarioDetail({
         </div>
       </DialogContent>
     </Dialog>
+  )
+}
+
+// ── Sub-formularios reutilizables ──────────────────────────────
+
+interface CasoFormFieldsProps {
+  titulo: string; onTitulo: (v: string) => void
+  desc: string; onDesc: (v: string) => void
+  entorno: EntornoCaso; onEntorno: (v: EntornoCaso) => void
+  tipo: TipoPrueba; onTipo: (v: TipoPrueba) => void
+  horas: number; onHoras: (v: number) => void
+  archivos: string; onArchivos: (v: string) => void
+  complejidad: ComplejidadCaso; onComplejidad: (v: ComplejidadCaso) => void
+}
+
+function CasoFormFields({ titulo, onTitulo, desc, onDesc, entorno, onEntorno, tipo, onTipo, horas, onHoras, archivos, onArchivos, complejidad, onComplejidad }: CasoFormFieldsProps) {
+  return (
+    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:8 }}>
+      <div style={{ gridColumn:"1/3" }}>
+        <Input value={titulo} onChange={e => onTitulo(e.target.value)} placeholder="Título del caso de prueba *" style={{ fontSize:12 }} />
+      </div>
+      <div style={{ gridColumn:"1/3" }}>
+        <Textarea rows={2} value={desc} onChange={e => onDesc(e.target.value)} placeholder="Descripción..." style={{ fontSize:12, resize:"none" }} />
+      </div>
+      <div>
+        <label style={{ fontSize:10, color:"var(--muted-foreground)", display:"block", marginBottom:4 }}>Entorno</label>
+        <Select value={entorno} onValueChange={(v: EntornoCaso) => onEntorno(v)}>
+          <SelectTrigger style={{ height:30, fontSize:11 }}><SelectValue/></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="test">Test</SelectItem>
+            <SelectItem value="preproduccion">Pre-Producción</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div>
+        <label style={{ fontSize:10, color:"var(--muted-foreground)", display:"block", marginBottom:4 }}>Tipo de prueba</label>
+        <Select value={tipo} onValueChange={(v: TipoPrueba) => onTipo(v)}>
+          <SelectTrigger style={{ height:30, fontSize:11 }}><SelectValue/></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="funcional">Funcional</SelectItem>
+            <SelectItem value="no_funcional">No Funcional</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div>
+        <label style={{ fontSize:10, color:"var(--muted-foreground)", display:"block", marginBottom:4 }}>Complejidad</label>
+        <Select value={complejidad} onValueChange={(v: ComplejidadCaso) => onComplejidad(v)}>
+          <SelectTrigger style={{ height:30, fontSize:11 }}><SelectValue/></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="alta">Alta</SelectItem>
+            <SelectItem value="media">Media</SelectItem>
+            <SelectItem value="baja">Baja</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div>
+        <label style={{ fontSize:10, color:"var(--muted-foreground)", display:"block", marginBottom:4 }}>Horas estimadas</label>
+        <Input type="number" min={1} value={horas} onChange={e => onHoras(parseInt(e.target.value)||1)} style={{ height:30, fontSize:11 }} />
+      </div>
+      <div style={{ gridColumn:"1/3" }}>
+        <label style={{ fontSize:10, color:"var(--muted-foreground)", display:"block", marginBottom:4 }}>Archivos analizados (separados por coma)</label>
+        <Input value={archivos} onChange={e => onArchivos(e.target.value)} placeholder="archivo1.ts, archivo2.tsx" style={{ fontSize:11 }} />
+      </div>
+    </div>
+  )
+}
+
+interface TareaFormFieldsProps {
+  titulo: string; onTitulo: (v: string) => void
+  desc: string; onDesc: (v: string) => void
+  tipo: TipoTarea; onTipo: (v: TipoTarea) => void
+  prioridad: PrioridadTarea; onPrioridad: (v: PrioridadTarea) => void
+  horas: number; onHoras: (v: number) => void
+}
+
+function TareaFormFields({ titulo, onTitulo, desc, onDesc, tipo, onTipo, prioridad, onPrioridad, horas, onHoras }: TareaFormFieldsProps) {
+  return (
+    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6, marginBottom:6 }}>
+      <div style={{ gridColumn:"1/3" }}>
+        <Input value={titulo} onChange={e => onTitulo(e.target.value)} placeholder="Título de la tarea *" style={{ fontSize:11 }} />
+      </div>
+      <div style={{ gridColumn:"1/3" }}>
+        <Input value={desc} onChange={e => onDesc(e.target.value)} placeholder="Descripción (opcional)" style={{ fontSize:11 }} />
+      </div>
+      <div>
+        <Select value={tipo} onValueChange={(v: TipoTarea) => onTipo(v)}>
+          <SelectTrigger style={{ height:28, fontSize:10 }}><SelectValue/></SelectTrigger>
+          <SelectContent>
+            {(Object.keys(TIPO_TAREA_LABEL) as TipoTarea[]).map(k => (
+              <SelectItem key={k} value={k}>{TIPO_TAREA_LABEL[k]}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div>
+        <Select value={prioridad} onValueChange={(v: PrioridadTarea) => onPrioridad(v)}>
+          <SelectTrigger style={{ height:28, fontSize:10 }}><SelectValue/></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="alta">Alta</SelectItem>
+            <SelectItem value="media">Media</SelectItem>
+            <SelectItem value="baja">Baja</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div>
+        <Input type="number" min={1} value={horas} onChange={e => onHoras(parseInt(e.target.value)||1)}
+          placeholder="Horas" style={{ height:28, fontSize:10 }} />
+      </div>
+    </div>
   )
 }

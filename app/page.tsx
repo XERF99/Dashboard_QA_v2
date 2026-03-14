@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Header } from "@/components/dashboard/header"
 import { HistoriasTable } from "@/components/dashboard/historias-table"
 import { HistoriaUsuarioDetail } from "@/components/dashboard/historia-usuario-detail"
@@ -16,8 +16,9 @@ import { useAuth } from "@/lib/auth-context"
 import {
   historiasEjemplo, casosPruebaEjemplo, tareasEjemplo,
   crearEvento, etapasParaTipo, siguienteEtapa, etapaCompletada,
+  TIPO_APLICACION_LABEL, AMBIENTE_LABEL,
   type HistoriaUsuario, type CasoPrueba, type Tarea, type Bloqueo,
-  type EtapaEjecucion, type EstadoAprobacion,
+  type EtapaEjecucion, type EstadoAprobacion, type Notificacion, type TipoNotificacion,
 } from "@/lib/types"
 
 // ── Toast ──────────────────────────────────────────────────
@@ -111,18 +112,69 @@ export default function DashboardPage() {
     setTimeout(() => setToasts(p => p.filter(x => x.id!==id)), 4500)
   }
 
-  // ── Filtros por rol ──
+  // ── Notificaciones (persistidas en localStorage) ──
+  const NOTIF_KEY = "qa_dashboard_notificaciones"
+  const _nc = useRef(0)
+
+  const [notificaciones, setNotificaciones] = useState<Notificacion[]>(() => {
+    if (typeof window === "undefined") return []
+    try {
+      const raw = localStorage.getItem(NOTIF_KEY)
+      if (!raw) return []
+      const parsed = JSON.parse(raw) as Array<Notificacion & { fecha: string }>
+      return parsed.map(n => ({ ...n, fecha: new Date(n.fecha) }))
+    } catch {
+      return []
+    }
+  })
+
+  // Sincronizar con localStorage cada vez que cambien las notificaciones
+  useEffect(() => {
+    try {
+      localStorage.setItem(NOTIF_KEY, JSON.stringify(notificaciones))
+    } catch { /* cuota excedida u otros errores: ignorar */ }
+  }, [notificaciones])
+
+  const addNotificacion = (
+    tipo: TipoNotificacion,
+    titulo: string,
+    descripcion: string,
+    destinatario: "admin" | "qa",
+    extra?: Pick<Notificacion, "casoId" | "huId" | "huTitulo" | "casoTitulo">
+  ) => {
+    const n: Notificacion = {
+      id: `notif-${Date.now()}-${++_nc.current}`,
+      tipo, titulo, descripcion, destinatario,
+      fecha: new Date(), leida: false,
+      ...extra,
+    }
+    setNotificaciones(p => [n, ...p])
+  }
+  const handleMarcarLeida = (id: string) =>
+    setNotificaciones(p => p.map(n => n.id === id ? { ...n, leida: true } : n))
+  const handleMarcarTodasLeidas = () =>
+    setNotificaciones(p => p.map(n => ({ ...n, leida: true })))
+
+  // ── Filtros por rol + búsqueda global ──
   const historiasVisibles = historias.filter(hu => {
     if (verSoloPropios && user) {
       return hu.responsable.toLowerCase() === user.nombre.toLowerCase()
     }
     return true
-  }).filter(hu =>
-    !busqueda ||
-    hu.titulo.toLowerCase().includes(busqueda.toLowerCase()) ||
-    hu.codigo.toLowerCase().includes(busqueda.toLowerCase()) ||
-    hu.responsable.toLowerCase().includes(busqueda.toLowerCase())
-  )
+  }).filter(hu => {
+    if (!busqueda) return true
+    const q = busqueda.toLowerCase()
+    const casosHU = casos.filter(c => hu.casosIds.includes(c.id))
+    return (
+      hu.titulo.toLowerCase().includes(q) ||
+      hu.codigo.toLowerCase().includes(q) ||
+      hu.responsable.toLowerCase().includes(q) ||
+      (hu.descripcion?.toLowerCase().includes(q) ?? false) ||
+      TIPO_APLICACION_LABEL[hu.tipoAplicacion].toLowerCase().includes(q) ||
+      AMBIENTE_LABEL[hu.ambiente].toLowerCase().includes(q) ||
+      casosHU.some(c => c.titulo.toLowerCase().includes(q))
+    )
+  })
 
   // ── CRUD HU (solo admin) ──
   const handleNuevaHU  = () => { setHuEditar(null); setHuFormOpen(true) }
@@ -188,13 +240,17 @@ export default function DashboardPage() {
 
   const handleEnviarAprobacion = (huId: string) => {
     setCasos(prev => prev.map(c =>
-      c.huId === huId && c.estadoAprobacion === "borrador"
+      c.huId === huId && (c.estadoAprobacion === "borrador" || c.estadoAprobacion === "rechazado")
         ? { ...c, estadoAprobacion: "pendiente_aprobacion" as EstadoAprobacion } : c
     ))
     const ev = crearEvento("caso_enviado_aprobacion", "Casos enviados para aprobación", user?.nombre || "Sistema")
     setHistorias(prev => prev.map(h => h.id === huId ? { ...h, historial: [...h.historial, ev] } : h))
     setHuSeleccionada(prev => prev?.id === huId ? { ...prev, historial: [...prev.historial, ev] } : prev)
     addToast({ type:"info", title:"Casos enviados", desc:"Pendientes de aprobación" })
+    const hu = historias.find(h => h.id === huId)
+    addNotificacion("aprobacion_enviada", "Casos enviados a aprobación",
+      `${user?.nombre || "QA"} envió todos los casos de la HU "${hu?.titulo || huId}" para aprobación`,
+      "admin", { huId, huTitulo: hu?.titulo })
   }
 
   const handleAprobarCasos = (huId: string) => {
@@ -206,6 +262,10 @@ export default function DashboardPage() {
     setHistorias(prev => prev.map(h => h.id === huId ? { ...h, historial: [...h.historial, ev] } : h))
     setHuSeleccionada(prev => prev?.id === huId ? { ...prev, historial: [...prev.historial, ev] } : prev)
     addToast({ type:"success", title:"Casos aprobados" })
+    const hu = historias.find(h => h.id === huId)
+    addNotificacion("caso_aprobado", "Casos aprobados",
+      `Admin aprobó todos los casos de la HU "${hu?.titulo || huId}"`,
+      "qa", { huId, huTitulo: hu?.titulo })
   }
 
   const handleRechazarCasos = (huId: string, motivo: string) => {
@@ -217,6 +277,10 @@ export default function DashboardPage() {
     setHistorias(prev => prev.map(h => h.id === huId ? { ...h, historial: [...h.historial, ev] } : h))
     setHuSeleccionada(prev => prev?.id === huId ? { ...prev, historial: [...prev.historial, ev] } : prev)
     addToast({ type:"warning", title:"Casos rechazados", desc:motivo.slice(0,60) })
+    const hu = historias.find(h => h.id === huId)
+    addNotificacion("caso_rechazado", "Casos rechazados",
+      `Admin rechazó los casos de la HU "${hu?.titulo || huId}": ${motivo.slice(0,80)}`,
+      "qa", { huId, huTitulo: hu?.titulo })
   }
 
   const handleCompletarCasoEtapa = (casoId: string, etapa: EtapaEjecucion, resultado: "exitoso" | "fallido", comentarioFallo?: string) => {
@@ -312,11 +376,88 @@ export default function DashboardPage() {
     addToast({ type:"info", title:"Ejecución iniciada", desc:`Etapa: ${etapa}` })
   }
 
+  // ── CRUD casos adicionales ──
+  const handleEditarCaso = (caso: CasoPrueba) => {
+    setCasos(prev => prev.map(c => c.id === caso.id ? caso : c))
+    const ev = crearEvento("caso_editado", `Caso editado: ${caso.titulo}`, user?.nombre || "Sistema")
+    setHistorias(prev => prev.map(h => h.id === caso.huId ? { ...h, historial: [...h.historial, ev] } : h))
+    setHuSeleccionada(prev => prev?.id === caso.huId ? { ...prev, historial: [...prev.historial, ev] } : prev)
+    addToast({ type:"success", title:"Caso actualizado", desc:caso.titulo })
+  }
+
+  const handleEliminarCaso = (casoId: string, huId: string) => {
+    setCasos(prev => prev.filter(c => c.id !== casoId))
+    setTareas(prev => prev.filter(t => t.casoPruebaId !== casoId))
+    const ev = crearEvento("caso_eliminado", "Caso de prueba eliminado", user?.nombre || "Sistema")
+    const upd = (h: HistoriaUsuario) => h.id === huId
+      ? { ...h, casosIds: h.casosIds.filter(id => id !== casoId), historial: [...h.historial, ev] } : h
+    setHistorias(prev => prev.map(upd))
+    setHuSeleccionada(prev => prev?.id === huId ? upd(prev) : prev)
+    addToast({ type:"warning", title:"Caso eliminado" })
+  }
+
+  const handleEnviarCasoAprobacion = (casoId: string, huId: string) => {
+    const caso = casos.find(c => c.id === casoId)
+    const hu = historias.find(h => h.id === huId)
+    setCasos(prev => prev.map(c =>
+      c.id === casoId && (c.estadoAprobacion === "borrador" || c.estadoAprobacion === "rechazado")
+        ? { ...c, estadoAprobacion: "pendiente_aprobacion" as EstadoAprobacion } : c
+    ))
+    const ev = crearEvento("caso_enviado_aprobacion", "Caso enviado para aprobación", user?.nombre || "Sistema")
+    setHistorias(prev => prev.map(h => h.id === huId ? { ...h, historial: [...h.historial, ev] } : h))
+    setHuSeleccionada(prev => prev?.id === huId ? { ...prev, historial: [...prev.historial, ev] } : prev)
+    addToast({ type:"info", title:"Caso enviado", desc:"Pendiente de aprobación" })
+    addNotificacion("aprobacion_enviada", "Caso enviado a aprobación",
+      `${user?.nombre || "QA"} envió el caso "${caso?.titulo || casoId}" de la HU "${hu?.titulo || huId}" para aprobación`,
+      "admin", { casoId, huId, casoTitulo: caso?.titulo, huTitulo: hu?.titulo })
+  }
+
+  const handleSolicitarModificacionCaso = (casoId: string, huId: string) => {
+    const caso = casos.find(c => c.id === casoId)
+    const hu = historias.find(h => h.id === huId)
+    setCasos(prev => prev.map(c =>
+      c.id === casoId ? { ...c, modificacionSolicitada: true } : c
+    ))
+    const ev = crearEvento("caso_modificacion_solicitada", "QA solicitó modificación de caso aprobado", user?.nombre || "Sistema")
+    setHistorias(prev => prev.map(h => h.id === huId ? { ...h, historial: [...h.historial, ev] } : h))
+    setHuSeleccionada(prev => prev?.id === huId ? { ...prev, historial: [...prev.historial, ev] } : prev)
+    addToast({ type:"info", title:"Modificación solicitada", desc:"El admin puede habilitar el cambio" })
+    addNotificacion("modificacion_solicitada", "Solicitud de modificación",
+      `${user?.nombre || "QA"} solicita modificar el caso aprobado "${caso?.titulo || casoId}" de la HU "${hu?.titulo || huId}"`,
+      "admin", { casoId, huId, casoTitulo: caso?.titulo, huTitulo: hu?.titulo })
+  }
+
+  const handleHabilitarModificacionCaso = (casoId: string, huId: string) => {
+    const caso = casos.find(c => c.id === casoId)
+    const hu = historias.find(h => h.id === huId)
+    setCasos(prev => prev.map(c =>
+      c.id === casoId ? { ...c, modificacionHabilitada: true, modificacionSolicitada: false, estadoAprobacion: "borrador" as EstadoAprobacion } : c
+    ))
+    const ev = crearEvento("caso_modificacion_habilitada", "Admin habilitó modificación de caso", user?.nombre || "Sistema")
+    setHistorias(prev => prev.map(h => h.id === huId ? { ...h, historial: [...h.historial, ev] } : h))
+    setHuSeleccionada(prev => prev?.id === huId ? { ...prev, historial: [...prev.historial, ev] } : prev)
+    addToast({ type:"success", title:"Modificación habilitada", desc:"QA puede editar el caso" })
+    addNotificacion("modificacion_habilitada", "Modificación habilitada",
+      `Admin habilitó la modificación del caso "${caso?.titulo || casoId}" de la HU "${hu?.titulo || huId}"`,
+      "qa", { casoId, huId, casoTitulo: caso?.titulo, huTitulo: hu?.titulo })
+  }
+
   // ── Tareas ──
   const handleAddTarea = (tarea: Tarea) => {
     setTareas(prev => [...prev, tarea])
     setCasos(prev => prev.map(c => c.id === tarea.casoPruebaId ? { ...c, tareasIds: [...c.tareasIds, tarea.id] } : c))
     addToast({ type:"success", title:"Tarea creada", desc:tarea.titulo })
+  }
+
+  const handleEditarTarea = (tarea: Tarea) => {
+    setTareas(prev => prev.map(t => t.id === tarea.id ? tarea : t))
+    addToast({ type:"success", title:"Tarea actualizada", desc:tarea.titulo })
+  }
+
+  const handleEliminarTarea = (tareaId: string, casoId: string) => {
+    setTareas(prev => prev.filter(t => t.id !== tareaId))
+    setCasos(prev => prev.map(c => c.id === casoId ? { ...c, tareasIds: c.tareasIds.filter(id => id !== tareaId) } : c))
+    addToast({ type:"warning", title:"Tarea eliminada" })
   }
 
   const handleCompletarTarea = (tareaId: string, resultado: "exitoso" | "fallido") => {
@@ -390,7 +531,13 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header busqueda={busqueda} onBusquedaChange={setBusqueda} />
+      <Header
+        busqueda={busqueda}
+        onBusquedaChange={setBusqueda}
+        notificaciones={notificaciones.filter(n => n.destinatario === (isAdmin ? "admin" : "qa"))}
+        onMarcarLeida={handleMarcarLeida}
+        onMarcarTodasLeidas={handleMarcarTodasLeidas}
+      />
 
       <main className="container mx-auto px-6 py-6 space-y-6" style={{ minHeight:"calc(100vh - 64px - 60px)" }}>
         <Tabs defaultValue="historias" className="w-full">
@@ -455,13 +602,20 @@ export default function DashboardPage() {
         onIniciarHU={handleIniciarHU}
         onCancelarHU={handleCancelarHU}
         onAddCaso={handleAddCaso}
+        onEditarCaso={handleEditarCaso}
+        onEliminarCaso={handleEliminarCaso}
+        onEnviarCasoAprobacion={handleEnviarCasoAprobacion}
         onEnviarAprobacion={handleEnviarAprobacion}
+        onSolicitarModificacionCaso={handleSolicitarModificacionCaso}
+        onHabilitarModificacionCaso={handleHabilitarModificacionCaso}
         onAprobarCasos={handleAprobarCasos}
         onRechazarCasos={handleRechazarCasos}
         onIniciarEjecucion={handleIniciarEjecucion}
         onCompletarCasoEtapa={handleCompletarCasoEtapa}
         onRetestearCaso={handleRetestearCaso}
         onAddTarea={handleAddTarea}
+        onEditarTarea={handleEditarTarea}
+        onEliminarTarea={handleEliminarTarea}
         onCompletarTarea={handleCompletarTarea}
         onBloquearTarea={handleBloquearTarea}
         onDesbloquearTarea={handleDesbloquearTarea}
@@ -492,7 +646,7 @@ export default function DashboardPage() {
             </div>
           </div>
           <p style={{ fontSize:11, color:"var(--muted-foreground)" }}>
-            © {new Date().getFullYear()} TCS · Sistema de Control de Calidad
+            © {new Date().getFullYear()} Sistema de Control de Calidad
           </p>
         </div>
       </footer>

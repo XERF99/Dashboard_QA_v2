@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Search, Bell, LogOut, Shield, FlaskConical, Eye } from "lucide-react"
+import { Search, Bell, LogOut, Shield, FlaskConical, Eye, Check, CheckCheck, Clock, X } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import {
@@ -12,6 +12,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,15 +31,41 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { ThemeSwitcher } from "@/components/theme-switcher"
 import { useAuth, roleDescriptions, type UserRole } from "@/lib/auth-context"
+import type { Notificacion, TipoNotificacion } from "@/lib/types"
 
 interface HeaderProps {
   busqueda: string
   onBusquedaChange: (value: string) => void
+  notificaciones: Notificacion[]
+  onMarcarLeida: (id: string) => void
+  onMarcarTodasLeidas: () => void
 }
 
-export function Header({ busqueda, onBusquedaChange }: HeaderProps) {
+// ── colores / íconos por tipo de notificación ────────────
+const NOTIF_CFG: Record<TipoNotificacion, { color: string; bg: string; label: string; icon: React.ReactNode }> = {
+  aprobacion_enviada:      { color:"var(--primary)",  bg:"color-mix(in oklch, var(--primary) 10%, transparent)",  label:"Enviado a aprobación", icon:<Clock size={13}/> },
+  modificacion_solicitada: { color:"var(--chart-3)",  bg:"color-mix(in oklch, var(--chart-3) 10%, transparent)",  label:"Solicitud de modificación", icon:<Bell size={13}/> },
+  caso_aprobado:           { color:"var(--chart-2)",  bg:"color-mix(in oklch, var(--chart-2) 10%, transparent)",  label:"Caso aprobado", icon:<Check size={13}/> },
+  caso_rechazado:          { color:"var(--chart-4)",  bg:"color-mix(in oklch, var(--chart-4) 10%, transparent)",  label:"Caso rechazado", icon:<X size={13}/> },
+  modificacion_habilitada: { color:"var(--chart-1)",  bg:"color-mix(in oklch, var(--chart-1) 10%, transparent)",  label:"Modificación habilitada", icon:<Check size={13}/> },
+}
+
+function fmtFecha(d: Date) {
+  const diff = Date.now() - d.getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return "Ahora"
+  if (mins < 60) return `Hace ${mins} min`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `Hace ${hrs}h`
+  return d.toLocaleDateString("es", { day:"2-digit", month:"short" })
+}
+
+export function Header({ busqueda, onBusquedaChange, notificaciones, onMarcarLeida, onMarcarTodasLeidas }: HeaderProps) {
   const { user, logout } = useAuth()
   const [confirmLogoutOpen, setConfirmLogoutOpen] = useState(false)
+  const [notifOpen, setNotifOpen] = useState(false)
+
+  const noLeidas = notificaciones.filter(n => !n.leida).length
 
   const getRoleIcon = (rol: UserRole) => {
     switch (rol) {
@@ -58,7 +89,7 @@ export function Header({ busqueda, onBusquedaChange }: HeaderProps) {
 
   return (
     <>
-      <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60">
         <div className="flex h-16 items-center justify-between px-6">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
@@ -73,18 +104,125 @@ export function Header({ busqueda, onBusquedaChange }: HeaderProps) {
             <div className="relative w-full max-w-md">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Buscar cambios..."
+                placeholder="Buscar por código, título, responsable, caso..."
                 value={busqueda}
                 onChange={(e) => onBusquedaChange(e.target.value)}
-                className="pl-10 bg-secondary border-border"
+                className={`pl-10 bg-secondary border-border ${busqueda ? "pr-8" : ""}`}
               />
+              {busqueda && (
+                <button
+                  onClick={() => onBusquedaChange("")}
+                  title="Limpiar búsqueda"
+                  style={{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", cursor:"pointer", display:"flex", color:"var(--muted-foreground)", padding:2 }}
+                  className="hover:text-foreground transition-colors"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
-              <Bell className="h-5 w-5" />
-            </Button>
+            {/* ── Campana de notificaciones ── */}
+            <Popover open={notifOpen} onOpenChange={setNotifOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground relative">
+                  <Bell className="h-5 w-5" />
+                  {noLeidas > 0 && (
+                    <span style={{
+                      position:"absolute", top:6, right:6,
+                      width:16, height:16, borderRadius:"50%",
+                      background:"var(--chart-4)", color:"#fff",
+                      fontSize:9, fontWeight:700,
+                      display:"flex", alignItems:"center", justifyContent:"center",
+                      border:"2px solid var(--background)",
+                    }}>
+                      {noLeidas > 9 ? "9+" : noLeidas}
+                    </span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="p-0 w-90" style={{ maxHeight:480, display:"flex", flexDirection:"column" }}>
+                {/* Cabecera */}
+                <div style={{ padding:"14px 16px 10px", borderBottom:"1px solid var(--border)", display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                    <Bell size={15} style={{ color:"var(--primary)" }}/>
+                    <span style={{ fontSize:14, fontWeight:700, color:"var(--foreground)" }}>Notificaciones</span>
+                    {noLeidas > 0 && (
+                      <Badge variant="outline" style={{ fontSize:10, padding:"0px 6px", color:"var(--chart-4)", borderColor:"var(--chart-4)", background:"color-mix(in oklch, var(--chart-4) 10%, transparent)" }}>
+                        {noLeidas} nueva{noLeidas !== 1 ? "s" : ""}
+                      </Badge>
+                    )}
+                  </div>
+                  {noLeidas > 0 && (
+                    <button
+                      onClick={onMarcarTodasLeidas}
+                      style={{ background:"none", border:"none", cursor:"pointer", display:"flex", alignItems:"center", gap:4, fontSize:11, color:"var(--primary)", fontWeight:600, padding:0 }}
+                    >
+                      <CheckCheck size={13}/> Marcar todas
+                    </button>
+                  )}
+                </div>
+
+                {/* Lista */}
+                <div style={{ overflowY:"auto", flex:1 }}>
+                  {notificaciones.length === 0 ? (
+                    <div style={{ padding:32, textAlign:"center" }}>
+                      <Bell size={28} style={{ margin:"0 auto 10px", opacity:0.25, display:"block" }}/>
+                      <p style={{ fontSize:13, color:"var(--muted-foreground)" }}>Sin notificaciones</p>
+                    </div>
+                  ) : notificaciones.map(n => {
+                    const cfg = NOTIF_CFG[n.tipo]
+                    return (
+                      <div
+                        key={n.id}
+                        onClick={() => onMarcarLeida(n.id)}
+                        style={{
+                          padding:"12px 16px",
+                          borderBottom:"1px solid var(--border)",
+                          background: n.leida ? "transparent" : "color-mix(in oklch, var(--primary) 4%, transparent)",
+                          cursor: n.leida ? "default" : "pointer",
+                          display:"flex", gap:10, alignItems:"flex-start",
+                          transition:"background 0.15s",
+                        }}
+                      >
+                        {/* Ícono */}
+                        <div style={{
+                          width:30, height:30, borderRadius:"50%", flexShrink:0,
+                          background:cfg.bg, color:cfg.color,
+                          display:"flex", alignItems:"center", justifyContent:"center",
+                          border:`1px solid ${cfg.color}`,
+                          opacity: n.leida ? 0.55 : 1,
+                        }}>
+                          {cfg.icon}
+                        </div>
+
+                        {/* Contenido */}
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:2 }}>
+                            <span style={{ fontSize:11, fontWeight:700, color:cfg.color, opacity: n.leida ? 0.7 : 1 }}>
+                              {cfg.label}
+                            </span>
+                            {!n.leida && (
+                              <span style={{ width:6, height:6, borderRadius:"50%", background:cfg.color, flexShrink:0, display:"inline-block" }}/>
+                            )}
+                          </div>
+                          <p style={{ fontSize:12, fontWeight:600, color:"var(--foreground)", marginBottom:3, opacity: n.leida ? 0.7 : 1 }}>
+                            {n.titulo}
+                          </p>
+                          <p style={{ fontSize:11, color:"var(--muted-foreground)", lineHeight:1.4, wordBreak:"break-word" }}>
+                            {n.descripcion}
+                          </p>
+                          <p style={{ fontSize:10, color:"var(--muted-foreground)", marginTop:4, opacity:0.7 }}>
+                            {fmtFecha(n.fecha)}
+                          </p>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </PopoverContent>
+            </Popover>
 
             <ThemeSwitcher />
 
