@@ -47,7 +47,7 @@ interface Props {
   onBloquearTarea: (tareaId: string, bloqueo: Bloqueo) => void
   onDesbloquearTarea: (tareaId: string, bloqueoId: string) => void
   onAddBloqueo: (huId: string, b: Bloqueo) => void
-  onResolverBloqueo: (huId: string, bId: string) => void
+  onResolverBloqueo: (huId: string, bId: string, nota: string) => void
   onPermitirCasosAdicionales: (huId: string, motivo: string) => void
 }
 
@@ -113,6 +113,10 @@ export function HistoriaUsuarioDetail({
   const [showRetestForm, setShowRetestForm] = useState<string | null>(null) // casoId
   const [comentarioCorreccion, setComentarioCorreccion] = useState("")
 
+  // Resolver bloqueo HU
+  const [showResolverForm, setShowResolverForm] = useState<string | null>(null) // bloqueoId
+  const [notaResolucion, setNotaResolucion] = useState("")
+
   if (!hu) return null
 
   const casosHU = casos.filter(c => hu.casosIds.includes(c.id))
@@ -135,6 +139,11 @@ export function HistoriaUsuarioDetail({
   const pendientesAprobacion = casosHU.filter(c => c.estadoAprobacion === "pendiente_aprobacion")
   const aprobados = casosHU.filter(c => c.estadoAprobacion === "aprobado")
   const rechazados = casosHU.filter(c => c.estadoAprobacion === "rechazado")
+
+  // Etapa ya iniciada (para deshabilitar el botón de inicio)
+  const etapaYaIniciada = aprobados.some(c =>
+    c.resultadosPorEtapa.some(r => r.etapa === hu.etapa && r.estado !== "pendiente")
+  )
 
   // Submit caso
   const submitCaso = () => {
@@ -247,8 +256,13 @@ export function HistoriaUsuarioDetail({
               )}
               {/* QA inicia ejecución de etapa */}
               {isQA && hu.estado === "en_progreso" && aprobados.length > 0 && hu.etapa !== "completada" && hu.etapa !== "cambio_cancelado" && hu.etapa !== "sin_iniciar" && (
-                <Button size="sm" variant="outline" onClick={() => onIniciarEjecucion(hu.id, hu.etapa as EtapaEjecucion)}>
-                  <Play size={12} className="mr-1"/> Iniciar ejecución — {ETAPA_EXEC_LABEL[hu.etapa]}
+                <Button size="sm" variant="outline" disabled={etapaYaIniciada}
+                  style={etapaYaIniciada ? { borderColor:"var(--chart-1)", color:"var(--chart-1)", opacity:0.7, cursor:"not-allowed" } : {}}
+                  onClick={() => !etapaYaIniciada && onIniciarEjecucion(hu.id, hu.etapa as EtapaEjecucion)}>
+                  {etapaYaIniciada
+                    ? <><span style={{ width:7, height:7, borderRadius:"50%", background:"var(--chart-1)", display:"inline-block", marginRight:6 }}/> En progreso — {ETAPA_EXEC_LABEL[hu.etapa]}</>
+                    : <><Play size={12} className="mr-1"/> Iniciar ejecución — {ETAPA_EXEC_LABEL[hu.etapa]}</>
+                  }
                 </Button>
               )}
               {/* Admin habilita excepción */}
@@ -535,14 +549,15 @@ export function HistoriaUsuarioDetail({
                             {caso.estadoAprobacion === "aprobado" && resultadoEtapaActual?.estado === "en_ejecucion" && (isQA || isAdmin) && (
                               <div style={{ marginBottom:10, marginTop:6 }}>
                                 {showFalloForm !== caso.id ? (
-                                  <div style={{ display:"flex", gap:8 }}>
+                                  <div style={{ display:"flex", gap:6 }}>
                                     <Button size="sm" className="bg-chart-2 hover:bg-chart-2/90 text-white"
+                                      style={{ height:26, fontSize:10, padding:"0 10px" }}
                                       onClick={() => onCompletarCasoEtapa(caso.id, etapaActual, "exitoso")}>
-                                      <CheckCircle2 size={12} className="mr-1"/> Exitoso
+                                      <CheckCircle2 size={11} className="mr-1"/> Exitoso
                                     </Button>
-                                    <Button size="sm" variant="outline" style={{ color:"var(--chart-4)" }}
+                                    <Button size="sm" variant="outline" style={{ color:"var(--chart-4)", height:26, fontSize:10, padding:"0 10px" }}
                                       onClick={() => { setShowFalloForm(caso.id); setComentarioFallo("") }}>
-                                      <XCircle size={12} className="mr-1"/> Fallido
+                                      <XCircle size={11} className="mr-1"/> Fallido
                                     </Button>
                                   </div>
                                 ) : (
@@ -725,22 +740,22 @@ export function HistoriaUsuarioDetail({
                                       <div style={{ display:"flex", gap:3, flexShrink:0 }}>
                                         {tarea.estado !== "bloqueada" && (
                                           <>
-                                            <button type="button" onClick={() => onCompletarTarea(tarea.id, "exitoso")}
+                                            <button type="button" title="Completar exitosa" onClick={() => onCompletarTarea(tarea.id, "exitoso")}
                                               style={{ background:"none", border:"none", cursor:"pointer", color:"var(--chart-2)", padding:2 }}>
                                               <CheckCircle2 size={14}/>
                                             </button>
-                                            <button type="button" onClick={() => onCompletarTarea(tarea.id, "fallido")}
+                                            <button type="button" title="Marcar como fallida" onClick={() => onCompletarTarea(tarea.id, "fallido")}
                                               style={{ background:"none", border:"none", cursor:"pointer", color:"var(--chart-4)", padding:2 }}>
                                               <XCircle size={14}/>
                                             </button>
-                                            <button type="button" onClick={() => { setShowBloqueoTareaForm(tarea.id); setBloqueoTareaTexto("") }}
+                                            <button type="button" title="Bloquear tarea" onClick={() => { setShowBloqueoTareaForm(tarea.id); setBloqueoTareaTexto("") }}
                                               style={{ background:"none", border:"none", cursor:"pointer", color:"var(--chart-3)", padding:2 }}>
                                               <Lock size={13}/>
                                             </button>
                                           </>
                                         )}
                                         {tarea.estado === "bloqueada" && tarea.bloqueos.filter(b => !b.resuelto).length > 0 && (
-                                          <button type="button" onClick={() => {
+                                          <button type="button" title="Desbloquear tarea" onClick={() => {
                                             const bl = tarea.bloqueos.find(b => !b.resuelto)
                                             if (bl) onDesbloquearTarea(tarea.id, bl.id)
                                           }}
@@ -817,25 +832,44 @@ export function HistoriaUsuarioDetail({
                 {hu.bloqueos.length===0 && !showBloqueoForm && <p style={{ fontSize:12, color:"var(--muted-foreground)", fontStyle:"italic" }}>Sin bloqueos</p>}
                 <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
                   {blActivos.map(b=>(
-                    <div key={b.id} style={{ display:"flex", gap:8, alignItems:"flex-start", padding:"9px 11px", borderRadius:8, background:"color-mix(in oklch, var(--chart-4) 6%, transparent)", border:"1px solid color-mix(in oklch, var(--chart-4) 30%, var(--border))" }}>
-                      <AlertTriangle size={13} style={{ color:"var(--chart-4)", marginTop:2, flexShrink:0 }}/>
-                      <div style={{ flex:1 }}>
-                        <p style={{ fontSize:13, color:"var(--foreground)", lineHeight:1.4, marginBottom:2 }}>{b.descripcion}</p>
-                        <p style={{ fontSize:11, color:"var(--muted-foreground)" }}>{fmt(b.fecha)} · {b.reportadoPor}</p>
+                    <div key={b.id} style={{ borderRadius:8, background:"color-mix(in oklch, var(--chart-4) 6%, transparent)", border:"1px solid color-mix(in oklch, var(--chart-4) 30%, var(--border))", overflow:"hidden" }}>
+                      <div style={{ display:"flex", gap:8, alignItems:"flex-start", padding:"9px 11px" }}>
+                        <AlertTriangle size={13} style={{ color:"var(--chart-4)", marginTop:2, flexShrink:0 }}/>
+                        <div style={{ flex:1 }}>
+                          <p style={{ fontSize:13, color:"var(--foreground)", lineHeight:1.4, marginBottom:2 }}>{b.descripcion}</p>
+                          <p style={{ fontSize:11, color:"var(--muted-foreground)" }}>{fmt(b.fecha)} · {b.reportadoPor}</p>
+                        </div>
+                        {(isAdmin || isQA) && showResolverForm !== b.id && (
+                          <Button variant="outline" size="sm" onClick={()=>{ setShowResolverForm(b.id); setNotaResolucion("") }} style={{ height:26, fontSize:11, flexShrink:0 }}>
+                            <CheckCircle2 size={11} className="mr-1"/>Resolver
+                          </Button>
+                        )}
                       </div>
-                      {(isAdmin || isQA) && (
-                        <Button variant="outline" size="sm" onClick={()=>onResolverBloqueo(hu.id,b.id)} style={{ height:26, fontSize:11, flexShrink:0 }}>
-                          <CheckCircle2 size={11} className="mr-1"/>Resolver
-                        </Button>
+                      {showResolverForm === b.id && (
+                        <div style={{ padding:"0 11px 10px 11px", borderTop:"1px solid color-mix(in oklch, var(--chart-4) 20%, var(--border))" }}>
+                          <p style={{ fontSize:11, fontWeight:600, color:"var(--chart-3)", margin:"8px 0 5px" }}>¿Cómo se levantó el bloqueo? *</p>
+                          <Textarea rows={2} value={notaResolucion} onChange={e => setNotaResolucion(e.target.value)}
+                            placeholder="Describe cómo se resolvió el bloqueo..." style={{ fontSize:11, resize:"none", marginBottom:7 }} />
+                          <div style={{ display:"flex", gap:6, justifyContent:"flex-end" }}>
+                            <Button variant="outline" size="sm" style={{ height:24, fontSize:10 }}
+                              onClick={() => { setShowResolverForm(null); setNotaResolucion("") }}>Cancelar</Button>
+                            <Button size="sm" style={{ height:24, fontSize:10 }} disabled={!notaResolucion.trim()}
+                              className="bg-chart-2 hover:bg-chart-2/90 text-white"
+                              onClick={() => { onResolverBloqueo(hu.id, b.id, notaResolucion.trim()); setShowResolverForm(null); setNotaResolucion("") }}>
+                              <CheckCircle2 size={10} className="mr-1"/>Confirmar resolución
+                            </Button>
+                          </div>
+                        </div>
                       )}
                     </div>
                   ))}
                   {blResueltos.map(b=>(
-                    <div key={b.id} style={{ display:"flex", gap:8, padding:"8px 11px", borderRadius:8, background:"var(--secondary)", opacity:0.6 }}>
+                    <div key={b.id} style={{ display:"flex", gap:8, padding:"8px 11px", borderRadius:8, background:"var(--secondary)", opacity:0.7 }}>
                       <CheckCircle2 size={13} style={{ color:"var(--chart-2)", flexShrink:0, marginTop:2 }}/>
                       <div>
                         <p style={{ fontSize:12, color:"var(--foreground)", textDecoration:"line-through" }}>{b.descripcion}</p>
-                        <p style={{ fontSize:10, color:"var(--muted-foreground)", marginTop:1 }}>Resuelto · {b.reportadoPor}</p>
+                        <p style={{ fontSize:10, color:"var(--muted-foreground)", marginTop:1 }}>Resuelto · {b.reportadoPor}{b.resueltoPor ? ` por ${b.resueltoPor}` : ""}</p>
+                        {b.notaResolucion && <p style={{ fontSize:11, color:"var(--chart-2)", marginTop:2 }}><strong>Resolución:</strong> {b.notaResolucion}</p>}
                       </div>
                     </div>
                   ))}

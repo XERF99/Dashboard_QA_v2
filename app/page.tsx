@@ -325,16 +325,35 @@ export default function DashboardPage() {
   }
 
   const handleBloquearTarea = (tareaId: string, bloqueo: Bloqueo) => {
-    setTareas(prev => prev.map(t => t.id === tareaId ? { ...t, estado: "bloqueada", bloqueos: [...t.bloqueos, bloqueo] } : t))
+    let huId = ""
+    setTareas(prev => prev.map(t => {
+      if (t.id !== tareaId) return t
+      huId = t.huId
+      return { ...t, estado: "bloqueada", bloqueos: [...t.bloqueos, bloqueo] }
+    }))
+    setTimeout(() => {
+      if (!huId) return
+      const ev = crearEvento("tarea_bloqueada", `Tarea bloqueada: ${bloqueo.descripcion.slice(0,80)}`, user?.nombre || "Sistema")
+      setHistorias(prev => prev.map(h => h.id === huId ? { ...h, historial: [...h.historial, ev] } : h))
+      setHuSeleccionada(prev => prev?.id === huId ? { ...prev, historial: [...prev.historial, ev] } : prev)
+    }, 50)
     addToast({ type:"warning", title:"Tarea bloqueada", desc:bloqueo.descripcion.slice(0,60) })
   }
 
   const handleDesbloquearTarea = (tareaId: string, bloqueoId: string) => {
+    let huId = ""
     setTareas(prev => prev.map(t => {
       if (t.id !== tareaId) return t
+      huId = t.huId
       const bloqueos = t.bloqueos.map(b => b.id === bloqueoId ? { ...b, resuelto: true, fechaResolucion: new Date(), resueltoPor: user?.nombre } : b)
       return { ...t, bloqueos, estado: bloqueos.some(b => !b.resuelto) ? "bloqueada" : "en_progreso" }
     }))
+    setTimeout(() => {
+      if (!huId) return
+      const ev = crearEvento("tarea_desbloqueada", "Bloqueo de tarea resuelto", user?.nombre || "Sistema")
+      setHistorias(prev => prev.map(h => h.id === huId ? { ...h, historial: [...h.historial, ev] } : h))
+      setHuSeleccionada(prev => prev?.id === huId ? { ...prev, historial: [...prev.historial, ev] } : prev)
+    }, 50)
     addToast({ type:"success", title:"Bloqueo resuelto" })
   }
 
@@ -347,13 +366,13 @@ export default function DashboardPage() {
     addToast({ type:"warning", title:"Bloqueo registrado", desc:b.descripcion.slice(0,60) })
   }
 
-  const handleResolverBloqueo = (huId: string, bId: string) => {
+  const handleResolverBloqueo = (huId: string, bId: string, nota: string) => {
     const upd = (h: HistoriaUsuario) => h.id===huId
-      ? {...h, bloqueos: h.bloqueos.map(b => b.id===bId ? {...b, resuelto:true, fechaResolucion:new Date(), resueltoPor:user?.nombre} : b),
-          historial: [...h.historial, crearEvento("bloqueo_resuelto", "Bloqueo resuelto", user?.nombre||"Sistema")]} : h
+      ? {...h, bloqueos: h.bloqueos.map(b => b.id===bId ? {...b, resuelto:true, fechaResolucion:new Date(), resueltoPor:user?.nombre, notaResolucion:nota} : b),
+          historial: [...h.historial, crearEvento("bloqueo_resuelto", `Bloqueo resuelto: ${nota.slice(0,80)}`, user?.nombre||"Sistema")]} : h
     setHistorias(p => p.map(upd))
     setHuSeleccionada(p => p?.id===huId ? upd(p) : p)
-    addToast({ type:"success", title:"Bloqueo resuelto" })
+    addToast({ type:"success", title:"Bloqueo resuelto", desc:nota.slice(0,60) })
   }
 
   const handlePermitirCasosAdicionales = (huId: string, motivo: string) => {
@@ -373,7 +392,7 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-background">
       <Header busqueda={busqueda} onBusquedaChange={setBusqueda} />
 
-      <main className="container mx-auto px-6 py-6 space-y-6">
+      <main className="container mx-auto px-6 py-6 space-y-6" style={{ minHeight:"calc(100vh - 64px - 60px)" }}>
         <Tabs defaultValue="historias" className="w-full">
           <TabsList className="bg-secondary" style={{ display:"grid", gridTemplateColumns:`repeat(${tabCount},1fr)`, width:"100%", maxWidth:520 }}>
             <TabsTrigger value="historias" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
@@ -403,7 +422,7 @@ export default function DashboardPage() {
           </TabsContent>
 
           <TabsContent value="carga" className="mt-6">
-            <CargaOcupacional tareas={tareas} casos={casos} historias={historias} />
+            <CargaOcupacional tareas={tareas} casos={casos} historias={historias} currentUserName={user?.nombre} isQA={isQA} />
           </TabsContent>
 
           {canManageUsers && (
@@ -460,6 +479,23 @@ export default function DashboardPage() {
       />
 
       <ToastContainer toasts={toasts} onDismiss={id=>setToasts(p=>p.filter(x=>x.id!==id))} />
+
+      <footer style={{ borderTop:"1px solid var(--border)", background:"var(--card)", marginTop:32 }}>
+        <div className="container mx-auto px-6" style={{ padding:"16px 24px", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"center", width:28, height:28, borderRadius:8, background:"var(--primary)" }}>
+              <span style={{ fontSize:11, fontWeight:800, color:"var(--primary-foreground)" }}>QA</span>
+            </div>
+            <div>
+              <p style={{ fontSize:13, fontWeight:700, color:"var(--foreground)" }}>Dashboard QA</p>
+              <p style={{ fontSize:10, color:"var(--muted-foreground)" }}>Gestión de pruebas y control de calidad</p>
+            </div>
+          </div>
+          <p style={{ fontSize:11, color:"var(--muted-foreground)" }}>
+            © {new Date().getFullYear()} TCS · Sistema de Control de Calidad
+          </p>
+        </div>
+      </footer>
     </div>
   )
 }

@@ -14,6 +14,8 @@ interface CargaOcupacionalProps {
   tareas: Tarea[]
   casos: CasoPrueba[]
   historias: HistoriaUsuario[]
+  currentUserName?: string
+  isQA?: boolean
 }
 
 type NivelCarga = "disponible" | "normal" | "alto" | "saturado"
@@ -55,12 +57,17 @@ const NIVEL_CFG: Record<NivelCarga, { label: string; color: string; bg: string; 
 const MESES = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"]
 function fmt(d: Date) { return `${d.getDate().toString().padStart(2,"0")} ${MESES[d.getMonth()]}` }
 
-export function CargaOcupacional({ tareas, casos, historias }: CargaOcupacionalProps) {
+export function CargaOcupacional({ tareas, casos, historias, currentUserName, isQA }: CargaOcupacionalProps) {
+  // Si el usuario es QA, solo ve su propia carga
+  const historiasVistas = isQA && currentUserName
+    ? historias.filter(h => h.responsable.toLowerCase() === currentUserName.toLowerCase())
+    : historias
+
   const personas: PersonaCarga[] = useMemo(() => {
     // Agrupar por responsable de HU
     const mapa = new Map<string, { hus: HistoriaUsuario[]; casos: CasoPrueba[]; tareas: Tarea[] }>()
 
-    historias.forEach(hu => {
+    historiasVistas.forEach(hu => {
       if (!hu.responsable) return
       if (!mapa.has(hu.responsable)) mapa.set(hu.responsable, { hus: [], casos: [], tareas: [] })
       const entry = mapa.get(hu.responsable)!
@@ -109,7 +116,7 @@ export function CargaOcupacional({ tareas, casos, historias }: CargaOcupacionalP
         tiposTarea,
       }
     }).sort((a,b) => b.tareasActivas - a.tareasActivas)
-  }, [tareas, casos, historias])
+  }, [tareas, casos, historiasVistas])
 
   const chartData = personas.map(p => ({
     nombre: p.nombre.split(" ")[0],
@@ -128,13 +135,21 @@ export function CargaOcupacional({ tareas, casos, historias }: CargaOcupacionalP
     return (
       <div style={{ textAlign:"center", padding:48, color:"var(--muted-foreground)" }}>
         <BarChart2 size={32} style={{ margin:"0 auto 12px", opacity:0.4 }}/>
-        <p>Sin HUs asignadas para mostrar carga</p>
+        <p>{isQA && currentUserName ? `Sin HUs asignadas a ${currentUserName}` : "Sin HUs asignadas para mostrar carga"}</p>
       </div>
     )
   }
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
+
+      {/* Banner de vista personal QA */}
+      {isQA && currentUserName && (
+        <div style={{ padding:"10px 16px", borderRadius:10, background:"color-mix(in oklch, var(--primary) 8%, transparent)", border:"1px solid color-mix(in oklch, var(--primary) 25%, transparent)", display:"flex", alignItems:"center", gap:8 }}>
+          <User size={14} style={{ color:"var(--primary)", flexShrink:0 }}/>
+          <p style={{ fontSize:12, color:"var(--primary)", fontWeight:600 }}>Vista personal — mostrando solo tu carga de trabajo ({currentUserName})</p>
+        </div>
+      )}
 
       {/* ── Resumen ejecutivo ── */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12 }}>
