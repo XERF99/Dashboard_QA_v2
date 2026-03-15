@@ -138,7 +138,7 @@ export function LoginScreen() {
             </div>
           </div>
           <h1 style={{ fontSize: "26px", fontWeight: "400", letterSpacing: "0.06em", color: titleColor, fontFamily: "Georgia, serif", lineHeight: 1.2, margin: 0 }}>
-            Dashboard QA
+            QAControl
           </h1>
           <p style={{ fontSize: "11px", color: subtitleColor, marginTop: "6px", letterSpacing: "0.12em", textTransform: "uppercase", fontFamily: "monospace" }}>
             Gestión de Cambios

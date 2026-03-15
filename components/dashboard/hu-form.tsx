@@ -7,9 +7,11 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
-  TIPO_APLICACION_LABEL, AMBIENTE_LABEL, PRIORIDAD_CFG,
-  crearEvento,
+  PRIORIDAD_CFG,
+  crearEvento, etapaDefsParaTipo, ETAPAS_PREDETERMINADAS,
+  TIPOS_APLICACION_PREDETERMINADOS, AMBIENTES_PREDETERMINADOS,
   type HistoriaUsuario, type TipoAplicacion, type AmbientePrueba, type PrioridadHU,
+  type ConfigEtapas, type TipoAplicacionDef, type AmbienteDef,
 } from "@/lib/types"
 
 interface HUFormProps {
@@ -18,14 +20,20 @@ interface HUFormProps {
   onSubmit: (hu: HistoriaUsuario) => void
   huEditar?: HistoriaUsuario | null
   currentUser?: string
+  configEtapas?: ConfigEtapas
+  qaUsers?: string[]
+  aplicaciones?: string[]
+  tiposAplicacion?: TipoAplicacionDef[]
+  ambientes?: AmbienteDef[]
 }
-
-const QA_USERS = ["Maria Garcia", "Carlos Lopez", "Ana Martinez", "Pedro Sanchez", "Laura Jimenez", "Juan Rodriguez"]
 
 const FL: React.CSSProperties = { fontSize:11, fontWeight:600, color:"var(--foreground)", marginBottom:5, display:"block" }
 const PNL: React.CSSProperties = { padding:"14px 16px", borderRadius:10, border:"1px solid var(--border)", background:"var(--background)" }
 
-export function HUForm({ open, onClose, onSubmit, huEditar, currentUser }: HUFormProps) {
+export function HUForm({ open, onClose, onSubmit, huEditar, currentUser, configEtapas = ETAPAS_PREDETERMINADAS, qaUsers = [], aplicaciones = [], tiposAplicacion, ambientes }: HUFormProps) {
+  const tiposDisponibles = tiposAplicacion?.length ? tiposAplicacion : TIPOS_APLICACION_PREDETERMINADOS
+  const ambientesDisponibles = ambientes?.length ? ambientes : AMBIENTES_PREDETERMINADOS
+  const defaultAmbiente = ambientesDisponibles[0]?.id ?? "test"
   const [hu, setHu] = useState({
     titulo: "",
     descripcion: "",
@@ -33,11 +41,12 @@ export function HUForm({ open, onClose, onSubmit, huEditar, currentUser }: HUFor
     responsable: "",
     prioridad: "media" as PrioridadHU,
     puntos: 5,
+    sprint: "",
     aplicacion: "",
     tipoAplicacion: "aplicacion" as TipoAplicacion,
     requiriente: "",
     areaSolicitante: "",
-    ambiente: "test" as AmbientePrueba,
+    ambiente: defaultAmbiente as AmbientePrueba,
   })
 
   useEffect(() => {
@@ -50,6 +59,7 @@ export function HUForm({ open, onClose, onSubmit, huEditar, currentUser }: HUFor
         responsable: huEditar.responsable,
         prioridad: huEditar.prioridad,
         puntos: huEditar.puntos,
+        sprint: huEditar.sprint || "",
         aplicacion: huEditar.aplicacion,
         tipoAplicacion: huEditar.tipoAplicacion,
         requiriente: huEditar.requiriente,
@@ -60,8 +70,9 @@ export function HUForm({ open, onClose, onSubmit, huEditar, currentUser }: HUFor
       setHu({
         titulo: "", descripcion: "", criteriosAceptacion: "",
         responsable: "", prioridad: "media", puntos: 5,
-        aplicacion: "", tipoAplicacion: "aplicacion",
-        requiriente: "", areaSolicitante: "", ambiente: "test",
+        sprint: "",
+        aplicacion: "", tipoAplicacion: tiposDisponibles[0]?.id ?? "aplicacion",
+        requiriente: "", areaSolicitante: "", ambiente: defaultAmbiente,
       })
     }
   }, [open, huEditar])
@@ -82,6 +93,7 @@ export function HUForm({ open, onClose, onSubmit, huEditar, currentUser }: HUFor
       prioridad: hu.prioridad,
       estado: huEditar?.estado || "sin_iniciar",
       puntos: hu.puntos,
+      sprint: hu.sprint || undefined,
       aplicacion: hu.aplicacion,
       tipoAplicacion: hu.tipoAplicacion,
       requiriente: hu.requiriente,
@@ -106,6 +118,7 @@ export function HUForm({ open, onClose, onSubmit, huEditar, currentUser }: HUFor
       permitirCasosAdicionales: huEditar?.permitirCasosAdicionales || false,
       motivoCasosAdicionales: huEditar?.motivoCasosAdicionales,
       motivoCancelacion: huEditar?.motivoCancelacion,
+      comentarios: huEditar?.comentarios || [],
     }
     onSubmit(huFinal)
     onClose()
@@ -182,8 +195,14 @@ export function HUForm({ open, onClose, onSubmit, huEditar, currentUser }: HUFor
                     <div>
                       <label style={FL}>QA Responsable *</label>
                       <Select value={hu.responsable} onValueChange={v => setHu(p => ({...p, responsable:v}))}>
-                        <SelectTrigger><SelectValue placeholder="Seleccionar QA" /></SelectTrigger>
-                        <SelectContent>{QA_USERS.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
+                        <SelectTrigger><SelectValue placeholder={qaUsers.length === 0 ? "Sin QAs activos" : "Seleccionar QA"} /></SelectTrigger>
+                        <SelectContent>
+                          {/* Si el valor actual no está en la lista (ej: usuario desactivado), mostrarlo igual */}
+                          {hu.responsable && !qaUsers.includes(hu.responsable) && (
+                            <SelectItem value={hu.responsable}>{hu.responsable}</SelectItem>
+                          )}
+                          {qaUsers.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+                        </SelectContent>
                       </Select>
                     </div>
                     <div>
@@ -192,6 +211,11 @@ export function HUForm({ open, onClose, onSubmit, huEditar, currentUser }: HUFor
                         onChange={e => setHu(p => ({...p, puntos: parseInt(e.target.value) || 1}))} />
                     </div>
                   </div>
+                  <div style={{ marginTop:10 }}>
+                    <label style={FL}>Sprint / Versión</label>
+                    <Input value={hu.sprint} placeholder="Ej. Sprint 3, v2.1, Q1-2026..."
+                      onChange={e => setHu(p => ({...p, sprint: e.target.value}))} />
+                  </div>
                 </div>
 
                 <div style={PNL}>
@@ -199,16 +223,33 @@ export function HUForm({ open, onClose, onSubmit, huEditar, currentUser }: HUFor
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
                     <div>
                       <label style={FL}>Aplicación / Sistema *</label>
-                      <Input value={hu.aplicacion} required placeholder="Nombre del sistema"
-                        onChange={e => setHu(p => ({...p, aplicacion:e.target.value}))} />
+                      {aplicaciones.length > 0 ? (
+                        <Select value={hu.aplicacion} onValueChange={v => setHu(p => ({...p, aplicacion:v}))}>
+                          <SelectTrigger><SelectValue placeholder="Seleccionar aplicación" /></SelectTrigger>
+                          <SelectContent>
+                            {/* Si el valor actual no está en la lista (ej: HU antigua), mostrarlo igual */}
+                            {hu.aplicacion && !aplicaciones.includes(hu.aplicacion) && (
+                              <SelectItem value={hu.aplicacion}>{hu.aplicacion}</SelectItem>
+                            )}
+                            {aplicaciones.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Input value={hu.aplicacion} required placeholder="Nombre del sistema"
+                          onChange={e => setHu(p => ({...p, aplicacion:e.target.value}))} />
+                      )}
                     </div>
                     <div>
                       <label style={FL}>Tipo de Aplicación *</label>
                       <Select value={hu.tipoAplicacion} onValueChange={(v: TipoAplicacion) => setHu(p => ({...p, tipoAplicacion:v}))}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          {(Object.keys(TIPO_APLICACION_LABEL) as TipoAplicacion[]).map(k => (
-                            <SelectItem key={k} value={k}>{TIPO_APLICACION_LABEL[k]}</SelectItem>
+                          {/* Si la HU tiene un tipo que ya no está en la lista (ej: borrado), mostrarlo igual */}
+                          {hu.tipoAplicacion && !tiposDisponibles.some(t => t.id === hu.tipoAplicacion) && (
+                            <SelectItem value={hu.tipoAplicacion}>{hu.tipoAplicacion}</SelectItem>
+                          )}
+                          {tiposDisponibles.map(t => (
+                            <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
@@ -218,8 +259,11 @@ export function HUForm({ open, onClose, onSubmit, huEditar, currentUser }: HUFor
                       <Select value={hu.ambiente} onValueChange={(v: AmbientePrueba) => setHu(p => ({...p, ambiente:v}))}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          {(Object.keys(AMBIENTE_LABEL) as AmbientePrueba[]).map(k => (
-                            <SelectItem key={k} value={k}>{AMBIENTE_LABEL[k]}</SelectItem>
+                          {hu.ambiente && !ambientesDisponibles.some(a => a.id === hu.ambiente) && (
+                            <SelectItem value={hu.ambiente}>{hu.ambiente}</SelectItem>
+                          )}
+                          {ambientesDisponibles.map(a => (
+                            <SelectItem key={a.id} value={a.id}>{a.label}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
@@ -239,16 +283,23 @@ export function HUForm({ open, onClose, onSubmit, huEditar, currentUser }: HUFor
                 </div>
 
                 {/* Nota informativa sobre etapas */}
-                <div style={{ padding:"10px 14px", borderRadius:8,
-                  background:"color-mix(in oklch, var(--chart-3) 8%, transparent)",
-                  border:"1px solid color-mix(in oklch, var(--chart-3) 25%, transparent)" }}>
-                  <p style={{ fontSize:11, color:"var(--chart-3)", lineHeight:1.5 }}>
-                    {hu.tipoAplicacion === "base_de_datos" || hu.tipoAplicacion === "batch"
-                      ? "Este tipo solo tiene etapa de Despliegue."
-                      : "Este tipo tiene 3 etapas: Despliegue → Rollback → Redespliegue."}
-                    {" "}El QA asignado creará los casos de prueba una vez inicie la HU.
-                  </p>
-                </div>
+                {(() => {
+                  const etapas = etapaDefsParaTipo(hu.tipoAplicacion, configEtapas)
+                  const notaEtapas = etapas.length === 0
+                    ? "Este tipo no tiene etapas de ejecución definidas."
+                    : etapas.length === 1
+                    ? `Este tipo tiene 1 etapa: ${etapas[0].label}.`
+                    : `Este tipo tiene ${etapas.length} etapas: ${etapas.map(e => e.label).join(" → ")}.`
+                  return (
+                    <div style={{ padding:"10px 14px", borderRadius:8,
+                      background:"color-mix(in oklch, var(--chart-3) 8%, transparent)",
+                      border:"1px solid color-mix(in oklch, var(--chart-3) 25%, transparent)" }}>
+                      <p style={{ fontSize:11, color:"var(--chart-3)", lineHeight:1.5 }}>
+                        {notaEtapas}{" "}El QA asignado creará los casos de prueba una vez inicie la HU.
+                      </p>
+                    </div>
+                  )
+                })()}
               </div>
             </div>
 

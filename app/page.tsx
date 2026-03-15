@@ -1,24 +1,34 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import { Header } from "@/components/dashboard/header"
 import { HistoriasTable } from "@/components/dashboard/historias-table"
 import { HistoriaUsuarioDetail } from "@/components/dashboard/historia-usuario-detail"
 import { HUForm } from "@/components/dashboard/hu-form"
 import { CargaOcupacional } from "@/components/dashboard/carga-ocupacional"
+import { AnalyticsKPIs } from "@/components/dashboard/analytics-kpis"
 import { UserManagement } from "@/components/dashboard/user-management"
+import { BloqueosPanel } from "@/components/dashboard/bloqueos-panel"
+import { AuditoriaPanel } from "@/components/dashboard/auditoria-panel"
+import { RolesConfig } from "@/components/dashboard/roles-config"
+import { EtapasConfig } from "@/components/dashboard/etapas-config"
+import { AplicacionesConfig, APLICACIONES_PREDETERMINADAS } from "@/components/dashboard/aplicaciones-config"
+import { TiposAplicacionConfig } from "@/components/dashboard/tipos-aplicacion-config"
+import { AmbientesConfig } from "@/components/dashboard/ambientes-config"
 import { HUStatsCards } from "@/components/dashboard/hu-stats-cards"
 import { LoginScreen } from "@/components/auth/login-screen"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
-import { BookOpen, Users, UserCog, Trash2, X, CheckCircle, LogOut, AlertTriangle } from "lucide-react"
+import { BookOpen, Users, UserCog, Trash2, X, CheckCircle, LogOut, AlertTriangle, BarChart2, Settings, ShieldAlert, History, Layers, Monitor, Globe, Settings2 } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import {
   historiasEjemplo, casosPruebaEjemplo, tareasEjemplo,
   crearEvento, etapasParaTipo, siguienteEtapa, etapaCompletada,
-  TIPO_APLICACION_LABEL, AMBIENTE_LABEL,
+  ETAPAS_PREDETERMINADAS, TIPOS_APLICACION_PREDETERMINADOS, AMBIENTES_PREDETERMINADOS,
+  getTipoAplicacionLabel, getAmbienteLabel,
   type HistoriaUsuario, type CasoPrueba, type Tarea, type Bloqueo,
-  type EtapaEjecucion, type EstadoAprobacion, type Notificacion, type TipoNotificacion,
+  type EtapaEjecucion, type EstadoHU, type EstadoAprobacion, type Notificacion, type TipoNotificacion,
+  type Comentario, type ConfigEtapas, type TipoAplicacionDef, type AmbienteDef,
 } from "@/lib/types"
 
 // ── Toast ──────────────────────────────────────────────────
@@ -92,11 +102,43 @@ function ConfirmDeleteModal({ open, titulo, subtitulo, onConfirm, onCancel }: {
 //  PÁGINA PRINCIPAL
 // ═══════════════════════════════════════════════════════════
 export default function DashboardPage() {
-  const { isAuthenticated, canManageUsers, verSoloPropios, isAdmin, isQA, user } = useAuth()
+  const { isAuthenticated, canManageUsers, verSoloPropios, isAdmin, isQALead, isQA, canCreateHU, user, users, roles } = useAuth()
+  const qaUsers = users.filter(u => u.activo && (roles.find(r => r.id === u.rol)?.permisos.includes("canEdit") ?? false)).map(u => u.nombre)
+
+  // ── Visibilidad de Carga Ocupacional por rol ───────────────
+  // Admin → todos (con pills) | QA Lead → sus QAs + él mismo | QA → solo él mismo | Viewer → todos
+  const filtroNombresCarga = useMemo<string[] | undefined>(() => {
+    if (isAdmin) return qaUsers.length > 0 ? qaUsers : undefined  // ve todos con pills por persona
+    if (isQALead && user) {
+      const nombresQA = users
+        .filter(u => u.activo && (roles.find(r => r.id === u.rol)?.permisos.includes("verSoloPropios") ?? false))
+        .map(u => u.nombre)
+      return [...new Set([user.nombre, ...nombresQA])]
+    }
+    if (verSoloPropios && user) return [user.nombre]  // QA: solo él mismo
+    return undefined  // Viewer y otros: todos
+  }, [isAdmin, isQALead, verSoloPropios, user, users, roles])
 
   const [historias, setHistorias]   = useState<HistoriaUsuario[]>(historiasEjemplo)
   const [casos, setCasos]           = useState<CasoPrueba[]>(casosPruebaEjemplo)
   const [tareas, setTareas]         = useState<Tarea[]>(tareasEjemplo)
+  const [configEtapas, setConfigEtapas] = useState<ConfigEtapas>(ETAPAS_PREDETERMINADAS)
+  const [aplicaciones, setAplicaciones] = useState<string[]>(APLICACIONES_PREDETERMINADAS)
+  const [tiposAplicacion, setTiposAplicacion] = useState<TipoAplicacionDef[]>(TIPOS_APLICACION_PREDETERMINADOS)
+  const [ambientes, setAmbientes] = useState<AmbienteDef[]>(AMBIENTES_PREDETERMINADOS)
+  const [configSeccion, setConfigSeccion] = useState<"roles" | "tipos" | "aplicaciones" | "ambientes" | "etapas">("roles")
+
+  const handleTiposChange = (newTipos: TipoAplicacionDef[]) => {
+    setTiposAplicacion(newTipos)
+    setConfigEtapas(prev => {
+      const updated = { ...prev }
+      // Inicializar entradas para tipos nuevos
+      newTipos.forEach(t => { if (!(t.id in updated)) updated[t.id] = [] })
+      // Eliminar entradas de tipos borrados
+      Object.keys(updated).forEach(k => { if (!newTipos.some(t => t.id === k)) delete updated[k] })
+      return updated
+    })
+  }
 
   const [busqueda, setBusqueda]             = useState("")
   const [huFormOpen, setHuFormOpen]         = useState(false)
@@ -170,8 +212,8 @@ export default function DashboardPage() {
       hu.codigo.toLowerCase().includes(q) ||
       hu.responsable.toLowerCase().includes(q) ||
       (hu.descripcion?.toLowerCase().includes(q) ?? false) ||
-      TIPO_APLICACION_LABEL[hu.tipoAplicacion].toLowerCase().includes(q) ||
-      AMBIENTE_LABEL[hu.ambiente].toLowerCase().includes(q) ||
+      getTipoAplicacionLabel(hu.tipoAplicacion, tiposAplicacion).toLowerCase().includes(q) ||
+      getAmbienteLabel(hu.ambiente, ambientes).toLowerCase().includes(q) ||
       casosHU.some(c => c.titulo.toLowerCase().includes(q))
     )
   })
@@ -199,11 +241,37 @@ export default function DashboardPage() {
     })
   }
 
+  // ── Acciones masivas ──
+  const handleBulkCambiarEstado = (ids: string[], estado: EstadoHU) => {
+    setHistorias(prev => prev.map(h => ids.includes(h.id) ? { ...h, estado } : h))
+    addToast({ type:"success", title:"Estado actualizado", desc:`${ids.length} HU${ids.length!==1?"s":""} actualizadas` })
+  }
+
+  const handleBulkCambiarResponsable = (ids: string[], responsable: string) => {
+    setHistorias(prev => prev.map(h => ids.includes(h.id) ? { ...h, responsable } : h))
+    addToast({ type:"success", title:"Responsable actualizado", desc:`${ids.length} HU${ids.length!==1?"s":""} asignadas a ${responsable}` })
+  }
+
+  const handleBulkEliminar = (ids: string[]) => {
+    setDeleteModal({
+      open:true,
+      titulo:`¿Eliminar ${ids.length} Historia${ids.length!==1?"s":""} de Usuario?`,
+      subtitulo:`Esta acción también eliminará todos sus casos de prueba asociados`,
+      fn:() => {
+        setHistorias(p => p.filter(h => !ids.includes(h.id)))
+        setCasos(p => p.filter(c => !ids.includes(c.huId)))
+        setTareas(p => p.filter(t => !ids.includes(t.huId)))
+        setDeleteModal(d => ({...d, open:false}))
+        addToast({ type:"error", title:`${ids.length} historia${ids.length!==1?"s":""} eliminada${ids.length!==1?"s":""}` })
+      }
+    })
+  }
+
   // ── QA inicia HU ──
   const handleIniciarHU = (huId: string) => {
     setHistorias(prev => prev.map(h => {
       if (h.id !== huId || h.estado !== "sin_iniciar") return h
-      const primeraEtapa = etapasParaTipo(h.tipoAplicacion)[0]
+      const primeraEtapa = etapasParaTipo(h.tipoAplicacion, configEtapas)[0]
       return {
         ...h, estado: "en_progreso", etapa: primeraEtapa,
         historial: [...h.historial, crearEvento("hu_iniciada",
@@ -314,7 +382,7 @@ export default function DashboardPage() {
       if (!check.completa) return
 
       if (check.exitosa) {
-        const next = siguienteEtapa(hu.etapa as EtapaEjecucion, hu.tipoAplicacion)
+        const next = siguienteEtapa(hu.etapa as EtapaEjecucion, hu.tipoAplicacion, configEtapas)
         if (next) {
           setCasos(prevC => prevC.map(c => {
             if (c.huId !== huIdAfectada) return c
@@ -516,6 +584,51 @@ export default function DashboardPage() {
     addToast({ type:"success", title:"Bloqueo resuelto", desc:nota.slice(0,60) })
   }
 
+  const handleResolverBloqueoCaso = (casoId: string, huId: string, bId: string, nota: string) => {
+    setCasos(prev => prev.map(c =>
+      c.id === casoId
+        ? { ...c, bloqueos: c.bloqueos.map(b => b.id === bId ? { ...b, resuelto: true, fechaResolucion: new Date(), resueltoPor: user?.nombre, notaResolucion: nota } : b) }
+        : c
+    ))
+    const ev = crearEvento("bloqueo_resuelto", `Bloqueo de caso resuelto: ${nota.slice(0,80)}`, user?.nombre || "Sistema")
+    setHistorias(prev => prev.map(h => h.id === huId ? { ...h, historial: [...h.historial, ev] } : h))
+    setHuSeleccionada(prev => prev?.id === huId ? { ...prev, historial: [...prev.historial, ev] } : prev)
+    addToast({ type: "success", title: "Bloqueo resuelto", desc: nota.slice(0, 60) })
+  }
+
+  const handleResolverBloqueoTarea = (tareaId: string, bId: string, nota: string) => {
+    let huId = ""
+    setTareas(prev => prev.map(t => {
+      if (t.id !== tareaId) return t
+      huId = t.huId
+      const bloqueos = t.bloqueos.map(b => b.id === bId
+        ? { ...b, resuelto: true, fechaResolucion: new Date(), resueltoPor: user?.nombre, notaResolucion: nota }
+        : b
+      )
+      return { ...t, bloqueos, estado: bloqueos.some(b => !b.resuelto) ? "bloqueada" as const : "en_progreso" as const }
+    }))
+    setTimeout(() => {
+      if (!huId) return
+      const ev = crearEvento("bloqueo_resuelto", `Bloqueo de tarea resuelto: ${nota.slice(0,80)}`, user?.nombre || "Sistema")
+      setHistorias(prev => prev.map(h => h.id === huId ? { ...h, historial: [...h.historial, ev] } : h))
+      setHuSeleccionada(prev => prev?.id === huId ? { ...prev, historial: [...prev.historial, ev] } : prev)
+    }, 50)
+    addToast({ type: "success", title: "Bloqueo resuelto", desc: nota.slice(0, 60) })
+  }
+
+  // ── Comentarios ──
+  const handleAddComentarioHU = (huId: string, texto: string) => {
+    const c: Comentario = { id: `com-${Date.now()}`, texto, autor: user?.nombre || "Sistema", fecha: new Date() }
+    const upd = (h: HistoriaUsuario) => h.id === huId ? { ...h, comentarios: [...h.comentarios, c] } : h
+    setHistorias(p => p.map(upd))
+    setHuSeleccionada(p => p?.id === huId ? upd(p) : p)
+  }
+
+  const handleAddComentarioCaso = (casoId: string, texto: string) => {
+    const c: Comentario = { id: `com-${Date.now()}`, texto, autor: user?.nombre || "Sistema", fecha: new Date() }
+    setCasos(p => p.map(caso => caso.id === casoId ? { ...caso, comentarios: [...caso.comentarios, c] } : caso))
+  }
+
   const handlePermitirCasosAdicionales = (huId: string, motivo: string) => {
     const ev = crearEvento("casos_adicionales_habilitados", `Admin habilitó agregar casos: ${motivo}`, user?.nombre || "Sistema")
     const upd = (h: HistoriaUsuario) => h.id === huId
@@ -527,7 +640,12 @@ export default function DashboardPage() {
 
   if (!isAuthenticated) return <LoginScreen />
 
-  const tabCount = 2 + (canManageUsers ? 1 : 0)
+  const totalBloqueoActivos =
+    historias.reduce((n, h) => n + h.bloqueos.filter(b => !b.resuelto).length, 0) +
+    casos.reduce((n, c) => n + c.bloqueos.filter(b => !b.resuelto).length, 0) +
+    tareas.reduce((n, t) => n + t.bloqueos.filter(b => !b.resuelto).length, 0)
+
+  const tabCount = 4 + (canManageUsers ? 3 : 0)
 
   return (
     <div className="min-h-screen bg-background">
@@ -541,16 +659,41 @@ export default function DashboardPage() {
 
       <main className="container mx-auto px-6 py-6 space-y-6" style={{ minHeight:"calc(100vh - 64px - 60px)" }}>
         <Tabs defaultValue="historias" className="w-full">
-          <TabsList className="bg-secondary" style={{ display:"grid", gridTemplateColumns:`repeat(${tabCount},1fr)`, width:"100%", maxWidth:520 }}>
+          <TabsList className="bg-secondary" style={{ display:"grid", gridTemplateColumns:`repeat(${tabCount},1fr)`, width:"100%", maxWidth: canManageUsers ? 1260 : 720 }}>
             <TabsTrigger value="historias" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-              <BookOpen className="h-4 w-4"/> Historias de Usuario
+              <BookOpen className="h-4 w-4"/> Historias
+            </TabsTrigger>
+            <TabsTrigger value="analytics" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+              <BarChart2 className="h-4 w-4"/> Analytics
             </TabsTrigger>
             <TabsTrigger value="carga" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-              <Users className="h-4 w-4"/> Carga Ocupacional
+              <Users className="h-4 w-4"/> Carga
             </TabsTrigger>
+            <TabsTrigger value="bloqueos" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground relative">
+              <ShieldAlert className="h-4 w-4"/> Bloqueos
+              {totalBloqueoActivos > 0 && (
+                <span style={{
+                  display: "inline-flex", alignItems: "center", justifyContent: "center",
+                  minWidth: 16, height: 16, borderRadius: 999, fontSize: 9, fontWeight: 700,
+                  background: "var(--chart-4)", color: "#fff", padding: "0 4px",
+                }}>
+                  {totalBloqueoActivos}
+                </span>
+              )}
+            </TabsTrigger>
+            {canManageUsers && (
+              <TabsTrigger value="auditoria" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                <History className="h-4 w-4"/> Auditoría
+              </TabsTrigger>
+            )}
             {canManageUsers && (
               <TabsTrigger value="usuarios" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
                 <UserCog className="h-4 w-4"/> Usuarios
+              </TabsTrigger>
+            )}
+            {canManageUsers && (
+              <TabsTrigger value="configuracion" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                <Settings className="h-4 w-4"/> Configuración
               </TabsTrigger>
             )}
           </TabsList>
@@ -564,29 +707,121 @@ export default function DashboardPage() {
               onEditar={handleEditarHU}
               onEliminar={handleEliminarHU}
               onNueva={handleNuevaHU}
-              canEdit={isAdmin}
+              canEdit={canCreateHU}
+              configEtapas={configEtapas}
+              tiposAplicacion={tiposAplicacion}
+              ambientes={ambientes}
+              qaUsers={qaUsers}
+              onBulkCambiarEstado={handleBulkCambiarEstado}
+              onBulkCambiarResponsable={handleBulkCambiarResponsable}
+              onBulkEliminar={handleBulkEliminar}
             />
           </TabsContent>
 
-          <TabsContent value="carga" className="mt-6">
-            <CargaOcupacional tareas={tareas} casos={casos} historias={historias} currentUserName={user?.nombre} isQA={isQA} />
+          <TabsContent value="analytics" className="mt-6">
+            <AnalyticsKPIs historias={historiasVisibles} casos={casos} tareas={tareas} isQA={verSoloPropios} currentUserName={user?.nombre} filtroNombres={filtroNombresCarga} configEtapas={configEtapas} tiposAplicacion={tiposAplicacion} ambientes={ambientes} />
           </TabsContent>
+
+          <TabsContent value="carga" className="mt-6">
+            <CargaOcupacional tareas={tareas} casos={casos} historias={historias} currentUserName={user?.nombre} filtroNombres={filtroNombresCarga} />
+          </TabsContent>
+
+          <TabsContent value="bloqueos" className="mt-6">
+            <BloqueosPanel
+              historias={historiasVisibles}
+              casos={casos}
+              tareas={tareas}
+              onResolverBloqueoHU={handleResolverBloqueo}
+              onResolverBloqueoCaso={handleResolverBloqueoCaso}
+              onResolverBloqueoTarea={handleResolverBloqueoTarea}
+              onVerHU={hu => { setHuSeleccionada(hu); setHuDetailOpen(true) }}
+              canEdit={!verSoloPropios || !!user}
+            />
+          </TabsContent>
+
+          {canManageUsers && (
+            <TabsContent value="auditoria" className="mt-6">
+              <AuditoriaPanel
+                historias={historias}
+                onVerHU={hu => { setHuSeleccionada(hu); setHuDetailOpen(true) }}
+              />
+            </TabsContent>
+          )}
 
           {canManageUsers && (
             <TabsContent value="usuarios" className="mt-6">
               <UserManagement />
             </TabsContent>
           )}
+
+          {canManageUsers && (
+            <TabsContent value="configuracion" className="mt-6">
+              {/* ── Nav lateral de secciones ── */}
+              <div style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
+                {/* Sidebar */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 180, flexShrink: 0 }}>
+                  {(
+                    [
+                      { id: "roles",        label: "Roles",              icon: <UserCog size={14} /> },
+                      { id: "tipos",        label: "Tipos de Aplicación", icon: <Layers size={14} /> },
+                      { id: "aplicaciones", label: "Aplicaciones",        icon: <Monitor size={14} /> },
+                      { id: "ambientes",    label: "Ambientes",           icon: <Globe size={14} /> },
+                      { id: "etapas",       label: "Etapas",              icon: <Settings2 size={14} /> },
+                    ] as const
+                  ).map(sec => {
+                    const active = configSeccion === sec.id
+                    return (
+                      <button
+                        key={sec.id}
+                        onClick={() => setConfigSeccion(sec.id)}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 8,
+                          padding: "8px 12px", borderRadius: 8, fontSize: 13,
+                          fontWeight: active ? 700 : 400,
+                          border: `1px solid ${active ? "color-mix(in oklch, var(--primary) 35%, transparent)" : "transparent"}`,
+                          background: active ? "color-mix(in oklch, var(--primary) 10%, transparent)" : "transparent",
+                          color: active ? "var(--primary)" : "var(--muted-foreground)",
+                          cursor: "pointer", textAlign: "left", width: "100%",
+                          transition: "all 0.15s",
+                        }}
+                        className={active ? "" : "hover:bg-secondary/60 hover:text-foreground"}
+                      >
+                        {sec.icon}
+                        {sec.label}
+                      </button>
+                    )
+                  })}
+                </div>
+
+                {/* Separador */}
+                <div style={{ width: 1, background: "var(--border)", alignSelf: "stretch", flexShrink: 0 }} />
+
+                {/* Contenido de la sección seleccionada */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  {configSeccion === "roles"        && <RolesConfig />}
+                  {configSeccion === "tipos"        && <TiposAplicacionConfig tipos={tiposAplicacion} onChange={handleTiposChange} />}
+                  {configSeccion === "aplicaciones" && <AplicacionesConfig aplicaciones={aplicaciones} onChange={setAplicaciones} />}
+                  {configSeccion === "ambientes"    && <AmbientesConfig ambientes={ambientes} onChange={setAmbientes} />}
+                  {configSeccion === "etapas"       && <EtapasConfig config={configEtapas} onChange={setConfigEtapas} tipos={tiposAplicacion} />}
+                </div>
+              </div>
+            </TabsContent>
+          )}
         </Tabs>
       </main>
 
-      {isAdmin && (
+      {canCreateHU && (
         <HUForm
           open={huFormOpen}
           onClose={() => { setHuFormOpen(false); setHuEditar(null) }}
           onSubmit={handleSubmitHU}
           huEditar={huEditar}
           currentUser={user?.nombre}
+          configEtapas={configEtapas}
+          qaUsers={qaUsers}
+          aplicaciones={aplicaciones}
+          tiposAplicacion={tiposAplicacion}
+          ambientes={ambientes}
         />
       )}
 
@@ -598,7 +833,11 @@ export default function DashboardPage() {
         tareas={tareas}
         currentUser={user?.nombre}
         isAdmin={isAdmin}
+        isQALead={isQALead}
         isQA={isQA}
+        configEtapas={configEtapas}
+        tiposAplicacion={tiposAplicacion}
+        ambientes={ambientes}
         onIniciarHU={handleIniciarHU}
         onCancelarHU={handleCancelarHU}
         onAddCaso={handleAddCaso}
@@ -622,6 +861,8 @@ export default function DashboardPage() {
         onAddBloqueo={handleAddBloqueo}
         onResolverBloqueo={handleResolverBloqueo}
         onPermitirCasosAdicionales={handlePermitirCasosAdicionales}
+        onAddComentarioHU={handleAddComentarioHU}
+        onAddComentarioCaso={handleAddComentarioCaso}
       />
 
       <ConfirmDeleteModal
@@ -641,7 +882,7 @@ export default function DashboardPage() {
               <span style={{ fontSize:11, fontWeight:800, color:"var(--primary-foreground)" }}>QA</span>
             </div>
             <div>
-              <p style={{ fontSize:13, fontWeight:700, color:"var(--foreground)" }}>Dashboard QA</p>
+              <p style={{ fontSize:13, fontWeight:700, color:"var(--foreground)" }}>QAControl</p>
               <p style={{ fontSize:10, color:"var(--muted-foreground)" }}>Gestión de pruebas y control de calidad</p>
             </div>
           </div>

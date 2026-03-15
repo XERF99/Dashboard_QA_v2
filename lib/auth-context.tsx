@@ -2,16 +2,78 @@
 
 import { createContext, useContext, useState, useCallback, type ReactNode } from "react"
 
-// ── Roles ────────────────────────────────────────────────
-export type UserRole = "admin" | "qa" | "viewer"
+// ── Permisos disponibles ──────────────────────────────────
+export type PermisoId =
+  | "canEdit"          // crear y editar casos de prueba y tareas
+  | "canManageUsers"   // gestionar usuarios y roles
+  | "canApproveCases"  // aprobar o rechazar casos de prueba
+  | "canCreateHU"      // crear y editar Historias de Usuario
+  | "verSoloPropios"   // restringe la vista a las HUs asignadas al usuario
 
-// ── Modelo de usuario ────────────────────────────────────
+export const PERMISOS_INFO: Record<PermisoId, { label: string; description: string }> = {
+  canEdit:         { label: "Editar contenido",    description: "Crear y editar casos de prueba y tareas" },
+  canManageUsers:  { label: "Gestionar usuarios",  description: "Crear, editar y eliminar usuarios y roles" },
+  canApproveCases: { label: "Aprobar casos",        description: "Aprobar o rechazar casos de prueba" },
+  canCreateHU:     { label: "Gestionar HUs",        description: "Crear y editar Historias de Usuario" },
+  verSoloPropios:  { label: "Ver solo propios",     description: "Restringe la vista a las HUs asignadas al usuario" },
+}
+
+// ── Definición de rol configurable ───────────────────────
+export interface RoleDef {
+  id: string
+  label: string
+  description: string
+  cls: string           // clases CSS para el badge
+  permisos: PermisoId[]
+  esBase: boolean       // true = rol del sistema, no se puede eliminar
+}
+
+// ── Roles predeterminados ─────────────────────────────────
+export const ROLES_PREDETERMINADOS: RoleDef[] = [
+  {
+    id: "admin",
+    label: "Administrador",
+    description: "Gestiona todo: HUs, usuarios, aprobaciones y configuración",
+    cls: "bg-chart-4/20 text-chart-4 border-chart-4/30",
+    permisos: ["canEdit", "canManageUsers", "canApproveCases", "canCreateHU"],
+    esBase: true,
+  },
+  {
+    id: "qa_lead",
+    label: "QA Lead",
+    description: "Crea HUs, gestiona todo el equipo QA y aprueba casos de prueba",
+    cls: "bg-purple-500/20 text-purple-500 border-purple-500/30",
+    permisos: ["canEdit", "canApproveCases", "canCreateHU"],
+    esBase: true,
+  },
+  {
+    id: "qa",
+    label: "QA",
+    description: "Crea y ejecuta casos de prueba sobre las HU asignadas",
+    cls: "bg-chart-1/20 text-chart-1 border-chart-1/30",
+    permisos: ["canEdit", "verSoloPropios"],
+    esBase: true,
+  },
+  {
+    id: "viewer",
+    label: "Visualizador",
+    description: "Ve todos los cambios pero sin poder editarlos",
+    cls: "bg-chart-2/20 text-chart-2 border-chart-2/30",
+    permisos: [],
+    esBase: true,
+  },
+]
+
+// ── Tipo de rol — string para soportar roles personalizados ─
+export type UserRole = string
+
+// ── Modelo de usuario ─────────────────────────────────────
 export interface User {
   id: string
   nombre: string
   email: string
   password: string
-  rol: UserRole
+  rol: string
   avatar?: string
   activo: boolean
   fechaCreacion: Date
@@ -21,7 +83,7 @@ export interface User {
 export type UserSafe = Omit<User, "password">
 
 // ── Contraseña genérica para nuevos usuarios ─────────────
-export const PASSWORD_GENERICA = "TCS2024"
+export const PASSWORD_GENERICA = "Qatesting1"
 
 // ── Usuarios iniciales ───────────────────────────────────
 export const usuariosIniciales: User[] = [
@@ -33,7 +95,14 @@ export const usuariosIniciales: User[] = [
     debeCambiarPassword: false,
   },
   {
-    id: "usr-002", nombre: "Maria Garcia",
+    id: "usr-002", nombre: "Laura Mendez",
+    email: "laura.mendez@empresa.com", password: "laura123",
+    rol: "qa_lead", activo: true,
+    fechaCreacion: new Date("2026-01-10"),
+    debeCambiarPassword: false,
+  },
+  {
+    id: "usr-006", nombre: "Maria Garcia",
     email: "maria.garcia@empresa.com", password: "maria123",
     rol: "qa", activo: true,
     fechaCreacion: new Date("2026-01-15"),
@@ -66,23 +135,31 @@ export const usuariosIniciales: User[] = [
 interface AuthContextType {
   user: UserSafe | null
   users: User[]
+  roles: RoleDef[]
   isAuthenticated: boolean
   pendientePassword: boolean        // true = debe cambiar contraseña antes de usar el app
   login: (email: string, password: string) => { success: boolean; error?: string; debeCambiar?: boolean }
   logout: () => void
   cambiarPassword: (actual: string, nueva: string) => { success: boolean; error?: string }
-  addUser: (data: { nombre: string; email: string; rol: UserRole }) => { success: boolean; error?: string }
+  updateProfile: (nombre: string) => { success: boolean; error?: string }
+  addUser: (data: { nombre: string; email: string; rol: string }) => { success: boolean; error?: string }
   updateUser: (user: User) => { success: boolean; error?: string }
   deleteUser: (id: string) => { success: boolean; error?: string }
   toggleUserActive: (id: string) => void
   resetPassword: (userId: string) => { success: boolean; error?: string }
-  // Permisos
-  canEdit: boolean           // admin puede hacer todo, QA puede crear casos/tareas
-  canManageUsers: boolean    // solo admin
-  canView: boolean           // todos
+  addRole: (data: Omit<RoleDef, "id" | "esBase">) => { success: boolean; error?: string }
+  updateRole: (role: RoleDef) => { success: boolean; error?: string }
+  deleteRole: (id: string) => { success: boolean; error?: string }
+  // Permisos derivados del rol activo
+  canEdit: boolean
+  canManageUsers: boolean
+  canView: boolean
   isAdmin: boolean
+  isQALead: boolean
   isQA: boolean
-  verSoloPropios: boolean    // QA solo ve lo asignado a él
+  canApproveCases: boolean
+  canCreateHU: boolean
+  verSoloPropios: boolean
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -90,6 +167,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserSafe | null>(null)
   const [users, setUsers] = useState<User[]>(usuariosIniciales)
+  const [roles, setRoles] = useState<RoleDef[]>(ROLES_PREDETERMINADOS)
   const [pendientePassword, setPendientePassword] = useState(false)
 
   const login = useCallback((email: string, password: string) => {
@@ -131,7 +209,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { success: true }
   }, [user, users])
 
-  const addUser = useCallback((data: { nombre: string; email: string; rol: UserRole }) => {
+  const addUser = useCallback((data: { nombre: string; email: string; rol: string }) => {
     const emailExists = users.some(u => u.email.toLowerCase() === data.email.toLowerCase())
     if (emailExists) return { success: false, error: "Ya existe un usuario con este email" }
 
@@ -171,19 +249,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (user?.id === id) return { success: false, error: "No puedes eliminar tu propia cuenta" }
 
     const target = users.find(u => u.id === id)
-    if (target?.rol === "admin") {
-      const adminCount = users.filter(u => u.rol === "admin").length
-      if (adminCount <= 1) return { success: false, error: "No puedes eliminar el último administrador" }
+    if (target) {
+      const targetRol = roles.find(r => r.id === target.rol)
+      if (targetRol?.permisos.includes("canManageUsers")) {
+        const adminCount = users.filter(u => {
+          const rd = roles.find(r => r.id === u.rol)
+          return rd?.permisos.includes("canManageUsers")
+        }).length
+        if (adminCount <= 1) return { success: false, error: "No puedes eliminar el último administrador" }
+      }
     }
 
     setUsers(prev => prev.filter(u => u.id !== id))
     return { success: true }
-  }, [user?.id, users])
+  }, [user?.id, users, roles])
 
   const toggleUserActive = useCallback((id: string) => {
     if (user?.id === id) return
     setUsers(prev => prev.map(u => u.id === id ? { ...u, activo: !u.activo } : u))
   }, [user?.id])
+
+  const updateProfile = useCallback((nombre: string) => {
+    if (!user) return { success: false, error: "No hay sesión activa" }
+    const trimmed = nombre.trim()
+    if (!trimmed) return { success: false, error: "El nombre no puede estar vacío" }
+    setUsers(prev => prev.map(u => u.id === user.id ? { ...u, nombre: trimmed } : u))
+    setUser(prev => prev ? { ...prev, nombre: trimmed } : prev)
+    return { success: true }
+  }, [user])
 
   const resetPassword = useCallback((userId: string) => {
     const target = users.find(u => u.id === userId)
@@ -195,21 +288,63 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { success: true }
   }, [users])
 
-  // ── Permisos basados en rol ──
-  const canView = user !== null
-  const isAdmin = user?.rol === "admin"
-  const isQA = user?.rol === "qa"
-  const canEdit = isAdmin || isQA
-  const canManageUsers = isAdmin
-  const verSoloPropios = isQA
+  // ── CRUD Roles ──────────────────────────────────────────
+  const addRole = useCallback((data: Omit<RoleDef, "id" | "esBase">) => {
+    const id = data.label
+      .toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/\s+/g, "_")
+      .replace(/[^a-z0-9_]/g, "")
+    if (!id || roles.some(r => r.id === id))
+      return { success: false, error: "Ya existe un rol con ese nombre" }
+    setRoles(prev => [...prev, { ...data, id, esBase: false }])
+    return { success: true }
+  }, [roles])
+
+  const updateRole = useCallback((updatedRole: RoleDef) => {
+    const orig = roles.find(r => r.id === updatedRole.id)
+    if (!orig) return { success: false, error: "Rol no encontrado" }
+    if (updatedRole.id === "admin" && !updatedRole.permisos.includes("canManageUsers"))
+      return { success: false, error: "El rol Administrador debe mantener el permiso de gestión de usuarios" }
+    setRoles(prev => prev.map(r => r.id === updatedRole.id ? updatedRole : r))
+    return { success: true }
+  }, [roles])
+
+  const deleteRole = useCallback((id: string) => {
+    const role = roles.find(r => r.id === id)
+    if (!role) return { success: false, error: "Rol no encontrado" }
+    if (role.esBase) return { success: false, error: "No se puede eliminar un rol base del sistema" }
+    if (users.some(u => u.rol === id))
+      return { success: false, error: "No se puede eliminar un rol con usuarios asignados" }
+    setRoles(prev => prev.filter(r => r.id !== id))
+    return { success: true }
+  }, [roles, users])
+
+  // ── Permisos derivados del rol activo ───────────────────
+  const roleDef = user ? roles.find(r => r.id === user.rol) : null
+  const hasPermiso = (p: PermisoId) => roleDef?.permisos.includes(p) ?? false
+
+  const canView         = user !== null
+  const canEdit         = hasPermiso("canEdit")
+  const canManageUsers  = hasPermiso("canManageUsers")
+  const canApproveCases = hasPermiso("canApproveCases")
+  const canCreateHU     = hasPermiso("canCreateHU")
+  const verSoloPropios  = hasPermiso("verSoloPropios")
+
+  // Compatibilidad con componentes que reciben isAdmin/isQALead/isQA
+  const isAdmin  = canManageUsers
+  const isQALead = canCreateHU && canApproveCases && !canManageUsers
+  const isQA     = canEdit && !canCreateHU && !canManageUsers
 
   return (
     <AuthContext.Provider value={{
-      user, users, isAuthenticated: user !== null,
+      user, users, roles, isAuthenticated: user !== null,
       pendientePassword,
-      login, logout, cambiarPassword,
+      login, logout, cambiarPassword, updateProfile,
       addUser, updateUser, deleteUser, toggleUserActive, resetPassword,
-      canEdit, canManageUsers, canView, isAdmin, isQA, verSoloPropios,
+      addRole, updateRole, deleteRole,
+      canEdit, canManageUsers, canView, isAdmin, isQALead, isQA,
+      canApproveCases, canCreateHU, verSoloPropios,
     }}>
       {children}
     </AuthContext.Provider>
@@ -220,20 +355,4 @@ export function useAuth() {
   const context = useContext(AuthContext)
   if (context === undefined) throw new Error("useAuth debe usarse dentro de un AuthProvider")
   return context
-}
-
-// ── Descripciones de roles para UI ───────────────────────
-export const roleDescriptions: Record<UserRole, { label: string; description: string }> = {
-  admin: {
-    label: "Administrador",
-    description: "Gestiona todo: HUs, usuarios, aprobaciones y configuración",
-  },
-  qa: {
-    label: "QA",
-    description: "Crea y ejecuta casos de prueba sobre las HU asignadas",
-  },
-  viewer: {
-    label: "Visualizador",
-    description: "Ve todos los cambios pero sin poder editarlos",
-  },
 }

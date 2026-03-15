@@ -6,8 +6,43 @@
 //          └── Tarea = actividad dentro del caso de prueba
 // ═══════════════════════════════════════════════════════════
 
-// ── Etapas de ejecución (Despliegue → Rollback → Redespliegue) ──
-export type EtapaEjecucion = "despliegue" | "rollback" | "redespliegue"
+// ── Etapas de ejecución — string flexible para permitir etapas personalizadas ──
+export type EtapaEjecucion = string
+
+// ── Definición de una etapa configurable ────────────────────
+export interface EtapaDefinicion {
+  id: string      // clave interna, ej. "despliegue"
+  label: string   // texto visible, ej. "Despliegue"
+  cls: string     // clases CSS para el badge
+}
+
+// ── Configuración de etapas por tipo de aplicación ──────────
+export type ConfigEtapas = Record<string, EtapaDefinicion[]>
+
+// ── Configuración predeterminada (equivale al comportamiento original) ──
+export const ETAPAS_PREDETERMINADAS: ConfigEtapas = {
+  aplicacion: [
+    { id: "despliegue",   label: "Despliegue",   cls: "bg-chart-1/20 text-chart-1 border-chart-1/30" },
+    { id: "rollback",     label: "Rollback",     cls: "bg-chart-3/20 text-chart-3 border-chart-3/30" },
+    { id: "redespliegue", label: "Redespliegue", cls: "bg-purple-500/20 text-purple-500 border-purple-500/30" },
+  ],
+  infraestructura: [
+    { id: "despliegue",   label: "Despliegue",   cls: "bg-chart-1/20 text-chart-1 border-chart-1/30" },
+    { id: "rollback",     label: "Rollback",     cls: "bg-chart-3/20 text-chart-3 border-chart-3/30" },
+    { id: "redespliegue", label: "Redespliegue", cls: "bg-purple-500/20 text-purple-500 border-purple-500/30" },
+  ],
+  mixto: [
+    { id: "despliegue",   label: "Despliegue",   cls: "bg-chart-1/20 text-chart-1 border-chart-1/30" },
+    { id: "rollback",     label: "Rollback",     cls: "bg-chart-3/20 text-chart-3 border-chart-3/30" },
+    { id: "redespliegue", label: "Redespliegue", cls: "bg-purple-500/20 text-purple-500 border-purple-500/30" },
+  ],
+  base_de_datos: [
+    { id: "despliegue",   label: "Despliegue",   cls: "bg-chart-1/20 text-chart-1 border-chart-1/30" },
+  ],
+  batch: [
+    { id: "despliegue",   label: "Despliegue",   cls: "bg-chart-1/20 text-chart-1 border-chart-1/30" },
+  ],
+}
 
 // ── Etapa de la HU (incluye sin_iniciar y estados finales) ──
 export type EtapaHU =
@@ -28,15 +63,56 @@ export type EstadoHU =
 export type PrioridadHU = "critica" | "alta" | "media" | "baja"
 
 // ── Tipo de aplicación (determina qué etapas aplican) ────
-export type TipoAplicacion =
-  | "base_de_datos"     // solo despliegue
-  | "aplicacion"        // despliegue → rollback → redespliegue
-  | "infraestructura"   // despliegue → rollback → redespliegue
-  | "batch"             // solo despliegue
-  | "mixto"             // todas las etapas
+export type TipoAplicacion = string
+
+// ── Definición de un tipo de aplicación configurable ────────
+export interface TipoAplicacionDef {
+  id: string      // clave interna, ej. "aplicacion" — inmutable
+  label: string   // nombre visible, ej. "Aplicación"
+}
+
+// ── Tipos predeterminados ────────────────────────────────────
+export const TIPOS_APLICACION_PREDETERMINADOS: TipoAplicacionDef[] = [
+  { id: "aplicacion",      label: "Aplicación" },
+  { id: "infraestructura", label: "Infraestructura" },
+  { id: "mixto",           label: "Mixto" },
+  { id: "base_de_datos",   label: "Base de Datos" },
+  { id: "batch",           label: "Proceso Batch" },
+]
+
+/** Obtiene el label de un tipo: busca en la lista dinámica, cae al registro estático, luego al id */
+export function getTipoAplicacionLabel(id: string, tipos?: TipoAplicacionDef[]): string {
+  if (tipos) {
+    const found = tipos.find(t => t.id === id)
+    if (found) return found.label
+  }
+  return TIPO_APLICACION_LABEL[id] ?? id
+}
 
 // ── Ambiente de pruebas ──────────────────────────────────
-export type AmbientePrueba = "test" | "preproduccion" | "produccion"
+export type AmbientePrueba = string
+
+// ── Definición de un ambiente configurable ───────────────
+export interface AmbienteDef {
+  id: string      // clave interna, ej. "test"
+  label: string   // nombre visible, ej. "Test"
+}
+
+// ── Ambientes predeterminados ────────────────────────────
+export const AMBIENTES_PREDETERMINADOS: AmbienteDef[] = [
+  { id: "test",          label: "Test" },
+  { id: "preproduccion", label: "Pre-Producción" },
+  { id: "produccion",    label: "Producción" },
+]
+
+/** Obtiene el label de un ambiente: busca en la lista dinámica, cae al registro estático, luego al id */
+export function getAmbienteLabel(id: string, ambientes?: AmbienteDef[]): string {
+  if (ambientes) {
+    const found = ambientes.find(a => a.id === id)
+    if (found) return found.label
+  }
+  return AMBIENTE_LABEL[id] ?? id
+}
 
 // ── Tipo y complejidad de prueba ─────────────────────────
 export type TipoPrueba = "funcional" | "no_funcional"
@@ -117,6 +193,14 @@ export interface Notificacion {
   casoTitulo?: string
 }
 
+// ── Comentario (aplica a HU y caso de prueba) ────────────
+export interface Comentario {
+  id: string
+  texto: string
+  autor: string
+  fecha: Date
+}
+
 // ── Bloqueo (aplica a HU, caso de prueba o tarea) ───────
 export interface Bloqueo {
   id: string
@@ -195,6 +279,8 @@ export interface CasoPrueba {
   modificacionHabilitada: boolean
   motivoModificacion?: string
   modificacionSolicitada?: boolean   // QA solicitó modificar este caso aprobado
+
+  comentarios: Comentario[]
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -210,6 +296,7 @@ export interface HistoriaUsuario {
   prioridad: PrioridadHU
   estado: EstadoHU
   puntos: number                   // story points
+  sprint?: string                  // sprint o versión a la que pertenece (ej. "Sprint 3", "v2.1")
   aplicacion: string               // app/sistema sobre el que aplica el cambio
   tipoAplicacion: TipoAplicacion   // determina qué etapas aplican
   requiriente: string              // quién solicitó el cambio
@@ -229,6 +316,8 @@ export interface HistoriaUsuario {
   // ── Excepción: admin permite agregar más casos post-despliegue ──
   permitirCasosAdicionales: boolean
   motivoCasosAdicionales?: string
+
+  comentarios: Comentario[]
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -243,13 +332,26 @@ export const ESTADO_HU_CFG: Record<EstadoHU, { label: string; cls: string }> = {
   cancelada:   { label: "Cancelada",    cls: "bg-muted text-muted-foreground border-border" },
 }
 
-export const ETAPA_HU_CFG: Record<EtapaHU, { label: string; cls: string }> = {
+export const ETAPA_HU_CFG: Record<string, { label: string; cls: string }> = {
   sin_iniciar:      { label: "Sin Iniciar",       cls: "bg-muted text-muted-foreground border-border" },
   despliegue:       { label: "Despliegue",         cls: "bg-chart-1/20 text-chart-1 border-chart-1/30" },
   rollback:         { label: "Rollback",            cls: "bg-chart-3/20 text-chart-3 border-chart-3/30" },
   redespliegue:     { label: "Redespliegue",        cls: "bg-purple-500/20 text-purple-500 border-purple-500/30" },
   completada:       { label: "Completada",          cls: "bg-chart-2/20 text-chart-2 border-chart-2/30" },
   cambio_cancelado: { label: "Cambio Cancelado",    cls: "bg-chart-4/20 text-chart-4 border-chart-4/30" },
+}
+
+/** Lookup dinámico: primero busca en las estáticas, luego en la config personalizada */
+export function getEtapaHUCfg(
+  etapaId: string,
+  config: ConfigEtapas = ETAPAS_PREDETERMINADAS,
+): { label: string; cls: string } {
+  if (ETAPA_HU_CFG[etapaId]) return ETAPA_HU_CFG[etapaId]
+  for (const defs of Object.values(config)) {
+    const found = defs.find(e => e.id === etapaId)
+    if (found) return { label: found.label, cls: found.cls }
+  }
+  return { label: etapaId, cls: "bg-muted text-muted-foreground border-border" }
 }
 
 export const PRIORIDAD_CFG: Record<PrioridadHU, { label: string; cls: string }> = {
@@ -259,7 +361,7 @@ export const PRIORIDAD_CFG: Record<PrioridadHU, { label: string; cls: string }> 
   baja:    { label: "Baja",    cls: "bg-chart-2/20 text-chart-2 border-chart-2/30" },
 }
 
-export const TIPO_APLICACION_LABEL: Record<TipoAplicacion, string> = {
+export const TIPO_APLICACION_LABEL: Record<string, string> = {
   base_de_datos:  "Base de Datos",
   aplicacion:     "Aplicación",
   infraestructura:"Infraestructura",
@@ -304,7 +406,7 @@ export const ESTADO_APROBACION_CFG: Record<EstadoAprobacion, { label: string; cl
   rechazado:              { label: "Rechazado",             cls: "bg-chart-4/20 text-chart-4 border-chart-4/30" },
 }
 
-export const AMBIENTE_LABEL: Record<AmbientePrueba, string> = {
+export const AMBIENTE_LABEL: Record<string, string> = {
   test:           "Test",
   preproduccion:  "Pre-Producción",
   produccion:     "Producción",
@@ -314,18 +416,29 @@ export const AMBIENTE_LABEL: Record<AmbientePrueba, string> = {
 //  FUNCIONES HELPER
 // ═══════════════════════════════════════════════════════════
 
-/** Etapas de ejecución según el tipo de aplicación */
-export function etapasParaTipo(tipo: TipoAplicacion): EtapaEjecucion[] {
-  if (tipo === "base_de_datos" || tipo === "batch") return ["despliegue"]
-  return ["despliegue", "rollback", "redespliegue"]
+/** Etapas de ejecución según el tipo de aplicación y configuración activa */
+export function etapasParaTipo(
+  tipo: TipoAplicacion,
+  config: ConfigEtapas = ETAPAS_PREDETERMINADAS,
+): EtapaEjecucion[] {
+  return (config[tipo] ?? ETAPAS_PREDETERMINADAS[tipo] ?? []).map(e => e.id)
+}
+
+/** EtapaDefinicion[] completa según el tipo (incluye label y cls) */
+export function etapaDefsParaTipo(
+  tipo: TipoAplicacion,
+  config: ConfigEtapas = ETAPAS_PREDETERMINADAS,
+): EtapaDefinicion[] {
+  return config[tipo] ?? ETAPAS_PREDETERMINADAS[tipo] ?? []
 }
 
 /** Siguiente etapa de ejecución (null si ya terminó) */
 export function siguienteEtapa(
   etapaActual: EtapaEjecucion,
-  tipo: TipoAplicacion
+  tipo: TipoAplicacion,
+  config: ConfigEtapas = ETAPAS_PREDETERMINADAS,
 ): EtapaEjecucion | null {
-  const etapas = etapasParaTipo(tipo)
+  const etapas = etapasParaTipo(tipo, config)
   const idx = etapas.indexOf(etapaActual)
   return idx >= 0 && idx < etapas.length - 1 ? etapas[idx + 1] : null
 }
@@ -510,6 +623,7 @@ export const casosPruebaEjemplo: CasoPrueba[] = [
     tareasIds: ["T-001", "T-002"],
     bloqueos: [], creadoPor: "Maria Garcia",
     modificacionHabilitada: false,
+    comentarios: [],
   },
   {
     id: "CP-002", huId: "hu-1",
@@ -526,6 +640,7 @@ export const casosPruebaEjemplo: CasoPrueba[] = [
     tareasIds: ["T-003", "T-004"],
     bloqueos: [], creadoPor: "Maria Garcia",
     modificacionHabilitada: false,
+    comentarios: [],
   },
   {
     id: "CP-003", huId: "hu-2",
@@ -544,6 +659,7 @@ export const casosPruebaEjemplo: CasoPrueba[] = [
     tareasIds: ["T-005", "T-006"],
     bloqueos: [], creadoPor: "Maria Garcia",
     modificacionHabilitada: false,
+    comentarios: [],
   },
   {
     id: "CP-004", huId: "hu-3",
@@ -560,6 +676,7 @@ export const casosPruebaEjemplo: CasoPrueba[] = [
     tareasIds: ["T-007", "T-008"],
     bloqueos: [], creadoPor: "Ana Martinez",
     modificacionHabilitada: false,
+    comentarios: [],
   },
   {
     id: "CP-005", huId: "hu-3",
@@ -581,6 +698,7 @@ export const casosPruebaEjemplo: CasoPrueba[] = [
     }],
     creadoPor: "Ana Martinez",
     modificacionHabilitada: false,
+    comentarios: [],
   },
 ]
 
@@ -591,7 +709,7 @@ export const historiasEjemplo: HistoriaUsuario[] = [
     descripcion: "Migrar el sistema de login actual a OAuth 2.0 para mayor seguridad y compatibilidad con proveedores externos",
     criteriosAceptacion: "- Login con Google y GitHub operativo\n- Token JWT con expiración de 1h\n- Refresh token automático\n- Pruebas de regresión al 100%",
     responsable: "Maria Garcia",
-    prioridad: "alta", estado: "en_progreso", puntos: 13,
+    prioridad: "alta", estado: "en_progreso", puntos: 13, sprint: "Sprint 3",
     aplicacion: "Portal Web Principal", tipoAplicacion: "aplicacion",
     requiriente: "Jefe de Seguridad IT", areaSolicitante: "Seguridad Informática",
     fechaCreacion: new Date("2026-02-20"), fechaFinEstimada: new Date("2026-03-20"),
@@ -613,6 +731,7 @@ export const historiasEjemplo: HistoriaUsuario[] = [
     ],
     creadoPor: "Admin Principal", delegadoPor: "Admin Principal",
     permitirCasosAdicionales: false,
+    comentarios: [],
   },
   {
     id: "hu-2", codigo: "HU-002",
@@ -620,7 +739,7 @@ export const historiasEjemplo: HistoriaUsuario[] = [
     descripcion: "Corregir el envío de emails del formulario de contacto que falla silenciosamente en producción",
     criteriosAceptacion: "- Envío de email confirmado en prod\n- Notificación al admin en < 30s\n- Log de errores habilitado",
     responsable: "Maria Garcia",
-    prioridad: "media", estado: "exitosa", puntos: 3,
+    prioridad: "media", estado: "exitosa", puntos: 3, sprint: "Sprint 2",
     aplicacion: "Portal Web Principal", tipoAplicacion: "aplicacion",
     requiriente: "Soporte Técnico", areaSolicitante: "Atención al Cliente",
     fechaCreacion: new Date("2026-03-01"), fechaFinEstimada: new Date("2026-03-08"),
@@ -638,6 +757,7 @@ export const historiasEjemplo: HistoriaUsuario[] = [
     ],
     creadoPor: "Admin Principal", delegadoPor: "Admin Principal",
     permitirCasosAdicionales: false,
+    comentarios: [],
   },
   {
     id: "hu-3", codigo: "HU-003",
@@ -645,7 +765,7 @@ export const historiasEjemplo: HistoriaUsuario[] = [
     descripcion: "Garantizar que el nuevo sistema de auth soporta la carga esperada en producción",
     criteriosAceptacion: "- P95 < 200ms con 5000 usuarios concurrentes\n- P99 < 500ms\n- Sin degradación en endpoints críticos",
     responsable: "Ana Martinez",
-    prioridad: "alta", estado: "en_progreso", puntos: 8,
+    prioridad: "alta", estado: "en_progreso", puntos: 8, sprint: "Sprint 3",
     aplicacion: "Portal Web Principal", tipoAplicacion: "aplicacion",
     requiriente: "Arquitectura", areaSolicitante: "Ingeniería",
     fechaCreacion: new Date("2026-03-02"), fechaFinEstimada: new Date("2026-03-18"),
@@ -660,6 +780,7 @@ export const historiasEjemplo: HistoriaUsuario[] = [
     ],
     creadoPor: "Admin Principal", delegadoPor: "Admin Principal",
     permitirCasosAdicionales: false,
+    comentarios: [],
   },
   {
     id: "hu-4", codigo: "HU-004",
@@ -667,7 +788,7 @@ export const historiasEjemplo: HistoriaUsuario[] = [
     descripcion: "Modernizar el scheduler de jobs nocturnos para recálculo de KPIs financieros",
     criteriosAceptacion: "- Jobs ejecutan sin error en producción\n- Tiempo de ejecución <= actual\n- Alertas configuradas",
     responsable: "Ana Martinez",
-    prioridad: "critica", estado: "sin_iniciar", puntos: 13,
+    prioridad: "critica", estado: "sin_iniciar", puntos: 13, sprint: "Sprint 4",
     aplicacion: "Sistema de Reportes", tipoAplicacion: "base_de_datos",
     requiriente: "Gerente Financiero", areaSolicitante: "Finanzas",
     fechaCreacion: new Date("2026-03-10"), fechaFinEstimada: new Date("2026-03-16"),
@@ -679,5 +800,6 @@ export const historiasEjemplo: HistoriaUsuario[] = [
     ],
     creadoPor: "Admin Principal", delegadoPor: "Admin Principal",
     permitirCasosAdicionales: false,
+    comentarios: [],
   },
 ]

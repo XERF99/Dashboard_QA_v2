@@ -13,16 +13,18 @@ import {
   AlertTriangle, Plus, CheckCircle2, ShieldAlert, Layers,
   User, Play, XCircle, Send, ThumbsUp, ThumbsDown,
   ChevronDown, ChevronUp, Lock, Unlock, FileText, RefreshCw,
-  Pencil, Trash2, Bell,
+  Pencil, Trash2, Bell, MessageSquare,
 } from "lucide-react"
 import {
-  ESTADO_HU_CFG, ETAPA_HU_CFG, PRIORIDAD_CFG, TIPO_APLICACION_LABEL,
+  ESTADO_HU_CFG, ETAPA_HU_CFG, PRIORIDAD_CFG,
   ESTADO_APROBACION_CFG, COMPLEJIDAD_CFG, TIPO_PRUEBA_LABEL, TIPO_PRUEBA_COLOR,
-  TIPO_TAREA_LABEL, TIPO_TAREA_COLOR, AMBIENTE_LABEL,
-  etapasParaTipo, fmtCorto, fmtHora,
-  type HistoriaUsuario, type CasoPrueba, type Tarea, type Bloqueo,
+  TIPO_TAREA_LABEL, TIPO_TAREA_COLOR,
+  etapasParaTipo, etapaDefsParaTipo, getEtapaHUCfg, ETAPAS_PREDETERMINADAS,
+  getTipoAplicacionLabel, getAmbienteLabel,
+  fmtCorto, fmtHora,
+  type HistoriaUsuario, type CasoPrueba, type Tarea, type Bloqueo, type Comentario,
   type EtapaEjecucion, type TipoPrueba, type ComplejidadCaso, type EntornoCaso,
-  type TipoTarea, type PrioridadTarea,
+  type TipoTarea, type PrioridadTarea, type ConfigEtapas, type TipoAplicacionDef, type AmbienteDef,
 } from "@/lib/types"
 
 interface Props {
@@ -33,6 +35,7 @@ interface Props {
   tareas: Tarea[]
   currentUser?: string
   isAdmin: boolean
+  isQALead?: boolean
   isQA: boolean
   onIniciarHU: (huId: string) => void
   onCancelarHU: (huId: string, motivo: string) => void
@@ -57,32 +60,118 @@ interface Props {
   onAddBloqueo: (huId: string, b: Bloqueo) => void
   onResolverBloqueo: (huId: string, bId: string, nota: string) => void
   onPermitirCasosAdicionales: (huId: string, motivo: string) => void
+  onAddComentarioHU: (huId: string, texto: string) => void
+  onAddComentarioCaso: (casoId: string, texto: string) => void
+  configEtapas?: ConfigEtapas
+  tiposAplicacion?: TipoAplicacionDef[]
+  ambientes?: AmbienteDef[]
 }
 
 // ── Helpers ──
 const PNL: React.CSSProperties = { padding:"13px 15px", borderRadius:10, border:"1px solid var(--border)", background:"var(--background)" }
 const SLBL: React.CSSProperties = { fontSize:"10px", textTransform:"uppercase", letterSpacing:"0.1em", fontWeight:700, color:"var(--muted-foreground)", marginBottom:10, display:"flex", alignItems:"center", gap:5 }
 
-const ETAPA_EXEC_LABEL: Record<string,string> = {
-  despliegue:"Despliegue", rollback:"Rollback", redespliegue:"Redespliegue",
-}
-
 function fmt(d: Date): string {
   const MESES = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"]
   return `${d.getDate().toString().padStart(2,"0")} ${MESES[d.getMonth()]} ${d.getFullYear()}`
+}
+
+// ── Hilo de comentarios ───────────────────────────────────────
+function CommentThread({
+  comentarios, onAdd, currentUser, canComment,
+}: {
+  comentarios: Comentario[]
+  onAdd: (texto: string) => void
+  currentUser?: string
+  canComment: boolean
+}) {
+  const [texto, setTexto] = useState("")
+  const MESES = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"]
+  function fmtTs(d: Date) {
+    const hoy = new Date()
+    const esHoy = d.getFullYear()===hoy.getFullYear() && d.getMonth()===hoy.getMonth() && d.getDate()===hoy.getDate()
+    const hhmm = `${d.getHours().toString().padStart(2,"0")}:${d.getMinutes().toString().padStart(2,"0")}`
+    return esHoy ? `hoy ${hhmm}` : `${d.getDate().toString().padStart(2,"0")} ${MESES[d.getMonth()]} ${hhmm}`
+  }
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+      {comentarios.length === 0 && (
+        <p style={{ fontSize:12, color:"var(--muted-foreground)", fontStyle:"italic" }}>Sin comentarios aún</p>
+      )}
+      {comentarios.map(c => (
+        <div key={c.id} style={{ display:"flex", gap:8 }}>
+          <div style={{
+            width:26, height:26, borderRadius:"50%", flexShrink:0,
+            background:"color-mix(in oklch, var(--primary) 15%, transparent)",
+            display:"flex", alignItems:"center", justifyContent:"center",
+            fontSize:10, fontWeight:700, color:"var(--primary)",
+          }}>
+            {c.autor.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()}
+          </div>
+          <div style={{ flex:1, minWidth:0 }}>
+            <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:2 }}>
+              <span style={{ fontSize:11, fontWeight:700, color:"var(--foreground)" }}>{c.autor}</span>
+              <span style={{ fontSize:10, color:"var(--muted-foreground)" }}>{fmtTs(c.fecha)}</span>
+            </div>
+            <p style={{ fontSize:12, color:"var(--foreground)", lineHeight:1.45, wordBreak:"break-word" }}>{c.texto}</p>
+          </div>
+        </div>
+      ))}
+      {canComment && (
+        <div style={{ display:"flex", gap:8, alignItems:"flex-end", marginTop:4 }}>
+          <div style={{
+            width:26, height:26, borderRadius:"50%", flexShrink:0,
+            background:"color-mix(in oklch, var(--primary) 15%, transparent)",
+            display:"flex", alignItems:"center", justifyContent:"center",
+            fontSize:10, fontWeight:700, color:"var(--primary)",
+          }}>
+            {(currentUser||"?").split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()}
+          </div>
+          <Textarea
+            rows={2}
+            value={texto}
+            onChange={e => setTexto(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && texto.trim()) {
+                onAdd(texto.trim()); setTexto("")
+              }
+            }}
+            placeholder="Escribe un comentario... (Ctrl+Enter para enviar)"
+            style={{ flex:1, resize:"none", fontSize:12 }}
+          />
+          <button
+            onClick={() => { if (!texto.trim()) return; onAdd(texto.trim()); setTexto("") }}
+            disabled={!texto.trim()}
+            style={{
+              padding:"6px 10px", borderRadius:7, border:"none", cursor:"pointer",
+              background: texto.trim() ? "var(--primary)" : "var(--secondary)",
+              color: texto.trim() ? "var(--primary-foreground)" : "var(--muted-foreground)",
+              display:"flex", alignItems:"center", gap:4, fontSize:11, fontWeight:600, flexShrink:0,
+            }}
+          >
+            <Send size={12}/> Enviar
+          </button>
+        </div>
+      )}
+    </div>
+  )
 }
 
 // ══════════════════════════════════════════════════════════════
 // COMPONENTE PRINCIPAL
 // ══════════════════════════════════════════════════════════════
 export function HistoriaUsuarioDetail({
-  open, onClose, hu, casos, tareas, currentUser, isAdmin, isQA,
+  open, onClose, hu, casos, tareas, currentUser, isAdmin, isQALead = false, isQA,
   onIniciarHU, onCancelarHU, onAddCaso, onEditarCaso, onEliminarCaso,
   onEnviarCasoAprobacion, onEnviarAprobacion,
   onSolicitarModificacionCaso, onHabilitarModificacionCaso,
   onAprobarCasos, onRechazarCasos, onIniciarEjecucion, onCompletarCasoEtapa, onRetestearCaso,
   onAddTarea, onEditarTarea, onEliminarTarea, onCompletarTarea, onBloquearTarea, onDesbloquearTarea,
   onAddBloqueo, onResolverBloqueo, onPermitirCasosAdicionales,
+  onAddComentarioHU, onAddComentarioCaso,
+  configEtapas = ETAPAS_PREDETERMINADAS,
+  tiposAplicacion,
+  ambientes,
 }: Props) {
   // Form visibility
   const [showCasoForm, setShowCasoForm] = useState(false)
@@ -138,16 +227,17 @@ export function HistoriaUsuarioDetail({
   const blResueltos = hu.bloqueos.filter(b => b.resuelto)
 
   const estCfg = ESTADO_HU_CFG[hu.estado]
-  const etaCfg = ETAPA_HU_CFG[hu.etapa]
+  const etaCfg = getEtapaHUCfg(hu.etapa, configEtapas)
   const priCfg = PRIORIDAD_CFG[hu.prioridad]
 
   // HU cerrada = ya no se puede crear nada
   const huCerrada = hu.estado === "exitosa" || hu.estado === "cancelada" || hu.estado === "fallida"
 
   // Puede agregar casos?
-  const etapasDisponibles = etapasParaTipo(hu.tipoAplicacion)
-  const enDespliegue = hu.etapa === "despliegue"
-  const pasoPrimeraEtapa = hu.etapa !== "sin_iniciar" && hu.etapa !== "despliegue"
+  const etapasDisponibles = etapaDefsParaTipo(hu.tipoAplicacion, configEtapas)
+  const primeraEtapa = etapasDisponibles[0]?.id
+  const enDespliegue = hu.etapa === primeraEtapa
+  const pasoPrimeraEtapa = hu.etapa !== "sin_iniciar" && hu.etapa !== primeraEtapa
   const puedeAgregarCasos = !huCerrada && hu.estado === "en_progreso" && (enDespliegue || hu.permitirCasosAdicionales)
 
   // Casos con estados
@@ -180,6 +270,7 @@ export function HistoriaUsuarioDetail({
       bloqueos: [],
       creadoPor: currentUser || "Sistema",
       modificacionHabilitada: false,
+      comentarios: [],
     }
     onAddCaso(caso)
     resetCasoForm()
@@ -303,8 +394,8 @@ export function HistoriaUsuarioDetail({
               <Badge variant="outline" className={priCfg.cls}>Prioridad {priCfg.label}</Badge>
               <span style={{ display:"flex", alignItems:"center", gap:3, fontSize:12, color:"var(--muted-foreground)" }}><Star size={12}/>{hu.puntos} pts</span>
               <span style={{ display:"flex", alignItems:"center", gap:3, fontSize:12, color:"var(--muted-foreground)" }}><User size={12}/>{hu.responsable}</span>
-              <Badge variant="outline" className="bg-muted text-muted-foreground border-border text-[10px]">{TIPO_APLICACION_LABEL[hu.tipoAplicacion]}</Badge>
-              <Badge variant="outline" className="bg-muted text-muted-foreground border-border text-[10px]">{AMBIENTE_LABEL[hu.ambiente]}</Badge>
+              <Badge variant="outline" className="bg-muted text-muted-foreground border-border text-[10px]">{getTipoAplicacionLabel(hu.tipoAplicacion, tiposAplicacion)}</Badge>
+              <Badge variant="outline" className="bg-muted text-muted-foreground border-border text-[10px]">{getAmbienteLabel(hu.ambiente, ambientes)}</Badge>
               {blActivos.length>0 && <Badge variant="outline" className="bg-chart-4/20 text-chart-4 border-chart-4/30"><ShieldAlert size={11} className="mr-1"/>{blActivos.length} bloqueo{blActivos.length>1?"s":""}</Badge>}
             </div>
 
@@ -316,7 +407,7 @@ export function HistoriaUsuarioDetail({
                     <Play size={12} className="mr-1"/> Iniciar HU
                   </Button>
                 )}
-                {isAdmin && hu.estado !== "cancelada" && hu.estado !== "exitosa" && (
+                {(isAdmin || isQALead) && hu.estado !== "cancelada" && hu.estado !== "exitosa" && (
                   <Button size="sm" variant="outline" style={{ color:"var(--chart-4)", borderColor:"var(--chart-4)" }}
                     onClick={() => setShowCancelarForm(true)}>
                     <XCircle size={12} className="mr-1"/> Cancelar HU
@@ -329,7 +420,7 @@ export function HistoriaUsuarioDetail({
                     Enviar todos a aprobación ({borradores.length + casosHU.filter(c => c.estadoAprobacion === "rechazado").length})
                   </Button>
                 )}
-                {isAdmin && pendientesAprobacion.length > 0 && (
+                {(isAdmin || isQALead) && pendientesAprobacion.length > 0 && (
                   <>
                     <Button size="sm" onClick={() => onAprobarCasos(hu.id)} className="bg-chart-2 hover:bg-chart-2/90 text-white">
                       <ThumbsUp size={12} className="mr-1"/> Aprobar ({pendientesAprobacion.length})
@@ -344,12 +435,12 @@ export function HistoriaUsuarioDetail({
                     style={etapaYaIniciada ? { borderColor:"var(--chart-1)", color:"var(--chart-1)", opacity:0.7, cursor:"not-allowed" } : {}}
                     onClick={() => !etapaYaIniciada && onIniciarEjecucion(hu.id, hu.etapa as EtapaEjecucion)}>
                     {etapaYaIniciada
-                      ? <><span style={{ width:7, height:7, borderRadius:"50%", background:"var(--chart-1)", display:"inline-block", marginRight:6 }}/> En progreso — {ETAPA_EXEC_LABEL[hu.etapa]}</>
-                      : <><Play size={12} className="mr-1"/> Iniciar ejecución — {ETAPA_EXEC_LABEL[hu.etapa]}</>
+                      ? <><span style={{ width:7, height:7, borderRadius:"50%", background:"var(--chart-1)", display:"inline-block", marginRight:6 }}/> En progreso — {getEtapaHUCfg(hu.etapa, configEtapas).label}</>
+                      : <><Play size={12} className="mr-1"/> Iniciar ejecución — {getEtapaHUCfg(hu.etapa, configEtapas).label}</>
                     }
                   </Button>
                 )}
-                {isAdmin && pasoPrimeraEtapa && !hu.permitirCasosAdicionales && hu.estado === "en_progreso" && (
+                {(isAdmin || isQALead) && pasoPrimeraEtapa && !hu.permitirCasosAdicionales && hu.estado === "en_progreso" && (
                   <Button size="sm" variant="outline" onClick={() => setShowExcepcionForm(true)}>
                     <Unlock size={12} className="mr-1"/> Permitir más casos
                   </Button>
@@ -452,15 +543,16 @@ export function HistoriaUsuarioDetail({
                   <p style={SLBL}><Layers size={11}/>Etapas de Ejecución</p>
                   <div style={{ display:"flex", gap:8 }}>
                     {etapasDisponibles.map((et, i) => {
-                      const esCurrent = hu.etapa === et
-                      const esCompletada = etapasDisponibles.indexOf(hu.etapa as EtapaEjecucion) > i || hu.etapa === "completada"
+                      const esCurrent = hu.etapa === et.id
+                      const currentIdx = etapasDisponibles.findIndex(e => e.id === hu.etapa)
+                      const esCompletada = currentIdx > i || hu.etapa === "completada"
                       return (
-                        <div key={et} style={{ flex:1, padding:"10px 14px", borderRadius:8,
+                        <div key={et.id} style={{ flex:1, padding:"10px 14px", borderRadius:8,
                           border: esCurrent ? "2px solid var(--primary)" : "1px solid var(--border)",
                           background: esCompletada ? "color-mix(in oklch, var(--chart-2) 8%, transparent)" : esCurrent ? "color-mix(in oklch, var(--primary) 8%, transparent)" : "transparent",
                           textAlign:"center" }}>
                           <p style={{ fontSize:10, fontWeight:700, color: esCompletada ? "var(--chart-2)" : esCurrent ? "var(--primary)" : "var(--muted-foreground)", textTransform:"uppercase" }}>
-                            {ETAPA_EXEC_LABEL[et]}
+                            {et.label}
                           </p>
                           <p style={{ fontSize:10, color:"var(--muted-foreground)", marginTop:2 }}>
                             {esCompletada ? "Completada" : esCurrent ? "Actual" : "Pendiente"}
@@ -478,12 +570,12 @@ export function HistoriaUsuarioDetail({
                   <p style={{ ...SLBL, marginBottom:0 }}>
                     <FileText size={11}/>Casos de Prueba ({casosHU.length})
                   </p>
-                  {(isQA || isAdmin) && puedeAgregarCasos && (
+                  {(isQA || isAdmin || isQALead) && puedeAgregarCasos && (
                     <Button size="sm" variant="outline" onClick={() => { setShowCasoForm(true); setEditandoCaso(null); resetCasoForm() }}>
                       <Plus size={12} className="mr-1"/> Nuevo Caso
                     </Button>
                   )}
-                  {pasoPrimeraEtapa && !hu.permitirCasosAdicionales && !isAdmin && !huCerrada && (
+                  {pasoPrimeraEtapa && !hu.permitirCasosAdicionales && !isAdmin && !isQALead && !huCerrada && (
                     <span style={{ fontSize:10, color:"var(--chart-3)", display:"flex", alignItems:"center", gap:4 }}>
                       <Lock size={10}/> No se pueden agregar más casos
                     </span>
@@ -577,12 +669,12 @@ export function HistoriaUsuarioDetail({
                       caso.resultadosPorEtapa.every(r => r.resultado === "exitoso")
 
                     // Puede editar/eliminar este caso (QA o Admin, siempre que no esté aprobado/pendiente)
-                    const puedeEditar = !huCerrada && (isQA || isAdmin) && (
+                    const puedeEditar = !huCerrada && (isQA || isAdmin || isQALead) && (
                       caso.estadoAprobacion === "borrador" ||
                       caso.estadoAprobacion === "rechazado" ||
                       caso.modificacionHabilitada
                     )
-                    const puedeEliminar = !huCerrada && (isQA || isAdmin) && (
+                    const puedeEliminar = !huCerrada && (isQA || isAdmin || isQALead) && (
                       caso.estadoAprobacion === "borrador" || caso.estadoAprobacion === "rechazado"
                     )
 
@@ -593,10 +685,10 @@ export function HistoriaUsuarioDetail({
                       !caso.modificacionHabilitada
 
                     // Admin ve solicitud de modificación pendiente?
-                    const adminVeSolicitud = isAdmin && caso.modificacionSolicitada && !caso.modificacionHabilitada
+                    const adminVeSolicitud = (isAdmin || isQALead) && caso.modificacionSolicitada && !caso.modificacionHabilitada
 
                     // Puede añadir tareas (QA o admin, HU no cerrada, caso no completado)
-                    const puedeAddTarea = !huCerrada && !casoCompletado && (isQA || isAdmin)
+                    const puedeAddTarea = !huCerrada && !casoCompletado && (isQA || isAdmin || isQALead)
 
                     return (
                       <div key={caso.id} style={{ border:`1px solid ${caso.modificacionSolicitada ? "var(--chart-3)" : "var(--border)"}`, borderRadius:10, background:"var(--card)", overflow:"hidden" }}>
@@ -643,7 +735,7 @@ export function HistoriaUsuarioDetail({
                                   r.estado === "en_ejecucion" ? "bg-chart-1/20 text-chart-1 border-chart-1/30" :
                                   "bg-muted text-muted-foreground border-border"
                                 }`} style={{ padding:"1px 4px" }}>
-                                  {ETAPA_EXEC_LABEL[r.etapa]?.slice(0,3)}
+                                  {getEtapaHUCfg(r.etapa, configEtapas).label.slice(0,3)}
                                   {r.resultado === "exitoso" ? " ✓" : r.resultado === "fallido" ? " ✗" : r.estado === "en_ejecucion" ? " ▶" : ""}
                                   {retestLabel}
                                 </Badge>
@@ -718,7 +810,7 @@ export function HistoriaUsuarioDetail({
                             )}
 
                             {/* Acciones de ejecución para el caso en etapa actual */}
-                            {caso.estadoAprobacion === "aprobado" && resultadoEtapaActual?.estado === "en_ejecucion" && (isQA || isAdmin) && (
+                            {caso.estadoAprobacion === "aprobado" && resultadoEtapaActual?.estado === "en_ejecucion" && (isQA || isAdmin || isQALead) && (
                               <div style={{ marginBottom:10, marginTop:6 }}>
                                 {showFalloForm !== caso.id ? (
                                   <div style={{ display:"flex", gap:6 }}>
@@ -756,7 +848,7 @@ export function HistoriaUsuarioDetail({
                             )}
 
                             {/* Solicitar retesteo cuando el caso falló */}
-                            {caso.estadoAprobacion === "aprobado" && resultadoEtapaActual?.resultado === "fallido" && (isQA || isAdmin) && (
+                            {caso.estadoAprobacion === "aprobado" && resultadoEtapaActual?.resultado === "fallido" && (isQA || isAdmin || isQALead) && (
                               <div style={{ marginBottom:10, marginTop:6 }}>
                                 {showRetestForm !== caso.id ? (
                                   <Button size="sm" variant="outline" style={{ borderColor:"var(--chart-1)", color:"var(--chart-1)" }}
@@ -802,7 +894,7 @@ export function HistoriaUsuarioDetail({
                                       }}>
                                         <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:3, flexWrap:"wrap" }}>
                                           <Badge variant="outline" className="text-[9px] bg-muted text-muted-foreground border-border" style={{ padding:"1px 5px" }}>
-                                            {ETAPA_EXEC_LABEL[r.etapa]}
+                                            {getEtapaHUCfg(r.etapa, configEtapas).label}
                                           </Badge>
                                           <Badge variant="outline" className={`text-[9px] ${intento.resultado === "exitoso" ? "bg-chart-2/20 text-chart-2 border-chart-2/30" : "bg-chart-4/20 text-chart-4 border-chart-4/30"}`} style={{ padding:"1px 5px" }}>
                                             Intento #{intento.numero} — {intento.resultado === "exitoso" ? "Exitoso" : "Fallido"}
@@ -861,9 +953,9 @@ export function HistoriaUsuarioDetail({
 
                               {tareasCaso.map(tarea => {
                                 const tareaBloqueos = tarea.bloqueos.filter(b => !b.resuelto)
-                                const puedeManejarTarea = !huCerrada && (isQA || isAdmin) && tarea.estado !== "completada"
-                                const puedeEditarTarea = !huCerrada && (isQA || isAdmin) && tarea.estado === "pendiente"
-                                const puedeEliminarTarea = !huCerrada && (isQA || isAdmin) &&
+                                const puedeManejarTarea = !huCerrada && (isQA || isAdmin || isQALead) && tarea.estado !== "completada"
+                                const puedeEditarTarea = !huCerrada && (isQA || isAdmin || isQALead) && tarea.estado === "pendiente"
+                                const puedeEliminarTarea = !huCerrada && (isQA || isAdmin || isQALead) &&
                                   (tarea.estado === "pendiente" || tarea.estado === "en_progreso")
 
                                 return (
@@ -955,6 +1047,17 @@ export function HistoriaUsuarioDetail({
                                 )
                               })}
                             </div>
+
+                            {/* ── Comentarios del caso ── */}
+                            <div style={{ marginTop:8, paddingTop:10, borderTop:"1px solid var(--border)" }}>
+                              <p style={{ ...SLBL, marginBottom:10 }}><MessageSquare size={10}/>Comentarios ({caso.comentarios.length})</p>
+                              <CommentThread
+                                comentarios={caso.comentarios}
+                                onAdd={texto => onAddComentarioCaso(caso.id, texto)}
+                                currentUser={currentUser}
+                                canComment={isAdmin || isQALead || isQA}
+                              />
+                            </div>
                           </div>
                         )}
                       </div>
@@ -967,7 +1070,7 @@ export function HistoriaUsuarioDetail({
               <div style={PNL}>
                 <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
                   <p style={{ ...SLBL, marginBottom:0 }}><ShieldAlert size={11}/>Bloqueos de la HU</p>
-                  {(isQA || isAdmin) && !huCerrada && (
+                  {(isQA || isAdmin || isQALead) && !huCerrada && (
                     <button onClick={()=>setShowBloqueoForm(v=>!v)} style={{ background:"none", border:"none", cursor:"pointer", fontSize:11, color:"var(--primary)", display:"flex", alignItems:"center", gap:4, fontWeight:600 }}>
                       <Plus size={11}/>Reportar
                     </button>
@@ -998,7 +1101,7 @@ export function HistoriaUsuarioDetail({
                           <p style={{ fontSize:13, color:"var(--foreground)", lineHeight:1.4, marginBottom:2 }}>{b.descripcion}</p>
                           <p style={{ fontSize:11, color:"var(--muted-foreground)" }}>{fmt(b.fecha)} · {b.reportadoPor}</p>
                         </div>
-                        {(isAdmin || isQA) && showResolverForm !== b.id && (
+                        {(isAdmin || isQALead || isQA) && showResolverForm !== b.id && (
                           <Button variant="outline" size="sm" onClick={()=>{ setShowResolverForm(b.id); setNotaResolucion("") }} style={{ height:26, fontSize:11, flexShrink:0 }}>
                             <CheckCircle2 size={11} className="mr-1"/>Resolver
                           </Button>
@@ -1033,6 +1136,17 @@ export function HistoriaUsuarioDetail({
                     </div>
                   ))}
                 </div>
+              </div>
+
+              {/* ── COMENTARIOS HU ── */}
+              <div style={PNL}>
+                <p style={{ ...SLBL, marginBottom:12 }}><MessageSquare size={11}/>Comentarios de la HU ({hu.comentarios.length})</p>
+                <CommentThread
+                  comentarios={hu.comentarios}
+                  onAdd={texto => onAddComentarioHU(hu.id, texto)}
+                  currentUser={currentUser}
+                  canComment={isAdmin || isQALead || isQA}
+                />
               </div>
             </div>
 

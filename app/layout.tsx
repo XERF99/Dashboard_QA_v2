@@ -9,8 +9,8 @@ const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'Dashboard QA - Gestion de Cambios',
-  description: 'Panel de control para gestion de cambios y QA con campos calculados de esfuerzo y criticidad',
+  title: 'QAControl - Gestion de Cambios',
+  description: 'Plataforma de gestión de calidad de software: historias de usuario, casos de prueba, etapas y ambientes configurables',
   generator: 'v0.app',
   icons: {
     icon: [

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Search, Bell, LogOut, Shield, FlaskConical, Eye, Check, CheckCheck, Clock, X } from "lucide-react"
+import { Search, Bell, LogOut, Shield, FlaskConical, Eye, Check, CheckCheck, Clock, X, UserCircle } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import {
@@ -28,9 +28,10 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Badge } from "@/components/ui/badge"
+import { Badge } from "@/components/ui/badge" 
 import { ThemeSwitcher } from "@/components/theme-switcher"
-import { useAuth, roleDescriptions, type UserRole } from "@/lib/auth-context"
+import { useAuth } from "@/lib/auth-context"
+import { PerfilDialog } from "@/components/dashboard/perfil-dialog"
 import type { Notificacion, TipoNotificacion } from "@/lib/types"
 
 interface HeaderProps {
@@ -61,26 +62,29 @@ function fmtFecha(d: Date) {
 }
 
 export function Header({ busqueda, onBusquedaChange, notificaciones, onMarcarLeida, onMarcarTodasLeidas }: HeaderProps) {
-  const { user, logout } = useAuth()
+  const { user, logout, roles } = useAuth()
   const [confirmLogoutOpen, setConfirmLogoutOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
+  const [perfilOpen, setPerfilOpen] = useState(false)
 
   const noLeidas = notificaciones.filter(n => !n.leida).length
 
-  const getRoleIcon = (rol: UserRole) => {
+  const getRoleIcon = (rol: string) => {
     switch (rol) {
-      case "admin": return <Shield className="h-3 w-3" />
-      case "qa": return <FlaskConical className="h-3 w-3" />
-      case "viewer": return <Eye className="h-3 w-3" />
+      case "admin":   return <Shield className="h-3 w-3" />
+      case "qa":      return <FlaskConical className="h-3 w-3" />
+      case "viewer":  return <Eye className="h-3 w-3" />
+      default:        return null
     }
   }
 
-  const getRoleBadgeStyle = (rol: UserRole) => {
-    switch (rol) {
-      case "admin": return "bg-chart-4/20 text-chart-4 border-chart-4/30"
-      case "qa": return "bg-chart-1/20 text-chart-1 border-chart-1/30"
-      case "viewer": return "bg-chart-2/20 text-chart-2 border-chart-2/30"
-    }
+  const getRoleBadgeStyle = (rol: string) => {
+    const found = roles.find(r => r.id === rol)
+    return found?.cls ?? "bg-muted text-muted-foreground border-border"
+  }
+
+  const getRoleLabel = (rol: string) => {
+    return roles.find(r => r.id === rol)?.label ?? rol
   }
 
   const getInitials = (nombre: string) => {
@@ -96,7 +100,7 @@ export function Header({ busqueda, onBusquedaChange, notificaciones, onMarcarLei
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
                 <span className="text-sm font-bold text-primary-foreground">QA</span>
               </div>
-              <span className="text-lg font-semibold text-foreground">Dashboard QA</span>
+              <span className="text-lg font-semibold text-foreground">QAControl</span>
             </div>
           </div>
 
@@ -245,13 +249,18 @@ export function Header({ busqueda, onBusquedaChange, notificaciones, onMarcarLei
                         <p className="text-xs text-muted-foreground">{user.email}</p>
                         <Badge variant="outline" className={`${getRoleBadgeStyle(user.rol)} w-fit flex items-center gap-1`}>
                           {getRoleIcon(user.rol)}
-                          {roleDescriptions[user.rol].label}
+                          {getRoleLabel(user.rol)}
                         </Badge>
                       </div>
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator />
                   </>
                 )}
+                <DropdownMenuItem onClick={() => setPerfilOpen(true)}>
+                  <UserCircle className="mr-2 h-4 w-4" />
+                  Mi Perfil
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={() => setConfirmLogoutOpen(true)}
                   className="text-destructive focus:text-destructive"
@@ -264,6 +273,8 @@ export function Header({ busqueda, onBusquedaChange, notificaciones, onMarcarLei
           </div>
         </div>
       </header>
+
+      <PerfilDialog open={perfilOpen} onClose={() => setPerfilOpen(false)} />
 
       {/* Confirmación de cierre de sesión */}
       <AlertDialog open={confirmLogoutOpen} onOpenChange={setConfirmLogoutOpen}>
