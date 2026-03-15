@@ -1,9 +1,11 @@
 "use client"
 
-import { createContext, useContext, useState, useCallback, type ReactNode } from "react"
+import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react"
+import { usePersistedState, STORAGE_KEYS } from "@/lib/storage"
 
 // ── Permisos disponibles ──────────────────────────────────
 export type PermisoId =
+  | "isSuperAdmin"     // Owner: acceso total por encima del admin
   | "canEdit"          // crear y editar casos de prueba y tareas
   | "canManageUsers"   // gestionar usuarios y roles
   | "canApproveCases"  // aprobar o rechazar casos de prueba
@@ -11,6 +13,7 @@ export type PermisoId =
   | "verSoloPropios"   // restringe la vista a las HUs asignadas al usuario
 
 export const PERMISOS_INFO: Record<PermisoId, { label: string; description: string }> = {
+  isSuperAdmin:    { label: "Owner (Super Admin)", description: "Acceso total: puede gestionar admins y ver historial de conexiones" },
   canEdit:         { label: "Editar contenido",    description: "Crear y editar casos de prueba y tareas" },
   canManageUsers:  { label: "Gestionar usuarios",  description: "Crear, editar y eliminar usuarios y roles" },
   canApproveCases: { label: "Aprobar casos",        description: "Aprobar o rechazar casos de prueba" },
@@ -31,6 +34,14 @@ export interface RoleDef {
 // ── Roles predeterminados ─────────────────────────────────
 export const ROLES_PREDETERMINADOS: RoleDef[] = [
   {
+    id: "owner",
+    label: "Owner",
+    description: "Acceso total por encima del Admin: gestiona todos los usuarios incluyendo admins y ve historial de conexiones",
+    cls: "bg-yellow-500/20 text-yellow-500 border-yellow-500/30",
+    permisos: ["isSuperAdmin", "canEdit", "canManageUsers", "canApproveCases", "canCreateHU"],
+    esBase: true,
+  },
+  {
     id: "admin",
     label: "Administrador",
     description: "Gestiona todo: HUs, usuarios, aprobaciones y configuración",
@@ -40,7 +51,7 @@ export const ROLES_PREDETERMINADOS: RoleDef[] = [
   },
   {
     id: "qa_lead",
-    label: "QA Lead",
+    label: "Lead",
     description: "Crea HUs, gestiona todo el equipo QA y aprueba casos de prueba",
     cls: "bg-purple-500/20 text-purple-500 border-purple-500/30",
     permisos: ["canEdit", "canApproveCases", "canCreateHU"],
@@ -48,7 +59,7 @@ export const ROLES_PREDETERMINADOS: RoleDef[] = [
   },
   {
     id: "qa",
-    label: "QA",
+    label: "User",
     description: "Crea y ejecuta casos de prueba sobre las HU asignadas",
     cls: "bg-chart-1/20 text-chart-1 border-chart-1/30",
     permisos: ["canEdit", "verSoloPropios"],
@@ -78,6 +89,8 @@ export interface User {
   activo: boolean
   fechaCreacion: Date
   debeCambiarPassword: boolean  // true = debe cambiar en próximo login
+  equipoIds?: string[]          // IDs de usuarios asignados a este líder
+  historialConexiones?: { entrada: Date; salida?: Date }[]  // últimas 50 sesiones
 }
 
 export type UserSafe = Omit<User, "password">
@@ -87,6 +100,13 @@ export const PASSWORD_GENERICA = "Qatesting1"
 
 // ── Usuarios iniciales ───────────────────────────────────
 export const usuariosIniciales: User[] = [
+  {
+    id: "usr-000", nombre: "Owner Principal",
+    email: "owner@empresa.com", password: "owner123",
+    rol: "owner", activo: true,
+    fechaCreacion: new Date("2025-12-01"),
+    debeCambiarPassword: false,
+  },
   {
     id: "usr-001", nombre: "Admin Principal",
     email: "admin@empresa.com", password: "admin123",
@@ -160,15 +180,30 @@ interface AuthContextType {
   canApproveCases: boolean
   canCreateHU: boolean
   verSoloPropios: boolean
+  isOwner: boolean
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserSafe | null>(null)
-  const [users, setUsers] = useState<User[]>(usuariosIniciales)
-  const [roles, setRoles] = useState<RoleDef[]>(ROLES_PREDETERMINADOS)
+  const [users, setUsers] = usePersistedState<User[]>(STORAGE_KEYS.users, usuariosIniciales)
+  const [roles, setRoles] = usePersistedState<RoleDef[]>(STORAGE_KEYS.roles, ROLES_PREDETERMINADOS)
   const [pendientePassword, setPendientePassword] = useState(false)
+
+  // ── Migración: añadir rol owner y usuario owner si no existen en localStorage ──
+  useEffect(() => {
+    setRoles(prev => {
+      let upd = prev.some(r => r.id === "owner") ? prev : [ROLES_PREDETERMINADOS[0], ...prev]
+      upd = upd.map(r => {
+        if (r.id === "qa_lead" && r.label === "QA Lead") return { ...r, label: "Lead" }
+        if (r.id === "qa"      && r.label === "QA")      return { ...r, label: "User" }
+        return r
+      })
+      return upd
+    })
+    setUsers(prev => prev.some(u => u.email === "owner@empresa.com") ? prev : [usuariosIniciales[0], ...prev])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const login = useCallback((email: string, password: string) => {
     const found = users.find(u => u.email.toLowerCase() === email.toLowerCase())
@@ -178,6 +213,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const { password: _, ...safe } = found
     setUser(safe)
+
+    // Registrar entrada de sesión (mantener solo las últimas 50)
+    const ahora = new Date()
+    setUsers(prev => prev.map(u =>
+      u.id === found.id
+        ? { ...u, historialConexiones: [...(u.historialConexiones ?? []).slice(-49), { entrada: ahora }] }
+        : u
+    ))
 
     if (found.debeCambiarPassword) {
       setPendientePassword(true)
@@ -189,9 +232,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [users])
 
   const logout = useCallback(() => {
+    // Registrar salida de sesión
+    if (user) {
+      const ahora = new Date()
+      setUsers(prev => prev.map(u => {
+        if (u.id !== user.id) return u
+        const hist = [...(u.historialConexiones ?? [])]
+        if (hist.length > 0 && !hist[hist.length - 1].salida) {
+          hist[hist.length - 1] = { ...hist[hist.length - 1], salida: ahora }
+        }
+        return { ...u, historialConexiones: hist }
+      }))
+    }
     setUser(null)
     setPendientePassword(false)
-  }, [])
+  }, [user])
 
   const cambiarPassword = useCallback((actual: string, nueva: string) => {
     if (!user) return { success: false, error: "No hay sesión activa" }
@@ -213,6 +268,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const emailExists = users.some(u => u.email.toLowerCase() === data.email.toLowerCase())
     if (emailExists) return { success: false, error: "Ya existe un usuario con este email" }
 
+    // Solo Owner puede crear usuarios con rol Admin u Owner
+    const targetRolDef   = roles.find(r => r.id === data.rol)
+    const currentIsOwner = user ? (roles.find(r => r.id === user.rol)?.permisos.includes("isSuperAdmin") ?? false) : false
+    if (targetRolDef?.permisos.includes("canManageUsers") && !currentIsOwner)
+      return { success: false, error: "Solo un Owner puede crear usuarios con rol de Administrador" }
+
     const maxId = Math.max(...users.map(u => parseInt(u.id.split("-")[1])))
     const id = `usr-${String(maxId + 1).padStart(3, "0")}`
 
@@ -227,13 +288,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     setUsers(prev => [...prev, newUser])
     return { success: true }
-  }, [users])
+  }, [user, users, roles])
 
   const updateUser = useCallback((updatedUser: User) => {
     const emailExists = users.some(
       u => u.email.toLowerCase() === updatedUser.email.toLowerCase() && u.id !== updatedUser.id
     )
     if (emailExists) return { success: false, error: "Ya existe otro usuario con este email" }
+
+    // Solo Owner puede cambiar el rol de alguien a Admin u Owner
+    const targetRolDef   = roles.find(r => r.id === updatedUser.rol)
+    const currentIsOwner = user ? (roles.find(r => r.id === user.rol)?.permisos.includes("isSuperAdmin") ?? false) : false
+    const existingUser   = users.find(u => u.id === updatedUser.id)
+    if (
+      targetRolDef?.permisos.includes("canManageUsers") &&
+      !currentIsOwner &&
+      existingUser?.rol !== updatedUser.rol
+    ) return { success: false, error: "Solo un Owner puede asignar el rol de Administrador" }
 
     setUsers(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u))
 
@@ -243,26 +314,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     return { success: true }
-  }, [user?.id, users])
+  }, [user, users, roles])
 
   const deleteUser = useCallback((id: string) => {
     if (user?.id === id) return { success: false, error: "No puedes eliminar tu propia cuenta" }
 
     const target = users.find(u => u.id === id)
-    if (target) {
-      const targetRol = roles.find(r => r.id === target.rol)
-      if (targetRol?.permisos.includes("canManageUsers")) {
-        const adminCount = users.filter(u => {
-          const rd = roles.find(r => r.id === u.rol)
-          return rd?.permisos.includes("canManageUsers")
-        }).length
-        if (adminCount <= 1) return { success: false, error: "No puedes eliminar el último administrador" }
-      }
+    if (!target) return { success: false, error: "Usuario no encontrado" }
+
+    const targetRolDef  = roles.find(r => r.id === target.rol)
+    const currentRolDef = user ? roles.find(r => r.id === user.rol) : null
+    const currentIsOwner = currentRolDef?.permisos.includes("isSuperAdmin") ?? false
+    const targetIsOwner  = targetRolDef?.permisos.includes("isSuperAdmin") ?? false
+
+    // Proteger owners: solo otro owner puede eliminarlos y debe quedar al menos 1
+    if (targetIsOwner) {
+      if (!currentIsOwner) return { success: false, error: "Solo un Owner puede eliminar a otro Owner" }
+      const ownerCount = users.filter(u => {
+        const rd = roles.find(r => r.id === u.rol)
+        return rd?.permisos.includes("isSuperAdmin")
+      }).length
+      if (ownerCount <= 1) return { success: false, error: "No puedes eliminar el último Owner" }
+    }
+
+    // Proteger admins: si el actual no es owner, no puede eliminar el último admin
+    if (!targetIsOwner && !currentIsOwner && targetRolDef?.permisos.includes("canManageUsers")) {
+      const adminCount = users.filter(u => {
+        const rd = roles.find(r => r.id === u.rol)
+        return rd?.permisos.includes("canManageUsers") && !rd?.permisos.includes("isSuperAdmin")
+      }).length
+      if (adminCount <= 1) return { success: false, error: "No puedes eliminar el último administrador" }
     }
 
     setUsers(prev => prev.filter(u => u.id !== id))
     return { success: true }
-  }, [user?.id, users, roles])
+  }, [user, users, roles])
 
   const toggleUserActive = useCallback((id: string) => {
     if (user?.id === id) return
@@ -304,6 +390,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const updateRole = useCallback((updatedRole: RoleDef) => {
     const orig = roles.find(r => r.id === updatedRole.id)
     if (!orig) return { success: false, error: "Rol no encontrado" }
+    if (updatedRole.id === "owner" && !updatedRole.permisos.includes("isSuperAdmin"))
+      return { success: false, error: "El rol Owner debe mantener el permiso de Super Admin" }
     if (updatedRole.id === "admin" && !updatedRole.permisos.includes("canManageUsers"))
       return { success: false, error: "El rol Administrador debe mantener el permiso de gestión de usuarios" }
     setRoles(prev => prev.map(r => r.id === updatedRole.id ? updatedRole : r))
@@ -331,6 +419,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const canCreateHU     = hasPermiso("canCreateHU")
   const verSoloPropios  = hasPermiso("verSoloPropios")
 
+  const isOwner  = hasPermiso("isSuperAdmin")
+
   // Compatibilidad con componentes que reciben isAdmin/isQALead/isQA
   const isAdmin  = canManageUsers
   const isQALead = canCreateHU && canApproveCases && !canManageUsers
@@ -344,7 +434,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       addUser, updateUser, deleteUser, toggleUserActive, resetPassword,
       addRole, updateRole, deleteRole,
       canEdit, canManageUsers, canView, isAdmin, isQALead, isQA,
-      canApproveCases, canCreateHU, verSoloPropios,
+      canApproveCases, canCreateHU, verSoloPropios, isOwner,
     }}>
       {children}
     </AuthContext.Provider>

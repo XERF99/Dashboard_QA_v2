@@ -8,9 +8,9 @@ import { Eye, Edit, Trash2, Plus, BookOpen, AlertTriangle, Layers, Clock, Filter
 import { Progress } from "@/components/ui/progress"
 import {
   ESTADO_HU_CFG, PRIORIDAD_CFG,
-  getEtapaHUCfg, ETAPAS_PREDETERMINADAS, getTipoAplicacionLabel, getAmbienteLabel,
+  getEtapaHUCfg, ETAPAS_PREDETERMINADAS, getTipoAplicacionLabel, getAmbienteLabel, getTipoPruebaLabel,
   type HistoriaUsuario, type CasoPrueba, type EstadoHU, type PrioridadHU, type TipoAplicacion,
-  type ConfigEtapas, type TipoAplicacionDef, type AmbienteDef,
+  type ConfigEtapas, type TipoAplicacionDef, type AmbienteDef, type TipoPruebaDef,
 } from "@/lib/types"
 import {
   exportarHUsCSV, exportarResultadosCSV,
@@ -34,6 +34,7 @@ interface Props {
   configEtapas?: ConfigEtapas
   tiposAplicacion?: TipoAplicacionDef[]
   ambientes?: AmbienteDef[]
+  tiposPrueba?: TipoPruebaDef[]
   qaUsers?: string[]
   onBulkEliminar?: (ids: string[]) => void
   onBulkCambiarEstado?: (ids: string[], estado: EstadoHU) => void
@@ -144,7 +145,7 @@ function Paginador({ pagina, total, pageSize, onCambiar }: {
   )
 }
 
-export function HistoriasTable({ historias, casos, onVerDetalle, onEditar, onEliminar, onNueva, canEdit=true, configEtapas = ETAPAS_PREDETERMINADAS, tiposAplicacion, ambientes, qaUsers, onBulkEliminar, onBulkCambiarEstado, onBulkCambiarResponsable }: Props) {
+export function HistoriasTable({ historias, casos, onVerDetalle, onEditar, onEliminar, onNueva, canEdit=true, configEtapas = ETAPAS_PREDETERMINADAS, tiposAplicacion, ambientes, tiposPrueba, qaUsers, onBulkEliminar, onBulkCambiarEstado, onBulkCambiarResponsable }: Props) {
   // ── Vista activa ──
   const [vistaKanban, setVistaKanban] = useState(false)
 
@@ -157,6 +158,10 @@ export function HistoriasTable({ historias, casos, onVerDetalle, onEditar, onEli
   const [filtroResponsable, setFiltroResponsable] = useState<string>("todos")
   const [filtroTipo,        setFiltroTipo]        = useState<TipoAplicacion | "todos">("todos")
   const [filtroSprint,      setFiltroSprint]      = useState<string>("todos")
+  const [filtroAmbiente,    setFiltroAmbiente]    = useState<string>("todos")
+  const [filtroTipoPrueba,  setFiltroTipoPrueba]  = useState<string>("todos")
+  const [filtroFechaDesde,  setFiltroFechaDesde]  = useState<string>("")
+  const [filtroFechaHasta,  setFiltroFechaHasta]  = useState<string>("")
   const [filtrosVisibles,   setFiltrosVisibles]   = useState(false)
 
   // ── Selección masiva ──
@@ -176,9 +181,11 @@ export function HistoriasTable({ historias, casos, onVerDetalle, onEditar, onEli
   }
 
   // Valores únicos para los selects
-  const responsables = useMemo(() => [...new Set(historias.map(h => h.responsable))].sort(), [historias])
-  const tiposApp     = useMemo(() => [...new Set(historias.map(h => h.tipoAplicacion))], [historias])
-  const sprints      = useMemo(() => [...new Set(historias.map(h => h.sprint).filter(Boolean) as string[])].sort(), [historias])
+  const responsables      = useMemo(() => [...new Set(historias.map(h => h.responsable))].sort(), [historias])
+  const tiposApp          = useMemo(() => [...new Set(historias.map(h => h.tipoAplicacion))], [historias])
+  const sprints           = useMemo(() => [...new Set(historias.map(h => h.sprint).filter(Boolean) as string[])].sort(), [historias])
+  const ambientesUnicos   = useMemo(() => [...new Set(historias.map(h => h.ambiente))], [historias])
+  const tiposPruebaUnicos = useMemo(() => [...new Set(historias.map(h => h.tipoPrueba).filter(Boolean))], [historias])
 
   // Aplicar filtros
   const historiasFiltradas = useMemo(() => historias.filter(hu => {
@@ -186,9 +193,22 @@ export function HistoriasTable({ historias, casos, onVerDetalle, onEditar, onEli
     if (filtroPrioridad   !== "todos" && hu.prioridad       !== filtroPrioridad)   return false
     if (filtroResponsable !== "todos" && hu.responsable     !== filtroResponsable) return false
     if (filtroTipo        !== "todos" && hu.tipoAplicacion  !== filtroTipo)        return false
-    if (filtroSprint      !== "todos" && (hu.sprint ?? "")  !== filtroSprint)      return false
+    if (filtroSprint !== "todos") {
+      const sprintBuscado = filtroSprint === "__sin_sprint__" ? "" : filtroSprint
+      if ((hu.sprint ?? "") !== sprintBuscado) return false
+    }
+    if (filtroAmbiente    !== "todos" && hu.ambiente        !== filtroAmbiente)    return false
+    if (filtroTipoPrueba  !== "todos" && hu.tipoPrueba      !== filtroTipoPrueba)  return false
+    if (filtroFechaDesde) {
+      const desde = new Date(filtroFechaDesde + "T00:00:00")
+      if (hu.fechaCreacion < desde) return false
+    }
+    if (filtroFechaHasta) {
+      const hasta = new Date(filtroFechaHasta + "T23:59:59")
+      if (hu.fechaCreacion > hasta) return false
+    }
     return true
-  }), [historias, filtroEstado, filtroPrioridad, filtroResponsable, filtroTipo, filtroSprint])
+  }), [historias, filtroEstado, filtroPrioridad, filtroResponsable, filtroTipo, filtroSprint, filtroAmbiente, filtroTipoPrueba, filtroFechaDesde, filtroFechaHasta])
 
   // Aplicar ordenamiento
   const historiasOrdenadas = useMemo(() => {
@@ -213,14 +233,15 @@ export function HistoriasTable({ historias, casos, onVerDetalle, onEditar, onEli
   }, [historiasFiltradas, sortCampo, sortDir])
 
   // Resetear página al cambiar filtros u ordenamiento
-  useEffect(() => { setPagina(1) }, [filtroEstado, filtroPrioridad, filtroResponsable, filtroTipo, filtroSprint, sortCampo, sortDir])
+  useEffect(() => { setPagina(1) }, [filtroEstado, filtroPrioridad, filtroResponsable, filtroTipo, filtroSprint, filtroAmbiente, filtroTipoPrueba, filtroFechaDesde, filtroFechaHasta, sortCampo, sortDir])
 
   const husEnPagina = useMemo(
     () => historiasOrdenadas.slice((pagina - 1) * PAGE_SIZE, pagina * PAGE_SIZE),
     [historiasOrdenadas, pagina]
   )
 
-  const filtrosActivos = [filtroEstado, filtroPrioridad, filtroResponsable, filtroTipo, filtroSprint].filter(f => f !== "todos").length
+  const filtrosActivos = [filtroEstado, filtroPrioridad, filtroResponsable, filtroTipo, filtroSprint, filtroAmbiente, filtroTipoPrueba].filter(f => f !== "todos").length
+    + (filtroFechaDesde ? 1 : 0) + (filtroFechaHasta ? 1 : 0)
 
   const limpiarFiltros = () => {
     setFiltroEstado("todos")
@@ -228,6 +249,10 @@ export function HistoriasTable({ historias, casos, onVerDetalle, onEditar, onEli
     setFiltroResponsable("todos")
     setFiltroTipo("todos")
     setFiltroSprint("todos")
+    setFiltroAmbiente("todos")
+    setFiltroTipoPrueba("todos")
+    setFiltroFechaDesde("")
+    setFiltroFechaHasta("")
   }
 
   // ── Selección: computed + handlers ──
@@ -504,11 +529,67 @@ export function HistoriasTable({ historias, casos, onVerDetalle, onEditar, onEli
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todos los sprints</SelectItem>
-                <SelectItem value="">Sin sprint</SelectItem>
+                <SelectItem value="__sin_sprint__">Sin sprint</SelectItem>
                 {sprints.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
               </SelectContent>
             </Select>
           )}
+
+          {ambientesUnicos.length > 1 && (
+            <Select value={filtroAmbiente} onValueChange={setFiltroAmbiente}>
+              <SelectTrigger className="h-7 text-xs w-36">
+                <SelectValue placeholder="Ambiente" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos los ambientes</SelectItem>
+                {ambientesUnicos.map(a => (
+                  <SelectItem key={a} value={a}>{getAmbienteLabel(a, ambientes)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
+          {tiposPruebaUnicos.length > 1 && (
+            <Select value={filtroTipoPrueba} onValueChange={setFiltroTipoPrueba}>
+              <SelectTrigger className="h-7 text-xs w-40">
+                <SelectValue placeholder="Tipo de prueba" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos los tipos</SelectItem>
+                {tiposPruebaUnicos.map(t => (
+                  <SelectItem key={t} value={t}>{getTipoPruebaLabel(t, tiposPrueba)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
+          {/* Rango de fechas (fecha de creación) */}
+          <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+            <span style={{ fontSize:10, color:"var(--muted-foreground)", flexShrink:0 }}>Creación</span>
+            <input
+              type="date"
+              value={filtroFechaDesde}
+              onChange={e => setFiltroFechaDesde(e.target.value)}
+              title="Desde"
+              style={{
+                height:28, fontSize:11, padding:"0 6px", borderRadius:6,
+                border:"1px solid var(--border)", background:"var(--card)",
+                color:"var(--foreground)", cursor:"pointer", outline:"none",
+              }}
+            />
+            <span style={{ fontSize:10, color:"var(--muted-foreground)" }}>–</span>
+            <input
+              type="date"
+              value={filtroFechaHasta}
+              onChange={e => setFiltroFechaHasta(e.target.value)}
+              title="Hasta"
+              style={{
+                height:28, fontSize:11, padding:"0 6px", borderRadius:6,
+                border:"1px solid var(--border)", background:"var(--card)",
+                color:"var(--foreground)", cursor:"pointer", outline:"none",
+              }}
+            />
+          </div>
         </div>
       )}
 

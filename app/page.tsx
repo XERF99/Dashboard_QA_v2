@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useEffect, useRef, useMemo } from "react"
+import { useState, useRef, useMemo } from "react"
+import { usePersistedState, STORAGE_KEYS } from "@/lib/storage"
 import { Header } from "@/components/dashboard/header"
 import { HistoriasTable } from "@/components/dashboard/historias-table"
 import { HistoriaUsuarioDetail } from "@/components/dashboard/historia-usuario-detail"
@@ -17,10 +18,12 @@ import { TiposAplicacionConfig } from "@/components/dashboard/tipos-aplicacion-c
 import { AmbientesConfig } from "@/components/dashboard/ambientes-config"
 import { TiposPruebaConfig } from "@/components/dashboard/tipos-prueba-config"
 import { HUStatsCards } from "@/components/dashboard/hu-stats-cards"
+import { CasosTable } from "@/components/dashboard/casos-table"
+import { HomeDashboard } from "@/components/dashboard/home-dashboard"
 import { LoginScreen } from "@/components/auth/login-screen"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
-import { BookOpen, Users, UserCog, Trash2, X, CheckCircle, LogOut, AlertTriangle, BarChart2, Settings, ShieldAlert, History, Layers, Monitor, Globe, Settings2, FlaskConical } from "lucide-react"
+import { BookOpen, Users, UserCog, Trash2, X, CheckCircle, LogOut, AlertTriangle, BarChart2, Settings, ShieldAlert, History, Layers, Monitor, Globe, Settings2, FlaskConical, ClipboardList, Home } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import {
   historiasEjemplo, casosPruebaEjemplo, tareasEjemplo,
@@ -103,32 +106,46 @@ function ConfirmDeleteModal({ open, titulo, subtitulo, onConfirm, onCancel }: {
 //  PÁGINA PRINCIPAL
 // ═══════════════════════════════════════════════════════════
 export default function DashboardPage() {
-  const { isAuthenticated, canManageUsers, verSoloPropios, isAdmin, isQALead, isQA, canCreateHU, user, users, roles } = useAuth()
+  const { isAuthenticated, canManageUsers, verSoloPropios, isAdmin, isQALead, isQA, canCreateHU, isOwner, user, users, roles } = useAuth()
   const qaUsers = users.filter(u => u.activo && (roles.find(r => r.id === u.rol)?.permisos.includes("canEdit") ?? false)).map(u => u.nombre)
 
   // ── Visibilidad de Carga Ocupacional por rol ───────────────
   // Admin → todos (con pills) | QA Lead → sus QAs + él mismo | QA → solo él mismo | Viewer → todos
   const filtroNombresCarga = useMemo<string[] | undefined>(() => {
-    if (isAdmin) return qaUsers.length > 0 ? qaUsers : undefined  // ve todos con pills por persona
+    if (isOwner) return undefined  // owner ve todo
+    if (isAdmin && user) {
+      if (user.equipoIds && user.equipoIds.length > 0) {
+        const teamNombres = users
+          .filter(u => user.equipoIds!.includes(u.id) && u.activo)
+          .map(u => u.nombre)
+        return [...new Set([user.nombre, ...teamNombres])]
+      }
+      return undefined  // admin sin equipo ve todo
+    }
     if (isQALead && user) {
-      const nombresQA = users
-        .filter(u => u.activo && (roles.find(r => r.id === u.rol)?.permisos.includes("verSoloPropios") ?? false))
-        .map(u => u.nombre)
-      return [...new Set([user.nombre, ...nombresQA])]
+      if (user.equipoIds && user.equipoIds.length > 0) {
+        const teamNombres = users
+          .filter(u => user.equipoIds!.includes(u.id) && u.activo)
+          .map(u => u.nombre)
+        return [...new Set([user.nombre, ...teamNombres])]
+      }
+      // Sin equipo asignado: solo él mismo
+      return [user.nombre]
     }
     if (verSoloPropios && user) return [user.nombre]  // QA: solo él mismo
     return undefined  // Viewer y otros: todos
-  }, [isAdmin, isQALead, verSoloPropios, user, users, roles])
+  }, [isOwner, isAdmin, isQALead, verSoloPropios, user, users])
 
-  const [historias, setHistorias]   = useState<HistoriaUsuario[]>(historiasEjemplo)
-  const [casos, setCasos]           = useState<CasoPrueba[]>(casosPruebaEjemplo)
-  const [tareas, setTareas]         = useState<Tarea[]>(tareasEjemplo)
-  const [configEtapas, setConfigEtapas] = useState<ConfigEtapas>(ETAPAS_PREDETERMINADAS)
-  const [aplicaciones, setAplicaciones] = useState<string[]>(APLICACIONES_PREDETERMINADAS)
-  const [tiposAplicacion, setTiposAplicacion] = useState<TipoAplicacionDef[]>(TIPOS_APLICACION_PREDETERMINADOS)
-  const [ambientes, setAmbientes] = useState<AmbienteDef[]>(AMBIENTES_PREDETERMINADOS)
-  const [tiposPrueba, setTiposPrueba] = useState<TipoPruebaDef[]>(TIPOS_PRUEBA_PREDETERMINADOS)
+  const [historias, setHistorias]   = usePersistedState<HistoriaUsuario[]>(STORAGE_KEYS.historias, historiasEjemplo)
+  const [casos, setCasos]           = usePersistedState<CasoPrueba[]>(STORAGE_KEYS.casos, casosPruebaEjemplo)
+  const [tareas, setTareas]         = usePersistedState<Tarea[]>(STORAGE_KEYS.tareas, tareasEjemplo)
+  const [configEtapas, setConfigEtapas] = usePersistedState<ConfigEtapas>(STORAGE_KEYS.configEtapas, ETAPAS_PREDETERMINADAS)
+  const [aplicaciones, setAplicaciones] = usePersistedState<string[]>(STORAGE_KEYS.aplicaciones, APLICACIONES_PREDETERMINADAS)
+  const [tiposAplicacion, setTiposAplicacion] = usePersistedState<TipoAplicacionDef[]>(STORAGE_KEYS.tiposAplicacion, TIPOS_APLICACION_PREDETERMINADOS)
+  const [ambientes, setAmbientes]   = usePersistedState<AmbienteDef[]>(STORAGE_KEYS.ambientes, AMBIENTES_PREDETERMINADOS)
+  const [tiposPrueba, setTiposPrueba] = usePersistedState<TipoPruebaDef[]>(STORAGE_KEYS.tiposPrueba, TIPOS_PRUEBA_PREDETERMINADOS)
   const [configSeccion, setConfigSeccion] = useState<"roles" | "tipos" | "aplicaciones" | "ambientes" | "tipos_prueba" | "etapas">("roles")
+  const [adminSeccion, setAdminSeccion]   = useState<"auditoria" | "usuarios" | "configuracion">("auditoria")
 
   const handleTiposChange = (newTipos: TipoAplicacionDef[]) => {
     setTiposAplicacion(newTipos)
@@ -142,6 +159,7 @@ export default function DashboardPage() {
     })
   }
 
+  const [tabActiva, setTabActiva]           = useState("inicio")
   const [busqueda, setBusqueda]             = useState("")
   const [huFormOpen, setHuFormOpen]         = useState(false)
   const [huDetailOpen, setHuDetailOpen]     = useState(false)
@@ -157,27 +175,8 @@ export default function DashboardPage() {
   }
 
   // ── Notificaciones (persistidas en localStorage) ──
-  const NOTIF_KEY = "qa_dashboard_notificaciones"
   const _nc = useRef(0)
-
-  const [notificaciones, setNotificaciones] = useState<Notificacion[]>(() => {
-    if (typeof window === "undefined") return []
-    try {
-      const raw = localStorage.getItem(NOTIF_KEY)
-      if (!raw) return []
-      const parsed = JSON.parse(raw) as Array<Notificacion & { fecha: string }>
-      return parsed.map(n => ({ ...n, fecha: new Date(n.fecha) }))
-    } catch {
-      return []
-    }
-  })
-
-  // Sincronizar con localStorage cada vez que cambien las notificaciones
-  useEffect(() => {
-    try {
-      localStorage.setItem(NOTIF_KEY, JSON.stringify(notificaciones))
-    } catch { /* cuota excedida u otros errores: ignorar */ }
-  }, [notificaciones])
+  const [notificaciones, setNotificaciones] = usePersistedState<Notificacion[]>(STORAGE_KEYS.notificaciones, [])
 
   const addNotificacion = (
     tipo: TipoNotificacion,
@@ -203,6 +202,20 @@ export default function DashboardPage() {
   const historiasVisibles = historias.filter(hu => {
     if (verSoloPropios && user) {
       return hu.responsable.toLowerCase() === user.nombre.toLowerCase()
+    }
+    if (isAdmin && !isOwner && user && user.equipoIds && user.equipoIds.length > 0) {
+      const teamNombres = users
+        .filter(u => user.equipoIds!.includes(u.id))
+        .map(u => u.nombre.toLowerCase())
+      return teamNombres.includes(hu.responsable.toLowerCase()) ||
+             hu.responsable.toLowerCase() === user.nombre.toLowerCase()
+    }
+    if (isQALead && user && user.equipoIds && user.equipoIds.length > 0) {
+      const teamNombres = users
+        .filter(u => user.equipoIds!.includes(u.id))
+        .map(u => u.nombre.toLowerCase())
+      return teamNombres.includes(hu.responsable.toLowerCase()) ||
+             hu.responsable.toLowerCase() === user.nombre.toLowerCase()
     }
     return true
   }).filter(hu => {
@@ -647,7 +660,7 @@ export default function DashboardPage() {
     casos.reduce((n, c) => n + c.bloqueos.filter(b => !b.resuelto).length, 0) +
     tareas.reduce((n, t) => n + t.bloqueos.filter(b => !b.resuelto).length, 0)
 
-  const tabCount = 4 + (canManageUsers ? 3 : 0)
+  const tabCount = 6 + (canManageUsers ? 1 : 0)
 
   return (
     <div className="min-h-screen bg-background">
@@ -660,8 +673,11 @@ export default function DashboardPage() {
       />
 
       <main className="container mx-auto px-6 py-6 space-y-6" style={{ minHeight:"calc(100vh - 64px - 60px)" }}>
-        <Tabs defaultValue="historias" className="w-full">
-          <TabsList className="bg-secondary" style={{ display:"grid", gridTemplateColumns:`repeat(${tabCount},1fr)`, width:"100%", maxWidth: canManageUsers ? 1260 : 720 }}>
+        <Tabs value={tabActiva} onValueChange={setTabActiva} className="w-full">
+          <TabsList className="bg-secondary" style={{ display:"grid", gridTemplateColumns:`repeat(${tabCount},1fr)`, width:"100%", maxWidth: canManageUsers ? 1150 : 1050 }}>
+            <TabsTrigger value="inicio" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+              <Home className="h-4 w-4"/> Inicio
+            </TabsTrigger>
             <TabsTrigger value="historias" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
               <BookOpen className="h-4 w-4"/> Historias
             </TabsTrigger>
@@ -683,22 +699,25 @@ export default function DashboardPage() {
                 </span>
               )}
             </TabsTrigger>
+            <TabsTrigger value="casos" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+              <ClipboardList className="h-4 w-4"/> Casos
+            </TabsTrigger>
             {canManageUsers && (
-              <TabsTrigger value="auditoria" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                <History className="h-4 w-4"/> Auditoría
-              </TabsTrigger>
-            )}
-            {canManageUsers && (
-              <TabsTrigger value="usuarios" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                <UserCog className="h-4 w-4"/> Usuarios
-              </TabsTrigger>
-            )}
-            {canManageUsers && (
-              <TabsTrigger value="configuracion" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                <Settings className="h-4 w-4"/> Configuración
+              <TabsTrigger value="admin" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                <Settings className="h-4 w-4"/> Admin
               </TabsTrigger>
             )}
           </TabsList>
+
+          <TabsContent value="inicio" className="mt-6">
+            <HomeDashboard
+              historias={historiasVisibles}
+              casos={casos}
+              tareas={tareas}
+              onVerHU={hu => { setHuSeleccionada(hu); setHuDetailOpen(true) }}
+              onIrATab={setTabActiva}
+            />
+          </TabsContent>
 
           <TabsContent value="historias" className="mt-6 space-y-4">
             <HUStatsCards historias={historiasVisibles} />
@@ -713,6 +732,7 @@ export default function DashboardPage() {
               configEtapas={configEtapas}
               tiposAplicacion={tiposAplicacion}
               ambientes={ambientes}
+              tiposPrueba={tiposPrueba}
               qaUsers={qaUsers}
               onBulkCambiarEstado={handleBulkCambiarEstado}
               onBulkCambiarResponsable={handleBulkCambiarResponsable}
@@ -741,42 +761,39 @@ export default function DashboardPage() {
             />
           </TabsContent>
 
-          {canManageUsers && (
-            <TabsContent value="auditoria" className="mt-6">
-              <AuditoriaPanel
-                historias={historias}
-                onVerHU={hu => { setHuSeleccionada(hu); setHuDetailOpen(true) }}
-              />
-            </TabsContent>
-          )}
+          <TabsContent value="casos" className="mt-6">
+            <CasosTable
+              casos={casos.filter(c => {
+                if (!verSoloPropios || !user) return true
+                const hu = historias.find(h => h.id === c.huId)
+                return hu?.responsable.toLowerCase() === user.nombre.toLowerCase()
+              })}
+              historias={historiasVisibles}
+              onVerHU={hu => { setHuSeleccionada(hu); setHuDetailOpen(true) }}
+              tiposPrueba={tiposPrueba}
+            />
+          </TabsContent>
 
           {canManageUsers && (
-            <TabsContent value="usuarios" className="mt-6">
-              <UserManagement />
-            </TabsContent>
-          )}
-
-          {canManageUsers && (
-            <TabsContent value="configuracion" className="mt-6">
-              {/* ── Nav lateral de secciones ── */}
+            <TabsContent value="admin" className="mt-6">
               <div style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
-                {/* Sidebar */}
-                <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 180, flexShrink: 0 }}>
+
+                {/* ── Sidebar Admin ── */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 190, flexShrink: 0 }}>
+
+                  {/* Secciones principales */}
                   {(
                     [
-                      { id: "roles",        label: "Roles",              icon: <UserCog size={14} /> },
-                      { id: "tipos",        label: "Tipos de Aplicación", icon: <Layers size={14} /> },
-                      { id: "aplicaciones", label: "Aplicaciones",        icon: <Monitor size={14} /> },
-                      { id: "ambientes",    label: "Ambientes",           icon: <Globe size={14} /> },
-                      { id: "tipos_prueba", label: "Tipos de Prueba",     icon: <FlaskConical size={14} /> },
-                      { id: "etapas",       label: "Etapas",              icon: <Settings2 size={14} /> },
+                      { id: "auditoria",     label: "Auditoría",     icon: <History size={14} /> },
+                      { id: "usuarios",      label: "Usuarios",       icon: <UserCog size={14} /> },
+                      { id: "configuracion", label: "Configuración",  icon: <Settings size={14} /> },
                     ] as const
                   ).map(sec => {
-                    const active = configSeccion === sec.id
+                    const active = adminSeccion === sec.id
                     return (
                       <button
                         key={sec.id}
-                        onClick={() => setConfigSeccion(sec.id)}
+                        onClick={() => setAdminSeccion(sec.id)}
                         style={{
                           display: "flex", alignItems: "center", gap: 8,
                           padding: "8px 12px", borderRadius: 8, fontSize: 13,
@@ -794,19 +811,69 @@ export default function DashboardPage() {
                       </button>
                     )
                   })}
+
+                  {/* Sub-items de Configuración */}
+                  {adminSeccion === "configuracion" && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 4, paddingLeft: 10 }}>
+                      <div style={{ height: 1, background: "var(--border)", marginBottom: 4 }} />
+                      {(
+                        [
+                          { id: "roles",        label: "Roles",               icon: <UserCog size={13} /> },
+                          { id: "tipos",        label: "Tipos de Aplicación",  icon: <Layers size={13} /> },
+                          { id: "aplicaciones", label: "Aplicaciones",         icon: <Monitor size={13} /> },
+                          { id: "ambientes",    label: "Ambientes",            icon: <Globe size={13} /> },
+                          { id: "tipos_prueba", label: "Tipos de Prueba",      icon: <FlaskConical size={13} /> },
+                          { id: "etapas",       label: "Etapas",               icon: <Settings2 size={13} /> },
+                        ] as const
+                      ).map(sub => {
+                        const active = configSeccion === sub.id
+                        return (
+                          <button
+                            key={sub.id}
+                            onClick={() => setConfigSeccion(sub.id)}
+                            style={{
+                              display: "flex", alignItems: "center", gap: 7,
+                              padding: "6px 10px", borderRadius: 7, fontSize: 12,
+                              fontWeight: active ? 700 : 400,
+                              border: `1px solid ${active ? "color-mix(in oklch, var(--primary) 35%, transparent)" : "transparent"}`,
+                              background: active ? "color-mix(in oklch, var(--primary) 10%, transparent)" : "transparent",
+                              color: active ? "var(--primary)" : "var(--muted-foreground)",
+                              cursor: "pointer", textAlign: "left", width: "100%",
+                              transition: "all 0.15s",
+                            }}
+                            className={active ? "" : "hover:bg-secondary/60 hover:text-foreground"}
+                          >
+                            {sub.icon}
+                            {sub.label}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
 
                 {/* Separador */}
                 <div style={{ width: 1, background: "var(--border)", alignSelf: "stretch", flexShrink: 0 }} />
 
-                {/* Contenido de la sección seleccionada */}
+                {/* ── Contenido ── */}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  {configSeccion === "roles"        && <RolesConfig />}
-                  {configSeccion === "tipos"        && <TiposAplicacionConfig tipos={tiposAplicacion} onChange={handleTiposChange} />}
-                  {configSeccion === "aplicaciones" && <AplicacionesConfig aplicaciones={aplicaciones} onChange={setAplicaciones} />}
-                  {configSeccion === "ambientes"    && <AmbientesConfig ambientes={ambientes} onChange={setAmbientes} />}
-                  {configSeccion === "tipos_prueba" && <TiposPruebaConfig tipos={tiposPrueba} onChange={setTiposPrueba} />}
-                  {configSeccion === "etapas"       && <EtapasConfig config={configEtapas} onChange={setConfigEtapas} tipos={tiposAplicacion} />}
+                  {adminSeccion === "auditoria" && (
+                    <AuditoriaPanel
+                      historias={historias}
+                      onVerHU={hu => { setHuSeleccionada(hu); setHuDetailOpen(true) }}
+                    />
+                  )}
+                  {adminSeccion === "usuarios" && <UserManagement />}
+                  {adminSeccion === "configuracion" && (
+                    <>
+                      {configSeccion === "roles"        && <RolesConfig />}
+                      {configSeccion === "tipos"        && <TiposAplicacionConfig tipos={tiposAplicacion} onChange={handleTiposChange} />}
+                      {configSeccion === "aplicaciones" && <AplicacionesConfig aplicaciones={aplicaciones} onChange={setAplicaciones} />}
+                      {configSeccion === "ambientes"    && <AmbientesConfig ambientes={ambientes} onChange={setAmbientes} />}
+                      {configSeccion === "tipos_prueba" && <TiposPruebaConfig tipos={tiposPrueba} onChange={setTiposPrueba} />}
+                      {configSeccion === "etapas"       && <EtapasConfig config={configEtapas} onChange={setConfigEtapas} tipos={tiposAplicacion} />}
+                    </>
+                  )}
                 </div>
               </div>
             </TabsContent>

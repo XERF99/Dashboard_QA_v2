@@ -62,10 +62,31 @@ import {
   CheckCircle2,
   XCircle,
   BarChart2,
+  UserCheck,
+  Star,
+  History,
 } from "lucide-react"
 
+// ── Helpers de formato para conexiones ───────────────────
+function formatFechaConexion(d: Date): string {
+  const hoy  = new Date()
+  const ayer = new Date(hoy); ayer.setDate(hoy.getDate() - 1)
+  const hora = d.toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" })
+  if (d.toDateString() === hoy.toDateString())  return `Hoy ${hora}`
+  if (d.toDateString() === ayer.toDateString()) return `Ayer ${hora}`
+  return d.toLocaleDateString("es", { day: "2-digit", month: "2-digit" }) + " " + hora
+}
+
+function formatDuracion(ms: number): string {
+  const min = Math.round(ms / 60000)
+  if (min < 1) return "< 1 min"
+  if (min < 60) return `${min} min`
+  const h = Math.floor(min / 60), m = min % 60
+  return m > 0 ? `${h}h ${m}m` : `${h}h`
+}
+
 export function UserManagement() {
-  const { users, roles, user: currentUser, addUser, updateUser, deleteUser, resetPassword } = useAuth()
+  const { users, roles, user: currentUser, isOwner, addUser, updateUser, deleteUser, resetPassword } = useAuth()
   const [formOpen, setFormOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [resetDialogOpen, setResetDialogOpen] = useState(false)
@@ -77,13 +98,33 @@ export function UserManagement() {
   const [nombre, setNombre] = useState("")
   const [email, setEmail] = useState("")
   const [rol, setRol] = useState("viewer")
+  const [equipoIds, setEquipoIds] = useState<string[]>([])
 
   const getRoleDef = (rolId: string) => roles.find(r => r.id === rolId)
+
+  // Determina si un rol tiene permisos equivalentes a QA Lead (no admin, no owner)
+  const esRolLider = (rolId: string) => {
+    const def = getRoleDef(rolId)
+    if (!def) return false
+    return def.permisos.includes("canCreateHU") &&
+           def.permisos.includes("canApproveCases") &&
+           !def.permisos.includes("canManageUsers")
+  }
+
+  // Determina si un rol necesita equipo asignado: admin o lead, pero no owner
+  const esRolConEquipo = (rolId: string) => {
+    const def = getRoleDef(rolId)
+    if (!def) return false
+    if (def.permisos.includes("isSuperAdmin")) return false
+    return def.permisos.includes("canManageUsers") ||
+           (def.permisos.includes("canCreateHU") && def.permisos.includes("canApproveCases"))
+  }
 
   const resetForm = () => {
     setNombre("")
     setEmail("")
     setRol("viewer")
+    setEquipoIds([])
     setUserToEdit(null)
   }
 
@@ -97,13 +138,17 @@ export function UserManagement() {
     setNombre(user.nombre)
     setEmail(user.email)
     setRol(user.rol)
+    setEquipoIds(user.equipoIds ?? [])
     setFormOpen(true)
   }
+
+  const toggleEquipoMember = (id: string) =>
+    setEquipoIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
 
   const handleSubmit = (e: React.SyntheticEvent) => {
     e.preventDefault()
     if (userToEdit) {
-      updateUser({ ...userToEdit, nombre, email, rol })
+      updateUser({ ...userToEdit, nombre, email, rol, equipoIds: esRolConEquipo(rol) ? equipoIds : [] })
     } else {
       addUser({ nombre, email, rol })
     }
@@ -139,6 +184,7 @@ export function UserManagement() {
 
   const getRoleIcon = (rolId: string) => {
     switch (rolId) {
+      case "owner":   return <Star className="h-3.5 w-3.5" />
       case "admin":   return <Shield className="h-3.5 w-3.5" />
       case "qa_lead": return <Crown className="h-3.5 w-3.5" />
       case "qa":      return <FlaskConical className="h-3.5 w-3.5" />
@@ -157,12 +203,22 @@ export function UserManagement() {
 
   const getRoleAccentColor = (rolId: string) => {
     switch (rolId) {
+      case "owner":   return "#eab308"
       case "admin":   return "var(--chart-4)"
       case "qa_lead": return "rgb(168 85 247)"
       case "qa":      return "var(--chart-1)"
       case "viewer":  return "var(--chart-2)"
       default:        return "var(--primary)"
     }
+  }
+
+  // Determina si el usuario actual puede eliminar a un target
+  const canDeleteTarget = (target: User) => {
+    if (target.id === currentUser?.id) return false
+    const targetRolDef = getRoleDef(target.rol)
+    const targetIsOwner = targetRolDef?.permisos.includes("isSuperAdmin") ?? false
+    if (targetIsOwner && !isOwner) return false
+    return true
   }
 
   return (
@@ -255,6 +311,79 @@ export function UserManagement() {
         })}
       </div>
 
+      {/* Panel de conexiones — solo visible para Owner */}
+      {isOwner && (
+        <Card className="bg-card border-border overflow-hidden">
+          <div style={{ height: 3, background: "#eab308" }} />
+          <CardHeader className="p-4 pb-3">
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <History size={14} style={{ color: "#eab308" }} />
+              <span style={{ fontSize: 13, fontWeight: 700, color: "var(--foreground)" }}>Actividad de Conexiones</span>
+              <Badge variant="outline" className="text-[10px] bg-yellow-500/10 text-yellow-500 border-yellow-500/30 ml-1">
+                Solo Owner
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow className="border-border hover:bg-transparent">
+                  <TableHead className="text-muted-foreground pl-4">Usuario</TableHead>
+                  <TableHead className="text-muted-foreground">Rol</TableHead>
+                  <TableHead className="text-muted-foreground">Último acceso</TableHead>
+                  <TableHead className="text-muted-foreground">Duración sesión</TableHead>
+                  <TableHead className="text-muted-foreground text-right pr-4">Sesiones</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {users.map(u => {
+                  const hist = u.historialConexiones ?? []
+                  const last = hist[hist.length - 1]
+                  const ultimoAcceso = last?.entrada ? formatFechaConexion(last.entrada) : "—"
+                  const duracion = last
+                    ? last.salida
+                      ? formatDuracion(last.salida.getTime() - last.entrada.getTime())
+                      : <span style={{ color: "var(--chart-2)", fontWeight: 600 }}>En sesión</span>
+                    : "—"
+                  const rolDef = getRoleDef(u.rol)
+                  return (
+                    <TableRow key={u.id} className="border-border hover:bg-secondary/50">
+                      <TableCell className="pl-4">
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <div className={`h-7 w-7 rounded-full flex items-center justify-center shrink-0 font-semibold text-xs ${getAvatarCls(u.rol)}`}>
+                            {u.nombre.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
+                          </div>
+                          <span style={{ fontSize: 13, fontWeight: 500, color: "var(--foreground)" }}>
+                            {u.nombre}
+                            {u.id === currentUser?.id && (
+                              <span style={{ marginLeft: 5, fontSize: 10, color: "var(--muted-foreground)" }}>(Tú)</span>
+                            )}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={`${rolDef?.cls ?? "bg-muted text-muted-foreground border-border"} text-[10px] px-2 py-0.5`}>
+                          {rolDef?.label ?? u.rol}
+                        </Badge>
+                      </TableCell>
+                      <TableCell style={{ fontSize: 12, color: "var(--muted-foreground)" }}>
+                        {ultimoAcceso}
+                      </TableCell>
+                      <TableCell style={{ fontSize: 12, color: "var(--muted-foreground)" }}>
+                        {duracion}
+                      </TableCell>
+                      <TableCell className="text-right pr-4" style={{ fontSize: 12, color: "var(--muted-foreground)" }}>
+                        {hist.length > 0 ? hist.length : "—"}
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Info contraseña genérica */}
       <div style={{ display:"flex", gap:10, alignItems:"center", padding:"10px 14px",
         borderRadius:8, background:"color-mix(in oklch, var(--primary) 8%, transparent)",
@@ -322,13 +451,32 @@ export function UserManagement() {
                       {u.email}
                     </TableCell>
 
-                    {/* Rol + descripción */}
+                    {/* Rol + descripción + equipo */}
                     <TableCell>
                       <div className="flex flex-col gap-0.5">
-                        <Badge variant="outline" className={`${rolDef?.cls ?? "bg-muted text-muted-foreground border-border"} flex items-center gap-1 w-fit text-[11px] px-2 py-0.5`}>
-                          {getRoleIcon(u.rol)}
-                          {rolDef?.label ?? u.rol}
-                        </Badge>
+                        <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
+                          <Badge variant="outline" className={`${rolDef?.cls ?? "bg-muted text-muted-foreground border-border"} flex items-center gap-1 w-fit text-[11px] px-2 py-0.5`}>
+                            {getRoleIcon(u.rol)}
+                            {rolDef?.label ?? u.rol}
+                          </Badge>
+                          {esRolConEquipo(u.rol) && (
+                            <span style={{
+                              display:"inline-flex", alignItems:"center", gap:3,
+                              fontSize:10, fontWeight:600,
+                              color: (u.equipoIds?.length ?? 0) > 0 ? "var(--primary)" : "var(--muted-foreground)",
+                              background: (u.equipoIds?.length ?? 0) > 0
+                                ? "color-mix(in oklch,var(--primary) 10%,transparent)"
+                                : "var(--secondary)",
+                              padding:"1px 6px", borderRadius:6,
+                              border:`1px solid ${(u.equipoIds?.length ?? 0) > 0 ? "color-mix(in oklch,var(--primary) 25%,transparent)" : "var(--border)"}`,
+                            }}>
+                              <UserCheck size={9}/>
+                              {(u.equipoIds?.length ?? 0) > 0
+                                ? `${u.equipoIds!.length} miembro${u.equipoIds!.length !== 1 ? "s" : ""}`
+                                : "Sin equipo"}
+                            </span>
+                          )}
+                        </div>
                         <p className="text-[11px] text-muted-foreground leading-tight max-w-55">
                           {rolDef?.description ?? ""}
                         </p>
@@ -382,7 +530,7 @@ export function UserManagement() {
                               Resetear contraseña
                             </DropdownMenuItem>
                           )}
-                          {u.id !== currentUser?.id && (
+                          {canDeleteTarget(u) && (
                             <>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
@@ -452,14 +600,17 @@ export function UserManagement() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {roles.map(r => (
-                      <SelectItem key={r.id} value={r.id}>
-                        <div className="flex items-center gap-2">
-                          {getRoleIcon(r.id)}
-                          {r.label}
-                        </div>
-                      </SelectItem>
-                    ))}
+                    {roles
+                      .filter(r => isOwner || (!r.permisos.includes("canManageUsers") && !r.permisos.includes("isSuperAdmin")))
+                      .map(r => (
+                        <SelectItem key={r.id} value={r.id}>
+                          <div className="flex items-center gap-2">
+                            {getRoleIcon(r.id)}
+                            {r.label}
+                          </div>
+                        </SelectItem>
+                      ))
+                    }
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground mt-1">
@@ -469,13 +620,16 @@ export function UserManagement() {
                 {(() => {
                   const def = getRoleDef(rol)
                   if (!def) return null
-                  const isAdminRole    = def.permisos.includes("canManageUsers")
-                  const isQALeadRole   = def.permisos.includes("canCreateHU") && def.permisos.includes("canApproveCases") && !isAdminRole
-                  const isQARole       = def.permisos.includes("verSoloPropios")
-                  const msg = isAdminRole
+                  const isOwnerRole  = def.permisos.includes("isSuperAdmin")
+                  const isAdminRole  = def.permisos.includes("canManageUsers") && !isOwnerRole
+                  const isLeadRole   = esRolLider(rol)
+                  const isQARole     = def.permisos.includes("verSoloPropios")
+                  const msg = isOwnerRole
                     ? "Ve la carga de todos los usuarios"
-                    : isQALeadRole
-                    ? "Ve su propia carga y la de los usuarios QA"
+                    : isAdminRole
+                    ? "Ve su propia carga y la de su equipo asignado (o todos si sin equipo)"
+                    : isLeadRole
+                    ? "Ve su propia carga y la de su equipo asignado"
                     : isQARole
                     ? "Ve únicamente su propia carga"
                     : "Ve la carga de todos los usuarios (solo lectura)"
@@ -494,6 +648,53 @@ export function UserManagement() {
                   )
                 })()}
               </Field>
+
+              {/* Selector de equipo — para roles admin y lead al editar */}
+              {userToEdit && esRolConEquipo(rol) && (
+                <Field>
+                  <FieldLabel>
+                    <span style={{ display:"flex", alignItems:"center", gap:6 }}>
+                      <UserCheck size={13} style={{ color:"var(--primary)" }}/>
+                      Miembros del equipo
+                      {equipoIds.length > 0 && (
+                        <span style={{
+                          fontSize:10, fontWeight:700, background:"color-mix(in oklch,var(--primary) 14%,transparent)",
+                          color:"var(--primary)", borderRadius:8, padding:"1px 6px",
+                        }}>
+                          {equipoIds.length}
+                        </span>
+                      )}
+                    </span>
+                  </FieldLabel>
+                  <div style={{
+                    display:"flex", flexDirection:"column", gap:2,
+                    maxHeight:180, overflowY:"auto", padding:"6px 8px",
+                    borderRadius:8, border:"1px solid var(--border)", background:"var(--secondary)",
+                  }}>
+                    {users.filter(u => u.activo && u.id !== userToEdit.id).length === 0 ? (
+                      <p style={{ fontSize:12, color:"var(--muted-foreground)", textAlign:"center", padding:8 }}>
+                        No hay otros usuarios activos
+                      </p>
+                    ) : users.filter(u => u.activo && u.id !== userToEdit.id).map(u => (
+                      <label key={u.id} style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer", padding:"5px 6px", borderRadius:6 }} className="hover:bg-card">
+                        <input
+                          type="checkbox"
+                          checked={equipoIds.includes(u.id)}
+                          onChange={() => toggleEquipoMember(u.id)}
+                          style={{ width:14, height:14, accentColor:"var(--primary)", cursor:"pointer", flexShrink:0 }}
+                        />
+                        <span style={{ fontSize:12, color:"var(--foreground)", flex:1 }}>{u.nombre}</span>
+                        <span style={{ fontSize:10, color:"var(--muted-foreground)" }}>
+                          {getRoleDef(u.rol)?.label ?? u.rol}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                  <p style={{ fontSize:11, color:"var(--muted-foreground)", marginTop:4 }}>
+                    Este usuario solo verá HUs y métricas de los usuarios seleccionados.
+                  </p>
+                </Field>
+              )}
             </FieldGroup>
 
             <DialogFooter>
