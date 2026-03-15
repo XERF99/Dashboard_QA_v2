@@ -477,7 +477,7 @@ export function UserManagement() {
                             </span>
                           )}
                         </div>
-                        <p className="text-[11px] text-muted-foreground leading-tight max-w-55">
+                        <p className="text-[11px] text-muted-foreground leading-tight line-clamp-2" title={rolDef?.description ?? ""}>
                           {rolDef?.description ?? ""}
                         </p>
                       </div>
