@@ -15,20 +15,21 @@ import { EtapasConfig } from "@/components/dashboard/etapas-config"
 import { AplicacionesConfig, APLICACIONES_PREDETERMINADAS } from "@/components/dashboard/aplicaciones-config"
 import { TiposAplicacionConfig } from "@/components/dashboard/tipos-aplicacion-config"
 import { AmbientesConfig } from "@/components/dashboard/ambientes-config"
+import { TiposPruebaConfig } from "@/components/dashboard/tipos-prueba-config"
 import { HUStatsCards } from "@/components/dashboard/hu-stats-cards"
 import { LoginScreen } from "@/components/auth/login-screen"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
-import { BookOpen, Users, UserCog, Trash2, X, CheckCircle, LogOut, AlertTriangle, BarChart2, Settings, ShieldAlert, History, Layers, Monitor, Globe, Settings2 } from "lucide-react"
+import { BookOpen, Users, UserCog, Trash2, X, CheckCircle, LogOut, AlertTriangle, BarChart2, Settings, ShieldAlert, History, Layers, Monitor, Globe, Settings2, FlaskConical } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import {
   historiasEjemplo, casosPruebaEjemplo, tareasEjemplo,
   crearEvento, etapasParaTipo, siguienteEtapa, etapaCompletada,
-  ETAPAS_PREDETERMINADAS, TIPOS_APLICACION_PREDETERMINADOS, AMBIENTES_PREDETERMINADOS,
+  ETAPAS_PREDETERMINADAS, TIPOS_APLICACION_PREDETERMINADOS, AMBIENTES_PREDETERMINADOS, TIPOS_PRUEBA_PREDETERMINADOS,
   getTipoAplicacionLabel, getAmbienteLabel,
   type HistoriaUsuario, type CasoPrueba, type Tarea, type Bloqueo,
   type EtapaEjecucion, type EstadoHU, type EstadoAprobacion, type Notificacion, type TipoNotificacion,
-  type Comentario, type ConfigEtapas, type TipoAplicacionDef, type AmbienteDef,
+  type Comentario, type ConfigEtapas, type TipoAplicacionDef, type AmbienteDef, type TipoPruebaDef,
 } from "@/lib/types"
 
 // ── Toast ──────────────────────────────────────────────────
@@ -126,7 +127,8 @@ export default function DashboardPage() {
   const [aplicaciones, setAplicaciones] = useState<string[]>(APLICACIONES_PREDETERMINADAS)
   const [tiposAplicacion, setTiposAplicacion] = useState<TipoAplicacionDef[]>(TIPOS_APLICACION_PREDETERMINADOS)
   const [ambientes, setAmbientes] = useState<AmbienteDef[]>(AMBIENTES_PREDETERMINADOS)
-  const [configSeccion, setConfigSeccion] = useState<"roles" | "tipos" | "aplicaciones" | "ambientes" | "etapas">("roles")
+  const [tiposPrueba, setTiposPrueba] = useState<TipoPruebaDef[]>(TIPOS_PRUEBA_PREDETERMINADOS)
+  const [configSeccion, setConfigSeccion] = useState<"roles" | "tipos" | "aplicaciones" | "ambientes" | "tipos_prueba" | "etapas">("roles")
 
   const handleTiposChange = (newTipos: TipoAplicacionDef[]) => {
     setTiposAplicacion(newTipos)
@@ -719,7 +721,7 @@ export default function DashboardPage() {
           </TabsContent>
 
           <TabsContent value="analytics" className="mt-6">
-            <AnalyticsKPIs historias={historiasVisibles} casos={casos} tareas={tareas} isQA={verSoloPropios} currentUserName={user?.nombre} filtroNombres={filtroNombresCarga} configEtapas={configEtapas} tiposAplicacion={tiposAplicacion} ambientes={ambientes} />
+            <AnalyticsKPIs historias={historiasVisibles} casos={casos} tareas={tareas} isQA={verSoloPropios} currentUserName={user?.nombre} filtroNombres={filtroNombresCarga} configEtapas={configEtapas} tiposAplicacion={tiposAplicacion} ambientes={ambientes} tiposPrueba={tiposPrueba} />
           </TabsContent>
 
           <TabsContent value="carga" className="mt-6">
@@ -766,6 +768,7 @@ export default function DashboardPage() {
                       { id: "tipos",        label: "Tipos de Aplicación", icon: <Layers size={14} /> },
                       { id: "aplicaciones", label: "Aplicaciones",        icon: <Monitor size={14} /> },
                       { id: "ambientes",    label: "Ambientes",           icon: <Globe size={14} /> },
+                      { id: "tipos_prueba", label: "Tipos de Prueba",     icon: <FlaskConical size={14} /> },
                       { id: "etapas",       label: "Etapas",              icon: <Settings2 size={14} /> },
                     ] as const
                   ).map(sec => {
@@ -802,6 +805,7 @@ export default function DashboardPage() {
                   {configSeccion === "tipos"        && <TiposAplicacionConfig tipos={tiposAplicacion} onChange={handleTiposChange} />}
                   {configSeccion === "aplicaciones" && <AplicacionesConfig aplicaciones={aplicaciones} onChange={setAplicaciones} />}
                   {configSeccion === "ambientes"    && <AmbientesConfig ambientes={ambientes} onChange={setAmbientes} />}
+                  {configSeccion === "tipos_prueba" && <TiposPruebaConfig tipos={tiposPrueba} onChange={setTiposPrueba} />}
                   {configSeccion === "etapas"       && <EtapasConfig config={configEtapas} onChange={setConfigEtapas} tipos={tiposAplicacion} />}
                 </div>
               </div>
@@ -822,6 +826,7 @@ export default function DashboardPage() {
           aplicaciones={aplicaciones}
           tiposAplicacion={tiposAplicacion}
           ambientes={ambientes}
+          tiposPrueba={tiposPrueba}
         />
       )}
 
@@ -838,6 +843,7 @@ export default function DashboardPage() {
         configEtapas={configEtapas}
         tiposAplicacion={tiposAplicacion}
         ambientes={ambientes}
+        tiposPrueba={tiposPrueba}
         onIniciarHU={handleIniciarHU}
         onCancelarHU={handleCancelarHU}
         onAddCaso={handleAddCaso}

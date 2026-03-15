@@ -98,6 +98,21 @@ export function EtapasConfig({ config, onChange, tipos: tiposProp }: EtapasConfi
         Personaliza las etapas de ejecución para cada tipo de aplicación. Los cambios aplican a las HUs nuevas y en progreso.
       </p>
 
+      {/* Banner informativo */}
+      <div style={{
+        display: "flex", alignItems: "flex-start", gap: 10,
+        padding: "10px 14px", borderRadius: 8,
+        background: "color-mix(in oklch, var(--chart-3) 10%, transparent)",
+        border: "1px solid color-mix(in oklch, var(--chart-3) 30%, transparent)",
+        marginBottom: 4,
+      }}>
+        <span style={{ fontSize: 15, flexShrink: 0, marginTop: 1 }}>💡</span>
+        <p style={{ fontSize: 12, color: "var(--foreground)", lineHeight: 1.5 }}>
+          Las etapas se organizan por <strong>Tipo de Aplicación</strong>. Si necesitas agregar un tipo nuevo,
+          ve primero a <strong>Tipos de Aplicación</strong> en el menú lateral y créalo; luego regresa aquí para configurar sus etapas.
+        </p>
+      </div>
+
       {tipos.map(tipoDef => {
         const tid = tipoDef.id
         const etapas = config[tid] ?? []

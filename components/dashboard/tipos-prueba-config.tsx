@@ -3,15 +3,15 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Plus, Trash2, ArrowUp, ArrowDown, RotateCcw, Layers } from "lucide-react"
-import { TIPOS_APLICACION_PREDETERMINADOS, type TipoAplicacionDef } from "@/lib/types"
+import { Plus, Trash2, ArrowUp, ArrowDown, RotateCcw, FlaskConical } from "lucide-react"
+import { TIPOS_PRUEBA_PREDETERMINADOS, type TipoPruebaDef } from "@/lib/types"
 
-interface TiposAplicacionConfigProps {
-  tipos: TipoAplicacionDef[]
-  onChange: (tipos: TipoAplicacionDef[]) => void
+interface TiposPruebaConfigProps {
+  tipos: TipoPruebaDef[]
+  onChange: (tipos: TipoPruebaDef[]) => void
 }
 
-export function TiposAplicacionConfig({ tipos, onChange }: TiposAplicacionConfigProps) {
+export function TiposPruebaConfig({ tipos, onChange }: TiposPruebaConfigProps) {
   const [nuevoLabel, setNuevoLabel] = useState("")
 
   function agregar() {
@@ -46,20 +46,20 @@ export function TiposAplicacionConfig({ tipos, onChange }: TiposAplicacionConfig
   }
 
   const hayDiferencias =
-    tipos.length !== TIPOS_APLICACION_PREDETERMINADOS.length ||
+    tipos.length !== TIPOS_PRUEBA_PREDETERMINADOS.length ||
     tipos.some((t, i) =>
-      t.id !== TIPOS_APLICACION_PREDETERMINADOS[i]?.id ||
-      t.label !== TIPOS_APLICACION_PREDETERMINADOS[i]?.label
+      t.id !== TIPOS_PRUEBA_PREDETERMINADOS[i]?.id ||
+      t.label !== TIPOS_PRUEBA_PREDETERMINADOS[i]?.label
     )
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-        <Layers size={15} style={{ color: "var(--primary)" }} />
-        <p style={{ fontSize: 14, fontWeight: 700, color: "var(--foreground)" }}>Tipos de Aplicación</p>
+        <FlaskConical size={15} style={{ color: "var(--primary)" }} />
+        <p style={{ fontSize: 14, fontWeight: 700, color: "var(--foreground)" }}>Tipos de Prueba</p>
       </div>
       <p style={{ fontSize: 12, color: "var(--muted-foreground)", marginBottom: 6 }}>
-        Define los tipos de aplicación disponibles. Cada tipo determina qué etapas de ejecución aplican a sus HUs.
+        Define los tipos de prueba disponibles al crear o editar una Historia de Usuario o un Caso de Prueba.
       </p>
 
       {/* Lista */}
@@ -91,10 +91,10 @@ export function TiposAplicacionConfig({ tipos, onChange }: TiposAplicacionConfig
               value={tipo.label}
               onChange={e => editarLabel(idx, e.target.value)}
               style={{ height: 28, fontSize: 12, flex: 1 }}
-              placeholder="Nombre del tipo"
+              placeholder="Nombre del tipo de prueba"
             />
 
-            {/* ID inmutable (referencia interna) */}
+            {/* ID inmutable */}
             <span style={{
               fontSize: 9, fontFamily: "monospace", color: "var(--muted-foreground)",
               background: "var(--secondary)", padding: "2px 6px", borderRadius: 4, flexShrink: 0,
@@ -117,7 +117,7 @@ export function TiposAplicacionConfig({ tipos, onChange }: TiposAplicacionConfig
           value={nuevoLabel}
           onChange={e => setNuevoLabel(e.target.value)}
           onKeyDown={e => { if (e.key === "Enter") agregar() }}
-          placeholder="Nuevo tipo (ej: Microservicio, ETL, Monolito...)"
+          placeholder="Nuevo tipo (ej: Smoke, E2E, Accesibilidad...)"
           style={{ height: 30, fontSize: 12, flex: 1 }}
         />
         <Button size="sm" style={{ height: 30, gap: 4 }} onClick={agregar} disabled={!nuevoLabel.trim()}>
@@ -128,7 +128,7 @@ export function TiposAplicacionConfig({ tipos, onChange }: TiposAplicacionConfig
       {/* Restaurar */}
       {hayDiferencias && (
         <button
-          onClick={() => onChange([...TIPOS_APLICACION_PREDETERMINADOS])}
+          onClick={() => onChange([...TIPOS_PRUEBA_PREDETERMINADOS])}
           style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--muted-foreground)", background: "none", border: "none", cursor: "pointer", padding: "2px 0" }}
           className="hover:text-foreground"
         >

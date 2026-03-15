@@ -114,10 +114,40 @@ export function getAmbienteLabel(id: string, ambientes?: AmbienteDef[]): string 
   return AMBIENTE_LABEL[id] ?? id
 }
 
-// ── Tipo y complejidad de prueba ─────────────────────────
-export type TipoPrueba = "funcional" | "no_funcional"
+// ── Tipo de prueba — string flexible para tipos personalizados ──
+export type TipoPrueba = string
 export type ComplejidadCaso = "alta" | "media" | "baja"
 export type EntornoCaso = "test" | "preproduccion"
+
+// ── Definición de un tipo de prueba configurable ─────────
+export interface TipoPruebaDef {
+  id: string      // clave interna, ej. "funcional"
+  label: string   // nombre visible, ej. "Funcional"
+}
+
+// ── Tipos de prueba predeterminados ──────────────────────
+export const TIPOS_PRUEBA_PREDETERMINADOS: TipoPruebaDef[] = [
+  { id: "funcional",    label: "Funcional" },
+  { id: "no_funcional", label: "No Funcional" },
+  { id: "regresion",    label: "Regresión" },
+  { id: "integracion",  label: "Integración" },
+  { id: "rendimiento",  label: "Rendimiento" },
+  { id: "seguridad",    label: "Seguridad" },
+]
+
+/** Obtiene el label de un tipo de prueba: busca en la lista dinámica, cae al registro estático, luego al id */
+export function getTipoPruebaLabel(id: string, tipos?: TipoPruebaDef[]): string {
+  if (tipos) {
+    const found = tipos.find(t => t.id === id)
+    if (found) return found.label
+  }
+  return TIPO_PRUEBA_LABEL[id] ?? id
+}
+
+/** Obtiene el color CSS de un tipo de prueba con fallback */
+export function getTipoPruebaColor(id: string): string {
+  return TIPO_PRUEBA_COLOR[id] ?? "bg-muted text-muted-foreground border-border"
+}
 
 // ── Aprobación de caso de prueba ─────────────────────────
 export type EstadoAprobacion =
@@ -307,6 +337,7 @@ export interface HistoriaUsuario {
   etapa: EtapaHU
   motivoCancelacion?: string
   ambiente: AmbientePrueba
+  tipoPrueba: TipoPrueba
   casosIds: string[]
   bloqueos: Bloqueo[]
   historial: EventoHistorial[]
@@ -713,7 +744,7 @@ export const historiasEjemplo: HistoriaUsuario[] = [
     aplicacion: "Portal Web Principal", tipoAplicacion: "aplicacion",
     requiriente: "Jefe de Seguridad IT", areaSolicitante: "Seguridad Informática",
     fechaCreacion: new Date("2026-02-20"), fechaFinEstimada: new Date("2026-03-20"),
-    etapa: "despliegue", ambiente: "test",
+    etapa: "despliegue", ambiente: "test", tipoPrueba: "funcional",
     casosIds: ["CP-001", "CP-002"],
     bloqueos: [{
       id: "bl-hu-001", descripcion: "Credenciales OAuth pendientes de aprobación por equipo de seguridad corporativa",
@@ -744,7 +775,7 @@ export const historiasEjemplo: HistoriaUsuario[] = [
     requiriente: "Soporte Técnico", areaSolicitante: "Atención al Cliente",
     fechaCreacion: new Date("2026-03-01"), fechaFinEstimada: new Date("2026-03-08"),
     fechaCierre: new Date("2026-03-07"),
-    etapa: "completada", ambiente: "preproduccion",
+    etapa: "completada", ambiente: "preproduccion", tipoPrueba: "funcional",
     casosIds: ["CP-003"],
     bloqueos: [],
     historial: [
@@ -769,7 +800,7 @@ export const historiasEjemplo: HistoriaUsuario[] = [
     aplicacion: "Portal Web Principal", tipoAplicacion: "aplicacion",
     requiriente: "Arquitectura", areaSolicitante: "Ingeniería",
     fechaCreacion: new Date("2026-03-02"), fechaFinEstimada: new Date("2026-03-18"),
-    etapa: "despliegue", ambiente: "test",
+    etapa: "despliegue", ambiente: "test", tipoPrueba: "rendimiento",
     casosIds: ["CP-004", "CP-005"],
     bloqueos: [],
     historial: [
@@ -792,7 +823,7 @@ export const historiasEjemplo: HistoriaUsuario[] = [
     aplicacion: "Sistema de Reportes", tipoAplicacion: "base_de_datos",
     requiriente: "Gerente Financiero", areaSolicitante: "Finanzas",
     fechaCreacion: new Date("2026-03-10"), fechaFinEstimada: new Date("2026-03-16"),
-    etapa: "sin_iniciar", ambiente: "produccion",
+    etapa: "sin_iniciar", ambiente: "produccion", tipoPrueba: "funcional",
     casosIds: [],
     bloqueos: [],
     historial: [

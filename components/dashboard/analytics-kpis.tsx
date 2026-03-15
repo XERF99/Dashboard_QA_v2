@@ -6,15 +6,15 @@ import { Progress } from "@/components/ui/progress"
 import {
   TrendingUp, CheckCircle, XCircle, Clock, AlertTriangle,
   BarChart2, RefreshCw, Layers, Target, Users, Zap,
-  FileSpreadsheet, ChevronDown, User2,
+  FileSpreadsheet, ChevronDown, User2, FlaskConical,
 } from "lucide-react"
 import { exportarAnalyticsCSV, exportarAnalyticsPDF } from "@/lib/export-utils"
 import {
   ESTADO_HU_CFG, PRIORIDAD_CFG,
-  ETAPAS_PREDETERMINADAS, getTipoAplicacionLabel, getAmbienteLabel,
+  ETAPAS_PREDETERMINADAS, getTipoAplicacionLabel, getAmbienteLabel, getTipoPruebaLabel,
   type HistoriaUsuario, type CasoPrueba, type Tarea,
   type EstadoHU, type PrioridadHU,
-  type ConfigEtapas, type TipoAplicacionDef, type AmbienteDef,
+  type ConfigEtapas, type TipoAplicacionDef, type AmbienteDef, type TipoPruebaDef,
 } from "@/lib/types"
 
 interface AnalyticsKPIsProps {
@@ -27,6 +27,7 @@ interface AnalyticsKPIsProps {
   configEtapas?: ConfigEtapas
   tiposAplicacion?: TipoAplicacionDef[]
   ambientes?: AmbienteDef[]
+  tiposPrueba?: TipoPruebaDef[]
 }
 
 // ── Helpers visuales ──────────────────────────────────────
@@ -113,7 +114,7 @@ function PillsNav({ nombres, seleccionada, onChange }: {
 }
 
 // ═══════════════════════════════════════════════════════════
-export function AnalyticsKPIs({ historias, casos, tareas, isQA, currentUserName, filtroNombres, configEtapas = ETAPAS_PREDETERMINADAS, tiposAplicacion, ambientes }: AnalyticsKPIsProps) {
+export function AnalyticsKPIs({ historias, casos, tareas, isQA, currentUserName, filtroNombres, configEtapas = ETAPAS_PREDETERMINADAS, tiposAplicacion, ambientes, tiposPrueba }: AnalyticsKPIsProps) {
 
   const [exportOpen, setExportOpen] = useState(false)
   const [personaSeleccionada, setPersonaSeleccionada] = useState<string | null>(null)
@@ -237,6 +238,15 @@ export function AnalyticsKPIs({ historias, casos, tareas, isQA, currentUserName,
       count: husFiltradas.filter(h => h.ambiente === a).length,
     })).sort((a, b) => b.count - a.count)
   }, [husFiltradas, ambientes])
+
+  const byTipoPrueba = useMemo(() => {
+    const ids = [...new Set(husFiltradas.map(h => h.tipoPrueba))]
+    return ids.map(id => ({
+      key: id,
+      label: getTipoPruebaLabel(id, tiposPrueba),
+      count: husFiltradas.filter(h => h.tipoPrueba === id).length,
+    })).sort((a, b) => b.count - a.count)
+  }, [husFiltradas, tiposPrueba])
 
   const byResponsable = useMemo(() => {
     const mapa = new Map<string, { total: number; exitosas: number; fallidas: number; enProgreso: number; bloqueos: number }>()
@@ -385,8 +395,8 @@ export function AnalyticsKPIs({ historias, casos, tareas, isQA, currentUserName,
         </div>
       </div>
 
-      {/* ── Fila 4: Casos + tipo/ambiente ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+      {/* ── Fila 4: Casos + tipo/ambiente/tipoPrueba ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 16 }}>
 
         {/* Casos por estado de aprobación */}
         <div style={{ padding: "18px 20px", borderRadius: 12, border: "1px solid var(--border)", background: "var(--card)" }}>
@@ -440,6 +450,30 @@ export function AnalyticsKPIs({ historias, casos, tareas, isQA, currentUserName,
                   </div>
                   <div style={{ height: 5, borderRadius: 3, background: "var(--secondary)", overflow: "hidden" }}>
                     <div style={{ width: `${Math.round((count / kpi.total) * 100)}%`, height: "100%", background: amb_color, borderRadius: 3 }} />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Por tipo de prueba */}
+        <div style={{ padding: "18px 20px", borderRadius: 12, border: "1px solid var(--border)", background: "var(--card)" }}>
+          <SectionTitle icon={<FlaskConical size={14} />} title="HUs por Tipo de Prueba" />
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {byTipoPrueba.length === 0 ? (
+              <p style={{ fontSize: 12, color: "var(--muted-foreground)", fontStyle: "italic" }}>Sin datos</p>
+            ) : byTipoPrueba.map(({ key, label, count }, i) => {
+              const CHART_COLORS = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)", "var(--primary)"]
+              const color = CHART_COLORS[i % CHART_COLORS.length]
+              return (
+                <div key={key}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                    <span style={{ fontSize: 12, color: "var(--foreground)" }}>{label}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color }}>{count}</span>
+                  </div>
+                  <div style={{ height: 5, borderRadius: 3, background: "var(--secondary)", overflow: "hidden" }}>
+                    <div style={{ width: `${Math.round((count / kpi.total) * 100)}%`, height: "100%", background: color, borderRadius: 3 }} />
                   </div>
                 </div>
               )

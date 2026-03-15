@@ -9,9 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   PRIORIDAD_CFG,
   crearEvento, etapaDefsParaTipo, ETAPAS_PREDETERMINADAS,
-  TIPOS_APLICACION_PREDETERMINADOS, AMBIENTES_PREDETERMINADOS,
-  type HistoriaUsuario, type TipoAplicacion, type AmbientePrueba, type PrioridadHU,
-  type ConfigEtapas, type TipoAplicacionDef, type AmbienteDef,
+  TIPOS_APLICACION_PREDETERMINADOS, AMBIENTES_PREDETERMINADOS, TIPOS_PRUEBA_PREDETERMINADOS,
+  type HistoriaUsuario, type TipoAplicacion, type AmbientePrueba, type PrioridadHU, type TipoPrueba,
+  type ConfigEtapas, type TipoAplicacionDef, type AmbienteDef, type TipoPruebaDef,
 } from "@/lib/types"
 
 interface HUFormProps {
@@ -25,15 +25,18 @@ interface HUFormProps {
   aplicaciones?: string[]
   tiposAplicacion?: TipoAplicacionDef[]
   ambientes?: AmbienteDef[]
+  tiposPrueba?: TipoPruebaDef[]
 }
 
 const FL: React.CSSProperties = { fontSize:11, fontWeight:600, color:"var(--foreground)", marginBottom:5, display:"block" }
 const PNL: React.CSSProperties = { padding:"14px 16px", borderRadius:10, border:"1px solid var(--border)", background:"var(--background)" }
 
-export function HUForm({ open, onClose, onSubmit, huEditar, currentUser, configEtapas = ETAPAS_PREDETERMINADAS, qaUsers = [], aplicaciones = [], tiposAplicacion, ambientes }: HUFormProps) {
+export function HUForm({ open, onClose, onSubmit, huEditar, currentUser, configEtapas = ETAPAS_PREDETERMINADAS, qaUsers = [], aplicaciones = [], tiposAplicacion, ambientes, tiposPrueba }: HUFormProps) {
   const tiposDisponibles = tiposAplicacion?.length ? tiposAplicacion : TIPOS_APLICACION_PREDETERMINADOS
   const ambientesDisponibles = ambientes?.length ? ambientes : AMBIENTES_PREDETERMINADOS
+  const tiposPruebaDisponibles = tiposPrueba?.length ? tiposPrueba : TIPOS_PRUEBA_PREDETERMINADOS
   const defaultAmbiente = ambientesDisponibles[0]?.id ?? "test"
+  const defaultTipoPrueba = tiposPruebaDisponibles[0]?.id ?? "funcional"
   const [hu, setHu] = useState({
     titulo: "",
     descripcion: "",
@@ -47,6 +50,7 @@ export function HUForm({ open, onClose, onSubmit, huEditar, currentUser, configE
     requiriente: "",
     areaSolicitante: "",
     ambiente: defaultAmbiente as AmbientePrueba,
+    tipoPrueba: defaultTipoPrueba as TipoPrueba,
   })
 
   useEffect(() => {
@@ -65,6 +69,7 @@ export function HUForm({ open, onClose, onSubmit, huEditar, currentUser, configE
         requiriente: huEditar.requiriente,
         areaSolicitante: huEditar.areaSolicitante,
         ambiente: huEditar.ambiente,
+        tipoPrueba: huEditar.tipoPrueba,
       })
     } else {
       setHu({
@@ -73,6 +78,7 @@ export function HUForm({ open, onClose, onSubmit, huEditar, currentUser, configE
         sprint: "",
         aplicacion: "", tipoAplicacion: tiposDisponibles[0]?.id ?? "aplicacion",
         requiriente: "", areaSolicitante: "", ambiente: defaultAmbiente,
+        tipoPrueba: defaultTipoPrueba,
       })
     }
   }, [open, huEditar])
@@ -103,6 +109,7 @@ export function HUForm({ open, onClose, onSubmit, huEditar, currentUser, configE
       fechaCierre: huEditar?.fechaCierre,
       etapa: huEditar?.etapa || "sin_iniciar",
       ambiente: hu.ambiente,
+      tipoPrueba: hu.tipoPrueba,
       casosIds: huEditar?.casosIds || [],
       bloqueos: huEditar?.bloqueos || [],
       historial: [
@@ -264,6 +271,20 @@ export function HUForm({ open, onClose, onSubmit, huEditar, currentUser, configE
                           )}
                           {ambientesDisponibles.map(a => (
                             <SelectItem key={a.id} value={a.id}>{a.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label style={FL}>Tipo de Prueba</label>
+                      <Select value={hu.tipoPrueba} onValueChange={(v: TipoPrueba) => setHu(p => ({...p, tipoPrueba:v}))}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {hu.tipoPrueba && !tiposPruebaDisponibles.some(t => t.id === hu.tipoPrueba) && (
+                            <SelectItem value={hu.tipoPrueba}>{hu.tipoPrueba}</SelectItem>
+                          )}
+                          {tiposPruebaDisponibles.map(t => (
+                            <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>

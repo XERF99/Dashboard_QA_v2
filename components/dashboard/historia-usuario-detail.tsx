@@ -17,14 +17,15 @@ import {
 } from "lucide-react"
 import {
   ESTADO_HU_CFG, ETAPA_HU_CFG, PRIORIDAD_CFG,
-  ESTADO_APROBACION_CFG, COMPLEJIDAD_CFG, TIPO_PRUEBA_LABEL, TIPO_PRUEBA_COLOR,
-  TIPO_TAREA_LABEL, TIPO_TAREA_COLOR,
+  ESTADO_APROBACION_CFG, COMPLEJIDAD_CFG, TIPO_TAREA_LABEL, TIPO_TAREA_COLOR,
   etapasParaTipo, etapaDefsParaTipo, getEtapaHUCfg, ETAPAS_PREDETERMINADAS,
-  getTipoAplicacionLabel, getAmbienteLabel,
+  getTipoAplicacionLabel, getAmbienteLabel, getTipoPruebaLabel, getTipoPruebaColor,
+  TIPOS_PRUEBA_PREDETERMINADOS,
   fmtCorto, fmtHora,
   type HistoriaUsuario, type CasoPrueba, type Tarea, type Bloqueo, type Comentario,
   type EtapaEjecucion, type TipoPrueba, type ComplejidadCaso, type EntornoCaso,
   type TipoTarea, type PrioridadTarea, type ConfigEtapas, type TipoAplicacionDef, type AmbienteDef,
+  type TipoPruebaDef,
 } from "@/lib/types"
 
 interface Props {
@@ -65,6 +66,7 @@ interface Props {
   configEtapas?: ConfigEtapas
   tiposAplicacion?: TipoAplicacionDef[]
   ambientes?: AmbienteDef[]
+  tiposPrueba?: TipoPruebaDef[]
 }
 
 // ── Helpers ──
@@ -172,6 +174,7 @@ export function HistoriaUsuarioDetail({
   configEtapas = ETAPAS_PREDETERMINADAS,
   tiposAplicacion,
   ambientes,
+  tiposPrueba,
 }: Props) {
   // Form visibility
   const [showCasoForm, setShowCasoForm] = useState(false)
@@ -396,6 +399,7 @@ export function HistoriaUsuarioDetail({
               <span style={{ display:"flex", alignItems:"center", gap:3, fontSize:12, color:"var(--muted-foreground)" }}><User size={12}/>{hu.responsable}</span>
               <Badge variant="outline" className="bg-muted text-muted-foreground border-border text-[10px]">{getTipoAplicacionLabel(hu.tipoAplicacion, tiposAplicacion)}</Badge>
               <Badge variant="outline" className="bg-muted text-muted-foreground border-border text-[10px]">{getAmbienteLabel(hu.ambiente, ambientes)}</Badge>
+              <Badge variant="outline" className={`${getTipoPruebaColor(hu.tipoPrueba)} text-[10px]`}>{getTipoPruebaLabel(hu.tipoPrueba, tiposPrueba)}</Badge>
               {blActivos.length>0 && <Badge variant="outline" className="bg-chart-4/20 text-chart-4 border-chart-4/30"><ShieldAlert size={11} className="mr-1"/>{blActivos.length} bloqueo{blActivos.length>1?"s":""}</Badge>}
             </div>
 
@@ -594,6 +598,7 @@ export function HistoriaUsuarioDetail({
                       horas={casoHoras} onHoras={setCasoHoras}
                       archivos={casoArchivos} onArchivos={setCasoArchivos}
                       complejidad={casoComplejidad} onComplejidad={setCasoComplejidad}
+                      tiposPrueba={tiposPrueba}
                     />
                     <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
                       <Button variant="outline" size="sm" onClick={() => { setShowCasoForm(false); resetCasoForm() }}>Cancelar</Button>
@@ -616,6 +621,7 @@ export function HistoriaUsuarioDetail({
                       horas={casoHoras} onHoras={setCasoHoras}
                       archivos={casoArchivos} onArchivos={setCasoArchivos}
                       complejidad={casoComplejidad} onComplejidad={setCasoComplejidad}
+                      tiposPrueba={tiposPrueba}
                     />
                     <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
                       <Button variant="outline" size="sm" onClick={() => { setEditandoCaso(null); resetCasoForm() }}>Cancelar</Button>
@@ -656,7 +662,7 @@ export function HistoriaUsuarioDetail({
                   {casosHU.map(caso => {
                     const aprobCfg = ESTADO_APROBACION_CFG[caso.estadoAprobacion]
                     const compCfg = COMPLEJIDAD_CFG[caso.complejidad]
-                    const tpColor = TIPO_PRUEBA_COLOR[caso.tipoPrueba]
+                    const tpColor = getTipoPruebaColor(caso.tipoPrueba)
                     const tareasCaso = tareas.filter(t => caso.tareasIds.includes(t.id))
                     const isExpanded = expandedCaso === caso.id
                     const bloqueosActivos = caso.bloqueos.filter(b => !b.resuelto)
@@ -699,7 +705,7 @@ export function HistoriaUsuarioDetail({
                             <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4 }}>
                               <p style={{ fontSize:11, fontFamily:"monospace", color:"var(--primary)", fontWeight:600 }}>{caso.id}</p>
                               <Badge variant="outline" className={`${aprobCfg.cls} text-[9px]`}>{aprobCfg.label}</Badge>
-                              <Badge variant="outline" className={`${tpColor} text-[9px]`}>{TIPO_PRUEBA_LABEL[caso.tipoPrueba]}</Badge>
+                              <Badge variant="outline" className={`${tpColor} text-[9px]`}>{getTipoPruebaLabel(caso.tipoPrueba, tiposPrueba)}</Badge>
                               <Badge variant="outline" className={`${compCfg.cls} text-[9px]`}>{compCfg.label}</Badge>
                               {caso.modificacionSolicitada && !caso.modificacionHabilitada && (
                                 <Badge variant="outline" className="bg-chart-3/20 text-chart-3 border-chart-3/30 text-[9px]">
@@ -1205,9 +1211,11 @@ interface CasoFormFieldsProps {
   horas: number; onHoras: (v: number) => void
   archivos: string; onArchivos: (v: string) => void
   complejidad: ComplejidadCaso; onComplejidad: (v: ComplejidadCaso) => void
+  tiposPrueba?: TipoPruebaDef[]
 }
 
-function CasoFormFields({ titulo, onTitulo, desc, onDesc, entorno, onEntorno, tipo, onTipo, horas, onHoras, archivos, onArchivos, complejidad, onComplejidad }: CasoFormFieldsProps) {
+function CasoFormFields({ titulo, onTitulo, desc, onDesc, entorno, onEntorno, tipo, onTipo, horas, onHoras, archivos, onArchivos, complejidad, onComplejidad, tiposPrueba }: CasoFormFieldsProps) {
+  const tiposPruebaOpts = tiposPrueba?.length ? tiposPrueba : TIPOS_PRUEBA_PREDETERMINADOS
   return (
     <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:8 }}>
       <div style={{ gridColumn:"1/3" }}>
@@ -1231,8 +1239,12 @@ function CasoFormFields({ titulo, onTitulo, desc, onDesc, entorno, onEntorno, ti
         <Select value={tipo} onValueChange={(v: TipoPrueba) => onTipo(v)}>
           <SelectTrigger style={{ height:30, fontSize:11 }}><SelectValue/></SelectTrigger>
           <SelectContent>
-            <SelectItem value="funcional">Funcional</SelectItem>
-            <SelectItem value="no_funcional">No Funcional</SelectItem>
+            {tipo && !tiposPruebaOpts.some(t => t.id === tipo) && (
+              <SelectItem value={tipo}>{tipo}</SelectItem>
+            )}
+            {tiposPruebaOpts.map(t => (
+              <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
