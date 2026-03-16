@@ -702,7 +702,7 @@ export function HistoriaUsuarioDetail({
                         <div style={{ display:"flex", alignItems:"center", gap:10, padding:"12px 14px", cursor:"pointer" }}
                           onClick={() => setExpandedCaso(isExpanded ? null : caso.id)} className="hover:bg-secondary/30">
                           <div style={{ flex:1, minWidth:0 }}>
-                            <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4 }}>
+                            <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4, flexWrap:"wrap" }}>
                               <p style={{ fontSize:11, fontFamily:"monospace", color:"var(--primary)", fontWeight:600 }}>{caso.id}</p>
                               <Badge variant="outline" className={`${aprobCfg.cls} text-[9px]`}>{aprobCfg.label}</Badge>
                               <Badge variant="outline" className={`${tpColor} text-[9px]`}>{getTipoPruebaLabel(caso.tipoPrueba, tiposPrueba)}</Badge>
@@ -729,13 +729,13 @@ export function HistoriaUsuarioDetail({
                             )}
                           </div>
                           <div style={{ display:"flex", alignItems:"center", gap:6, flexShrink:0 }}>
-                            <span style={{ fontSize:11, color:"var(--muted-foreground)" }}>{caso.horasEstimadas}h</span>
-                            <span style={{ fontSize:11, color:"var(--muted-foreground)" }}>{tareasCaso.length} tarea{tareasCaso.length!==1?"s":""}</span>
+                            <span className="hidden sm:inline" style={{ fontSize:11, color:"var(--muted-foreground)" }}>{caso.horasEstimadas}h</span>
+                            <span className="hidden sm:inline" style={{ fontSize:11, color:"var(--muted-foreground)" }}>{tareasCaso.length} tarea{tareasCaso.length!==1?"s":""}</span>
                             {caso.resultadosPorEtapa.map(r => {
                               const retests = (r.intentos?.length || 0)
                               const retestLabel = retests > 1 ? ` (${retests})` : ""
                               return (
-                                <Badge key={r.etapa} variant="outline" className={`text-[8px] ${
+                                <Badge key={r.etapa} variant="outline" className={`hidden sm:inline-flex text-[8px] ${
                                   r.resultado === "exitoso" ? "bg-chart-2/20 text-chart-2 border-chart-2/30" :
                                   r.resultado === "fallido" ? "bg-chart-4/20 text-chart-4 border-chart-4/30" :
                                   r.estado === "en_ejecucion" ? "bg-chart-1/20 text-chart-1 border-chart-1/30" :
