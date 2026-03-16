@@ -324,15 +324,15 @@ export function UserManagement() {
               </Badge>
             </div>
           </CardHeader>
-          <CardContent className="p-0">
-            <Table>
+          <CardContent className="p-0 overflow-x-auto">
+            <Table className="min-w-105">
               <TableHeader>
                 <TableRow className="border-border hover:bg-transparent">
                   <TableHead className="text-muted-foreground pl-4">Usuario</TableHead>
-                  <TableHead className="text-muted-foreground">Rol</TableHead>
+                  <TableHead className="text-muted-foreground hidden sm:table-cell">Rol</TableHead>
                   <TableHead className="text-muted-foreground">Último acceso</TableHead>
-                  <TableHead className="text-muted-foreground">Duración sesión</TableHead>
-                  <TableHead className="text-muted-foreground text-right pr-4">Sesiones</TableHead>
+                  <TableHead className="text-muted-foreground hidden sm:table-cell">Duración sesión</TableHead>
+                  <TableHead className="text-muted-foreground text-right pr-4 hidden sm:table-cell">Sesiones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -361,7 +361,7 @@ export function UserManagement() {
                           </span>
                         </div>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="hidden sm:table-cell">
                         <Badge variant="outline" className={`${rolDef?.cls ?? "bg-muted text-muted-foreground border-border"} text-[10px] px-2 py-0.5`}>
                           {rolDef?.label ?? u.rol}
                         </Badge>
@@ -369,10 +369,10 @@ export function UserManagement() {
                       <TableCell style={{ fontSize: 12, color: "var(--muted-foreground)" }}>
                         {ultimoAcceso}
                       </TableCell>
-                      <TableCell style={{ fontSize: 12, color: "var(--muted-foreground)" }}>
+                      <TableCell className="hidden sm:table-cell" style={{ fontSize: 12, color: "var(--muted-foreground)" }}>
                         {duracion}
                       </TableCell>
-                      <TableCell className="text-right pr-4" style={{ fontSize: 12, color: "var(--muted-foreground)" }}>
+                      <TableCell className="text-right pr-4 hidden sm:table-cell" style={{ fontSize: 12, color: "var(--muted-foreground)" }}>
                         {hist.length > 0 ? hist.length : "—"}
                       </TableCell>
                     </TableRow>
@@ -411,15 +411,15 @@ export function UserManagement() {
 
       {/* Tabla de usuarios */}
       <Card className="bg-card border-border">
-        <CardContent className="p-0">
-          <Table>
+        <CardContent className="p-0 overflow-x-auto">
+          <Table className="min-w-80">
             <TableHeader>
               <TableRow className="border-border hover:bg-transparent">
                 <TableHead className="text-muted-foreground pl-4">Usuario</TableHead>
                 <TableHead className="text-muted-foreground hidden md:table-cell">Email</TableHead>
                 <TableHead className="text-muted-foreground">Rol</TableHead>
-                <TableHead className="text-muted-foreground">Estado</TableHead>
-                <TableHead className="text-muted-foreground">Contraseña</TableHead>
+                <TableHead className="text-muted-foreground hidden sm:table-cell">Estado</TableHead>
+                <TableHead className="text-muted-foreground hidden sm:table-cell">Contraseña</TableHead>
                 <TableHead className="w-10"></TableHead>
               </TableRow>
             </TableHeader>
@@ -477,14 +477,14 @@ export function UserManagement() {
                             </span>
                           )}
                         </div>
-                        <p className="text-[11px] text-muted-foreground leading-tight line-clamp-2" title={rolDef?.description ?? ""}>
+                        <p className="text-[11px] text-muted-foreground leading-tight line-clamp-2 hidden sm:block" title={rolDef?.description ?? ""}>
                           {rolDef?.description ?? ""}
                         </p>
                       </div>
                     </TableCell>
 
                     {/* Estado activo/inactivo */}
-                    <TableCell>
+                    <TableCell className="hidden sm:table-cell">
                       {u.activo ? (
                         <div className="flex items-center gap-1.5 text-chart-2">
                           <CheckCircle2 className="h-4 w-4" />
@@ -499,7 +499,7 @@ export function UserManagement() {
                     </TableCell>
 
                     {/* Contraseña */}
-                    <TableCell>
+                    <TableCell className="hidden sm:table-cell">
                       {u.debeCambiarPassword ? (
                         <Badge variant="outline" className="bg-chart-3/15 text-chart-3 border-chart-3/30 text-[10px] px-2">
                           Pendiente cambio

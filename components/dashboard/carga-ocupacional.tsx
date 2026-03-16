@@ -68,7 +68,7 @@ function VistaPersonal({ p, historiasVistas }: { p: PersonaCarga; historiasVista
     <div style={{ display:"flex", flexDirection:"column", gap:16, maxWidth:720, margin:"0 auto" }}>
 
       {/* Indicadores principales */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12 }}>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {[
           { label:"HUs Asignadas",   value:p.husAsignadas,    sub:`${husActivas.length} en progreso`,    color:"var(--primary)",  icon:<User size={15}/> },
           { label:"Casos de Prueba", value:p.casosTotal,      sub:`${p.casosAprobados} aprobados`,       color:"var(--chart-1)",  icon:<CheckCircle size={15}/> },
@@ -138,7 +138,7 @@ function VistaPersonal({ p, historiasVistas }: { p: PersonaCarga; historiasVista
       </div>
 
       {/* Horas + próxima entrega */}
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div style={{ padding:"16px 18px", borderRadius:12, border:"1px solid var(--border)", background:"var(--card)" }}>
           <p style={{ fontSize:10, textTransform:"uppercase", letterSpacing:"0.08em", color:"var(--muted-foreground)", fontWeight:700, marginBottom:10 }}>Horas estimadas</p>
           <p style={{ fontSize:28, fontWeight:700, color:"var(--foreground)", lineHeight:1 }}>{p.horasTotales}<span style={{ fontSize:14, fontWeight:400, color:"var(--muted-foreground)" }}>h</span></p>
@@ -330,7 +330,7 @@ export function CargaOcupacional({ tareas, casos, historias, currentUserName, fi
       ) : (
         <>
           {/* Resumen ejecutivo */}
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12 }}>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
               { label:"Recursos",      value:personas.length,   sub:"personas asignadas",            icon:<User size={16}/>,          color:"var(--primary)" },
               { label:"Tareas Activas",value:totalActivas,      sub:"en progreso o pendientes",      icon:<Clock size={16}/>,         color:"var(--chart-1)" },

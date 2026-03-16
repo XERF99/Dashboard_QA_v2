@@ -66,6 +66,7 @@ export function Header({ busqueda, onBusquedaChange, notificaciones, onMarcarLei
   const [confirmLogoutOpen, setConfirmLogoutOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
   const [perfilOpen, setPerfilOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
 
   const noLeidas = notificaciones.filter(n => !n.leida).length
 
@@ -91,11 +92,36 @@ export function Header({ busqueda, onBusquedaChange, notificaciones, onMarcarLei
     return nombre.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)
   }
 
+  // Función de búsqueda compartida para reutilizar en móvil y desktop
+  const searchInput = (autoFocus?: boolean) => (
+    <div className="relative w-full max-w-md">
+      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+      <Input
+        placeholder="Buscar por código, título, responsable, caso..."
+        value={busqueda}
+        onChange={(e) => onBusquedaChange(e.target.value)}
+        autoFocus={autoFocus}
+        className={`pl-10 bg-secondary border-border ${busqueda ? "pr-8" : ""}`}
+      />
+      {busqueda && (
+        <button
+          onClick={() => onBusquedaChange("")}
+          title="Limpiar búsqueda"
+          style={{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", cursor:"pointer", display:"flex", color:"var(--muted-foreground)", padding:2 }}
+          className="hover:text-foreground transition-colors"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      )}
+    </div>
+  )
+
   return (
     <>
       <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60">
-        <div className="flex h-16 items-center justify-between px-6">
-          <div className="flex items-center gap-4">
+        <div className="flex h-16 items-center justify-between px-4 sm:px-6">
+          {/* Logo — se oculta si el search móvil está abierto */}
+          <div className={`flex items-center gap-4 ${searchOpen ? "hidden sm:flex" : "flex"}`}>
             <div className="flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
                 <span className="text-sm font-bold text-primary-foreground">QA</span>
@@ -104,29 +130,29 @@ export function Header({ busqueda, onBusquedaChange, notificaciones, onMarcarLei
             </div>
           </div>
 
-          <div className="flex flex-1 items-center justify-center px-8">
-            <div className="relative w-full max-w-md">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por código, título, responsable, caso..."
-                value={busqueda}
-                onChange={(e) => onBusquedaChange(e.target.value)}
-                className={`pl-10 bg-secondary border-border ${busqueda ? "pr-8" : ""}`}
-              />
-              {busqueda && (
-                <button
-                  onClick={() => onBusquedaChange("")}
-                  title="Limpiar búsqueda"
-                  style={{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", cursor:"pointer", display:"flex", color:"var(--muted-foreground)", padding:2 }}
-                  className="hover:text-foreground transition-colors"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              )}
+          {/* Search expandido en móvil */}
+          {searchOpen && (
+            <div className="flex sm:hidden flex-1 mx-2">
+              {searchInput(true)}
             </div>
+          )}
+
+          {/* Search desktop — siempre visible en sm+ */}
+          <div className="hidden sm:flex flex-1 items-center justify-center px-8">
+            {searchInput()}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2">
+            {/* Botón search móvil */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="sm:hidden text-muted-foreground hover:text-foreground"
+              onClick={() => { setSearchOpen(v => !v); if (searchOpen) onBusquedaChange("") }}
+            >
+              {searchOpen ? <X className="h-5 w-5" /> : <Search className="h-5 w-5" />}
+            </Button>
+
             {/* ── Campana de notificaciones ── */}
             <Popover open={notifOpen} onOpenChange={setNotifOpen}>
               <PopoverTrigger asChild>
@@ -146,7 +172,7 @@ export function Header({ busqueda, onBusquedaChange, notificaciones, onMarcarLei
                   )}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent align="end" className="p-0 w-90" style={{ maxHeight:480, display:"flex", flexDirection:"column" }}>
+              <PopoverContent align="end" className="p-0 w-[calc(100vw-2rem)] sm:w-90" style={{ maxHeight:480, display:"flex", flexDirection:"column" }}>
                 {/* Cabecera */}
                 <div style={{ padding:"14px 16px 10px", borderBottom:"1px solid var(--border)", display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0 }}>
                   <div style={{ display:"flex", alignItems:"center", gap:8 }}>

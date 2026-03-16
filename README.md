@@ -1,4 +1,4 @@
-# QAControl — Dashboard de Gestión de Pruebas
+# QAControl — Dashboard de Gestión de Pruebas · v2.2
 
 Sistema integral de gestión de calidad para equipos QA. Permite administrar Historias de Usuario, casos de prueba, flujos de aprobación, bloqueos y carga ocupacional del equipo, con control de acceso basado en roles.
 
@@ -24,6 +24,7 @@ Sistema integral de gestión de calidad para equipos QA. Permite administrar His
 
 ### Inicio (Home Dashboard)
 - KPIs generales: total de HUs, en progreso, exitosas, fallidas y canceladas
+- **Panel de Riesgos** automático: HUs vencidas, por vencer en 3/7 días, bloqueadas y casos sin ejecutar *(nuevo en v2.2)*
 - Distribución de HUs por estado con barra de progreso visual
 - Top responsables por carga de trabajo
 - Feed de actividad reciente con íconos por tipo de evento
@@ -34,9 +35,12 @@ Sistema integral de gestión de calidad para equipos QA. Permite administrar His
 ### Historias de Usuario (HU)
 - Tarjetas de estadísticas con porcentajes de progreso
 - Tabla completa con filtros por estado, prioridad, tipo de aplicación, ambiente y responsable
+- **Vista por Sprint**: tabs de selección de sprint con cards de progreso y distribución de estados *(nuevo en v2.2)*
+- **Importación CSV**: carga de HUs desde archivo CSV compatible con la exportación del sistema *(nuevo en v2.2)*
 - **Acciones masivas**: cambio de estado, reasignación de responsable y eliminación en lote
 - Búsqueda global que abarca título, código, responsable, descripción y casos de prueba
 - Creación y edición con formulario completo: prioridad, tipo de aplicación, ambiente, tipo de prueba, fecha estimada, story points, descripción
+- **Plantillas de HU**: autocompletado de campos técnicos al crear una nueva HU con 5 plantillas predefinidas *(nuevo en v2.2)*
 
 ### Detalle de Historia de Usuario
 - Seguimiento de etapas de ejecución configurables por tipo de aplicación
@@ -92,6 +96,30 @@ Sistema integral de gestión de calidad para equipos QA. Permite administrar His
 - **Ambientes**: entornos de prueba disponibles (Dev, QA, Staging, Prod, etc.)
 - **Tipos de Prueba**: categorías de prueba disponibles (Funcional, Regresión, Smoke, etc.)
 - **Etapas**: configuración de las etapas de ejecución por tipo de aplicación
+
+---
+
+## Changelog
+
+### v2.2
+- **Panel de Riesgos** en el tab Inicio: detecta automáticamente HUs vencidas, por vencer, bloqueadas y casos sin ejecutar. Cada alerta es clickeable para navegar a la HU afectada.
+- **Vista por Sprint** en Historias: barra de tabs por sprint con card de resumen (progreso %, distribución de estados, story points) que aparece al asignar el campo sprint a las HUs.
+- **Importación CSV**: modal de 3 pasos (cargar → preview → confirmar) para crear HUs masivamente desde archivos CSV. Compatible con el formato de exportación del propio sistema. Detecta y omite códigos duplicados.
+- **Plantillas de HU**: botón "Usar plantilla" en el formulario de nueva HU con 5 plantillas predefinidas (Despliegue, Rollback, Infraestructura, Base de Datos, Proceso Batch) que autocompletan tipo, prioridad, puntos, ambiente y criterios de aceptación.
+- **Diseño responsive completo**: todos los grids, tablas y paneles se adaptan correctamente a móvil, tablet y escritorio.
+
+### v2.1
+- Configuración dinámica de etapas por tipo de aplicación.
+- Gestión de equipos asignados a Admin y QA Lead.
+- Selección múltiple de HUs con acciones masivas.
+- Exportación PDF y CSV de HUs y resultados de prueba.
+- Vista kanban de Historias.
+
+### v2.0
+- Reescritura completa con Next.js App Router + React 19.
+- Sistema de roles con control de acceso granular.
+- Notificaciones internas entre roles.
+- Persistencia completa en localStorage.
 
 ---
 
@@ -189,9 +217,12 @@ dashboard_v22/
 │   │   └── login-screen.tsx  # Pantalla de inicio de sesión
 │   ├── dashboard/
 │   │   ├── home-dashboard.tsx          # Vista de inicio con KPIs y calendario
-│   │   ├── historias-table.tsx         # Tabla de HUs con filtros y acciones masivas
+│   │   ├── panel-riesgos.tsx           # Panel de alertas automáticas de riesgo ← v2.2
+│   │   ├── historias-table.tsx         # Tabla de HUs con filtros, sprints y acciones masivas
+│   │   ├── csv-import-modal.tsx        # Modal de importación desde CSV          ← v2.2
 │   │   ├── historia-usuario-detail.tsx # Modal detalle de HU con casos y tareas
 │   │   ├── hu-form.tsx                 # Formulario de creación/edición de HU
+│   │   ├── hu-templates.tsx            # Plantillas predefinidas para nuevas HUs ← v2.2
 │   │   ├── hu-stats-cards.tsx          # Tarjetas de estadísticas de HUs
 │   │   ├── casos-table.tsx             # Vista global de casos de prueba
 │   │   ├── analytics-kpis.tsx          # KPIs y gráficos de analytics

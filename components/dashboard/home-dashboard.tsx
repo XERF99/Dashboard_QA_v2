@@ -11,6 +11,7 @@ import {
   PRIORIDAD_CFG,
   type HistoriaUsuario, type CasoPrueba, type Tarea,
 } from "@/lib/types"
+import { PanelRiesgos } from "./panel-riesgos"
 
 interface Props {
   historias: HistoriaUsuario[]
@@ -303,7 +304,7 @@ export function HomeDashboard({ historias, casos, tareas, onVerHU, onIrATab }: P
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
       {/* ── Fila 1: KPI Strip (6 tarjetas) ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 10 }}>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
 
         <div style={{ ...CARD, padding: "14px 16px" }}>
           <p style={LABEL_UPPER}>HUs Total</p>
@@ -348,8 +349,11 @@ export function HomeDashboard({ historias, casos, tareas, onVerHU, onIrATab }: P
         </div>
       </div>
 
+      {/* ── Panel de Riesgos ── */}
+      <PanelRiesgos historias={historias} casos={casos} onVerHU={onVerHU} onIrATab={onIrATab} />
+
       {/* ── Fila 2: Distribución + Alertas ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: 14 }}>
+      <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-3.5">
 
         {/* Distribución por estado */}
         <div style={{ ...CARD, padding: "18px 20px" }}>
@@ -476,7 +480,7 @@ export function HomeDashboard({ historias, casos, tareas, onVerHU, onIrATab }: P
       </div>
 
       {/* ── Fila 3: Actividad reciente + Prioridad + Responsables ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: 14 }}>
+      <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-3.5">
 
         {/* Actividad reciente */}
         <div style={{ ...CARD, padding: "18px 20px" }}>
@@ -585,7 +589,7 @@ export function HomeDashboard({ historias, casos, tareas, onVerHU, onIrATab }: P
       </div>
 
       {/* ── Fila 4: Calendario + Entregas del mes ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 14 }}>
+      <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-3.5">
 
         <MiniCalendario historias={historias} onVerHU={onVerHU} />
 

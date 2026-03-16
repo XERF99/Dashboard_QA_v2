@@ -317,7 +317,8 @@ export function AuditoriaPanel({ historias, onVerHU }: Props) {
           <p style={{ fontSize:13 }}>No hay eventos que coincidan con los filtros</p>
         </div>
       ) : (
-        <div style={{ display:"flex", flexDirection:"column", gap:0, border:"1px solid var(--border)", borderRadius:10, overflow:"hidden" }}>
+        <div className="overflow-x-auto">
+        <div style={{ display:"flex", flexDirection:"column", gap:0, border:"1px solid var(--border)", borderRadius:10, overflow:"hidden", minWidth: 490 }}>
           {/* Cabecera de tabla */}
           <div style={{
             display:"grid", gridTemplateColumns:"130px 1fr 120px 140px",
@@ -395,6 +396,7 @@ export function AuditoriaPanel({ historias, onVerHU }: Props) {
               </div>
             )
           })}
+        </div>
         </div>
       )}
 

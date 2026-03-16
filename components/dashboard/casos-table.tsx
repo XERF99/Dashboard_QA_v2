@@ -307,6 +307,8 @@ export function CasosTable({ casos, historias, onVerHU, tiposPrueba }: Props) {
       )}
 
       {/* ── Cabecera de columnas ── */}
+      <div className="overflow-x-auto -mx-1 px-1">
+      <div style={{ minWidth: 700 }}>
       {casosOrdenados.length > 0 && (
         <div style={{
           display:"grid",
@@ -476,6 +478,8 @@ export function CasosTable({ casos, historias, onVerHU, tiposPrueba }: Props) {
         )
       })}
 
+      </div>
+      </div>
       <Paginador pagina={pagina} total={casosOrdenados.length} pageSize={PAGE_SIZE} onCambiar={setPagina} />
 
       {/* ── Nota al pie ── */}

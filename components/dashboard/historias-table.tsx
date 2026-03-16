@@ -4,7 +4,7 @@ import { useState, useMemo, useRef, useEffect } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Eye, Edit, Trash2, Plus, BookOpen, AlertTriangle, Layers, Clock, Filter, X, ArrowUpDown, ArrowUp, ArrowDown, LayoutList, LayoutGrid, FileSpreadsheet, ChevronDown } from "lucide-react"
+import { Eye, Edit, Trash2, Plus, BookOpen, AlertTriangle, Layers, Clock, Filter, X, ArrowUpDown, ArrowUp, ArrowDown, LayoutList, LayoutGrid, FileSpreadsheet, ChevronDown, Upload, CalendarDays } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import {
   ESTADO_HU_CFG, PRIORIDAD_CFG,
@@ -39,6 +39,7 @@ interface Props {
   onBulkEliminar?: (ids: string[]) => void
   onBulkCambiarEstado?: (ids: string[], estado: EstadoHU) => void
   onBulkCambiarResponsable?: (ids: string[], responsable: string) => void
+  onImportCSV?: () => void
 }
 
 // ── Urgencia: días hasta fechaFinEstimada ─────────────────
@@ -145,7 +146,7 @@ function Paginador({ pagina, total, pageSize, onCambiar }: {
   )
 }
 
-export function HistoriasTable({ historias, casos, onVerDetalle, onEditar, onEliminar, onNueva, canEdit=true, configEtapas = ETAPAS_PREDETERMINADAS, tiposAplicacion, ambientes, tiposPrueba, qaUsers, onBulkEliminar, onBulkCambiarEstado, onBulkCambiarResponsable }: Props) {
+export function HistoriasTable({ historias, casos, onVerDetalle, onEditar, onEliminar, onNueva, canEdit=true, configEtapas = ETAPAS_PREDETERMINADAS, tiposAplicacion, ambientes, tiposPrueba, qaUsers, onBulkEliminar, onBulkCambiarEstado, onBulkCambiarResponsable, onImportCSV }: Props) {
   // ── Vista activa ──
   const [vistaKanban, setVistaKanban] = useState(false)
 
@@ -412,13 +413,120 @@ export function HistoriasTable({ historias, casos, onVerDetalle, onEditar, onEli
             )}
           </div>
 
+          {canEdit && onImportCSV && (
+            <button
+              onClick={onImportCSV}
+              title="Importar HUs desde CSV"
+              style={{
+                display:"inline-flex", alignItems:"center", gap:5,
+                padding:"5px 10px", borderRadius:7, fontSize:11, fontWeight:600, cursor:"pointer",
+                border:"1px solid var(--border)", background:"var(--secondary)", color:"var(--foreground)",
+              }}
+            >
+              <Upload size={13}/> <span className="hidden sm:inline">Importar</span>
+            </button>
+          )}
           {canEdit && (
             <Button onClick={onNueva} size="sm">
-              <Plus size={13} className="mr-1.5" /> Nueva HU
+              <Plus size={13} className="mr-1.5" /> <span className="hidden sm:inline">Nueva HU</span>
             </Button>
           )}
         </div>
       </div>
+
+      {/* ── Selector de Sprint ── */}
+      {sprints.length > 0 && (
+        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+          {/* Tabs de sprint */}
+          <div className="overflow-x-auto -mx-1 px-1 pb-0.5 no-scrollbar">
+            <div style={{ display:"flex", gap:5 }}>
+              <button
+                onClick={() => setFiltroSprint("todos")}
+                style={{
+                  display:"inline-flex", alignItems:"center", gap:5,
+                  padding:"5px 12px", borderRadius:7, fontSize:11, fontWeight:600, cursor:"pointer",
+                  border:`1px solid ${filtroSprint==="todos" ? "var(--primary)" : "var(--border)"}`,
+                  background: filtroSprint==="todos" ? "var(--primary)" : "var(--secondary)",
+                  color: filtroSprint==="todos" ? "var(--primary-foreground)" : "var(--muted-foreground)",
+                  whiteSpace:"nowrap",
+                }}
+              >
+                <CalendarDays size={11}/> Todos
+              </button>
+              {sprints.map(sp => {
+                const activo = filtroSprint === sp
+                const husEnSprint = historias.filter(h => h.sprint === sp)
+                const completadas = husEnSprint.filter(h => h.estado === "exitosa").length
+                return (
+                  <button
+                    key={sp}
+                    onClick={() => setFiltroSprint(activo ? "todos" : sp)}
+                    style={{
+                      display:"inline-flex", alignItems:"center", gap:5,
+                      padding:"5px 12px", borderRadius:7, fontSize:11, fontWeight:600, cursor:"pointer",
+                      border:`1px solid ${activo ? "var(--primary)" : "var(--border)"}`,
+                      background: activo ? "var(--primary)" : "var(--secondary)",
+                      color: activo ? "var(--primary-foreground)" : "var(--muted-foreground)",
+                      whiteSpace:"nowrap",
+                    }}
+                  >
+                    {sp}
+                    <span style={{
+                      fontSize:9, fontWeight:700, padding:"1px 5px", borderRadius:5,
+                      background: activo ? "rgba(255,255,255,0.25)" : "color-mix(in oklch, var(--primary) 15%, transparent)",
+                      color: activo ? "var(--primary-foreground)" : "var(--primary)",
+                    }}>
+                      {completadas}/{husEnSprint.length}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Cards de resumen del sprint activo */}
+          {filtroSprint !== "todos" && filtroSprint !== "__sin_sprint__" && (() => {
+            const husEnSprint = historias.filter(h => h.sprint === filtroSprint)
+            const sinIniciar  = husEnSprint.filter(h => h.estado === "sin_iniciar").length
+            const enProgreso  = husEnSprint.filter(h => h.estado === "en_progreso").length
+            const exitosas    = husEnSprint.filter(h => h.estado === "exitosa").length
+            const fallidas    = husEnSprint.filter(h => h.estado === "fallida" || h.estado === "cancelada").length
+            const pct         = husEnSprint.length > 0 ? Math.round((exitosas / husEnSprint.length) * 100) : 0
+            const puntosTotales   = husEnSprint.reduce((s,h) => s + h.puntos, 0)
+            const puntosEjecutados = husEnSprint.filter(h => h.estado === "exitosa").reduce((s,h) => s + h.puntos, 0)
+
+            return (
+              <div style={{ padding:"14px 16px", borderRadius:10, border:"1px solid var(--border)", background:"var(--card)" }}>
+                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
+                  <p style={{ fontSize:12, fontWeight:700, color:"var(--foreground)" }}>{filtroSprint}</p>
+                  <span style={{ fontSize:11, color:"var(--muted-foreground)" }}>
+                    Progreso: <strong style={{ color:"var(--primary)" }}>{pct}%</strong>
+                    {" · "}{puntosTotales} pts ({puntosEjecutados} completados)
+                  </span>
+                </div>
+                {/* Barra de progreso */}
+                <div style={{ height:5, borderRadius:4, background:"var(--secondary)", overflow:"hidden", marginBottom:12 }}>
+                  <div style={{ width:`${pct}%`, height:"100%", background:"var(--chart-2)", borderRadius:4 }}/>
+                </div>
+                {/* Distribución de estados */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {[
+                    { label:"Sin iniciar",  value:sinIniciar, color:"var(--muted-foreground)" },
+                    { label:"En progreso",  value:enProgreso, color:"var(--chart-1)" },
+                    { label:"Exitosas",     value:exitosas,   color:"var(--chart-2)" },
+                    { label:"Fallidas/Canc",value:fallidas,   color:"var(--chart-4)" },
+                  ].map(s => (
+                    <div key={s.label} style={{ textAlign:"center", padding:"8px 4px", borderRadius:7, background:"var(--background)" }}>
+                      <p style={{ fontSize:20, fontWeight:800, color:s.value > 0 ? s.color : "var(--muted-foreground)", lineHeight:1 }}>{s.value}</p>
+                      <p style={{ fontSize:9, textTransform:"uppercase", letterSpacing:"0.06em", color:"var(--muted-foreground)", marginTop:3 }}>{s.label}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })()}
+        </div>
+      )}
 
       {/* ── Barra de acciones masivas ── */}
       {selectedIds.size > 0 && !vistaKanban && (
@@ -595,7 +703,8 @@ export function HistoriasTable({ historias, casos, onVerDetalle, onEditar, onEli
 
       {/* ── TABLERO KANBAN ── */}
       {vistaKanban && (
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10, alignItems:"start" }}>
+        <div className="overflow-x-auto -mx-1 px-1">
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10, alignItems:"start", minWidth: 700 }}>
           {KANBAN_COLUMNAS.map(col => {
             const husCol = historiasFiltradas
               .filter(hu => (col.estados as readonly string[]).includes(hu.estado))
@@ -721,12 +830,15 @@ export function HistoriasTable({ historias, casos, onVerDetalle, onEditar, onEli
             )
           })}
         </div>
+        </div>
       )}
 
       {/* ── VISTA LISTA ── */}
       {!vistaKanban && <>
 
       {/* ── Cabecera de ordenamiento ── */}
+      <div className="overflow-x-auto -mx-1 px-1">
+      <div>
       {historiasOrdenadas.length > 0 && (
         <div style={{
           display:"flex", alignItems:"center", gap:12,
@@ -748,16 +860,16 @@ export function HistoriasTable({ historias, casos, onVerDetalle, onEditar, onEli
           <button onClick={() => toggleSort("titulo")} style={{ display:"inline-flex", alignItems:"center", gap:3, background:"none", border:"none", cursor:"pointer", fontSize:10, fontWeight:700, color: sortCampo==="titulo" ? "var(--primary)" : "var(--muted-foreground)", textTransform:"uppercase", letterSpacing:"0.06em", flex:1, padding:0 }}>
             Título <SortIcon campo="titulo"/>
           </button>
-          <button onClick={() => toggleSort("prioridad")} style={{ display:"inline-flex", alignItems:"center", gap:3, background:"none", border:"none", cursor:"pointer", fontSize:10, fontWeight:700, color: sortCampo==="prioridad" ? "var(--primary)" : "var(--muted-foreground)", textTransform:"uppercase", letterSpacing:"0.06em", flexShrink:0, padding:0 }}>
+          <button onClick={() => toggleSort("prioridad")} className="hidden sm:inline-flex items-center gap-0.5 shrink-0" style={{ background:"none", border:"none", cursor:"pointer", fontSize:10, fontWeight:700, color: sortCampo==="prioridad" ? "var(--primary)" : "var(--muted-foreground)", textTransform:"uppercase", letterSpacing:"0.06em", padding:0 }}>
             Prioridad <SortIcon campo="prioridad"/>
           </button>
-          <button onClick={() => toggleSort("estado")} style={{ display:"inline-flex", alignItems:"center", gap:3, background:"none", border:"none", cursor:"pointer", fontSize:10, fontWeight:700, color: sortCampo==="estado" ? "var(--primary)" : "var(--muted-foreground)", textTransform:"uppercase", letterSpacing:"0.06em", flexShrink:0, padding:0 }}>
+          <button onClick={() => toggleSort("estado")} className="hidden sm:inline-flex items-center gap-0.5 shrink-0" style={{ background:"none", border:"none", cursor:"pointer", fontSize:10, fontWeight:700, color: sortCampo==="estado" ? "var(--primary)" : "var(--muted-foreground)", textTransform:"uppercase", letterSpacing:"0.06em", padding:0 }}>
             Estado <SortIcon campo="estado"/>
           </button>
-          <button onClick={() => toggleSort("fecha")} style={{ display:"inline-flex", alignItems:"center", gap:3, background:"none", border:"none", cursor:"pointer", fontSize:10, fontWeight:700, color: sortCampo==="fecha" ? "var(--primary)" : "var(--muted-foreground)", textTransform:"uppercase", letterSpacing:"0.06em", flexShrink:0, padding:0 }}>
+          <button onClick={() => toggleSort("fecha")} className="hidden sm:inline-flex items-center gap-0.5 shrink-0" style={{ background:"none", border:"none", cursor:"pointer", fontSize:10, fontWeight:700, color: sortCampo==="fecha" ? "var(--primary)" : "var(--muted-foreground)", textTransform:"uppercase", letterSpacing:"0.06em", padding:0 }}>
             Fecha <SortIcon campo="fecha"/>
           </button>
-          <button onClick={() => toggleSort("responsable")} style={{ display:"inline-flex", alignItems:"center", gap:3, background:"none", border:"none", cursor:"pointer", fontSize:10, fontWeight:700, color: sortCampo==="responsable" ? "var(--primary)" : "var(--muted-foreground)", textTransform:"uppercase", letterSpacing:"0.06em", flexShrink:0, minWidth:90, padding:0 }}>
+          <button onClick={() => toggleSort("responsable")} className="hidden sm:inline-flex items-center gap-0.5 shrink-0" style={{ background:"none", border:"none", cursor:"pointer", fontSize:10, fontWeight:700, color: sortCampo==="responsable" ? "var(--primary)" : "var(--muted-foreground)", textTransform:"uppercase", letterSpacing:"0.06em", minWidth:90, padding:0 }}>
             Responsable <SortIcon campo="responsable"/>
           </button>
           {/* Espacio para acciones */}
@@ -852,7 +964,7 @@ export function HistoriasTable({ historias, casos, onVerDetalle, onEditar, onEli
             </div>
 
             {/* Meta: casos, etapa, prioridad, estado + progreso */}
-            <div style={{ display:"flex", alignItems:"center", gap:6, flexShrink:0, flexWrap:"wrap" }}>
+            <div className="hidden sm:flex items-center flex-wrap shrink-0" style={{ gap:6 }}>
               <span style={{ display:"flex", alignItems:"center", gap:3, fontSize:11, color:"var(--muted-foreground)" }}>
                 <Layers size={11} /> {casosHU.length} caso{casosHU.length!==1?"s":""}
               </span>
@@ -868,9 +980,11 @@ export function HistoriasTable({ historias, casos, onVerDetalle, onEditar, onEli
             </div>
 
             {/* Responsable */}
-            <p style={{ fontSize:12, color:"var(--muted-foreground)", flexShrink:0, minWidth:90, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-              {hu.responsable}
-            </p>
+            <div className="hidden sm:block shrink-0" style={{ minWidth:90, overflow:"hidden" }}>
+              <p style={{ fontSize:12, color:"var(--muted-foreground)", textOverflow:"ellipsis", whiteSpace:"nowrap", overflow:"hidden" }}>
+                {hu.responsable}
+              </p>
+            </div>
 
             {/* Acciones */}
             <div style={{ display:"flex", gap:3, flexShrink:0 }}>
@@ -891,6 +1005,8 @@ export function HistoriasTable({ historias, casos, onVerDetalle, onEditar, onEli
         )
       })}
 
+      </div>
+      </div>
       <Paginador pagina={pagina} total={historiasOrdenadas.length} pageSize={PAGE_SIZE} onCambiar={setPagina} />
       </>}
     </div>

@@ -6,6 +6,7 @@ import { Header } from "@/components/dashboard/header"
 import { HistoriasTable } from "@/components/dashboard/historias-table"
 import { HistoriaUsuarioDetail } from "@/components/dashboard/historia-usuario-detail"
 import { HUForm } from "@/components/dashboard/hu-form"
+import { CSVImportModal } from "@/components/dashboard/csv-import-modal"
 import { CargaOcupacional } from "@/components/dashboard/carga-ocupacional"
 import { AnalyticsKPIs } from "@/components/dashboard/analytics-kpis"
 import { UserManagement } from "@/components/dashboard/user-management"
@@ -166,6 +167,7 @@ export default function DashboardPage() {
   const [huSeleccionada, setHuSeleccionada] = useState<HistoriaUsuario | null>(null)
   const [huEditar, setHuEditar]             = useState<HistoriaUsuario | null>(null)
   const [deleteModal, setDeleteModal]       = useState<{ open:boolean; titulo:string; subtitulo?:string; fn:()=>void }>({ open:false, titulo:"", fn:()=>{} })
+  const [importModalOpen, setImportModalOpen] = useState(false)
 
   const [toasts, setToasts] = useState<ToastItem[]>([])
   const addToast = (t: Omit<ToastItem,"id">) => {
@@ -280,6 +282,14 @@ export default function DashboardPage() {
         addToast({ type:"error", title:`${ids.length} historia${ids.length!==1?"s":""} eliminada${ids.length!==1?"s":""}` })
       }
     })
+  }
+
+  // ── Importar HUs desde CSV ──
+  const handleImportarHUs = (nuevasHUs: HistoriaUsuario[]) => {
+    const codigosExistentes = new Set(historias.map(h => h.codigo))
+    const sinDuplicados = nuevasHUs.filter(h => !codigosExistentes.has(h.codigo))
+    setHistorias(prev => [...prev, ...sinDuplicados])
+    addToast({ type:"success", title:`${sinDuplicados.length} HU${sinDuplicados.length!==1?"s":""} importadas`, desc:"Desde archivo CSV" })
   }
 
   // ── QA inicia HU ──
@@ -672,42 +682,45 @@ export default function DashboardPage() {
         onMarcarTodasLeidas={handleMarcarTodasLeidas}
       />
 
-      <main className="container mx-auto px-6 py-6 space-y-6" style={{ minHeight:"calc(100vh - 64px - 60px)" }}>
+      <main className="container mx-auto px-3 sm:px-6 py-4 sm:py-6 space-y-4 sm:space-y-6" style={{ minHeight:"calc(100vh - 64px - 60px)" }}>
         <Tabs value={tabActiva} onValueChange={setTabActiva} className="w-full">
-          <TabsList className="bg-secondary" style={{ display:"grid", gridTemplateColumns:`repeat(${tabCount},1fr)`, width:"100%", maxWidth: canManageUsers ? 1150 : 1050 }}>
-            <TabsTrigger value="inicio" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-              <Home className="h-4 w-4"/> Inicio
-            </TabsTrigger>
-            <TabsTrigger value="historias" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-              <BookOpen className="h-4 w-4"/> Historias
-            </TabsTrigger>
-            <TabsTrigger value="analytics" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-              <BarChart2 className="h-4 w-4"/> Analytics
-            </TabsTrigger>
-            <TabsTrigger value="carga" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-              <Users className="h-4 w-4"/> Carga
-            </TabsTrigger>
-            <TabsTrigger value="bloqueos" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground relative">
-              <ShieldAlert className="h-4 w-4"/> Bloqueos
-              {totalBloqueoActivos > 0 && (
-                <span style={{
-                  display: "inline-flex", alignItems: "center", justifyContent: "center",
-                  minWidth: 16, height: 16, borderRadius: 999, fontSize: 9, fontWeight: 700,
-                  background: "var(--chart-4)", color: "#fff", padding: "0 4px",
-                }}>
-                  {totalBloqueoActivos}
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="casos" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-              <ClipboardList className="h-4 w-4"/> Casos
-            </TabsTrigger>
-            {canManageUsers && (
-              <TabsTrigger value="admin" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                <Settings className="h-4 w-4"/> Admin
+          {/* Contenedor scrollable en móvil */}
+          <div className="overflow-x-auto -mx-3 px-3 sm:mx-0 sm:px-0 pb-0.5 no-scrollbar">
+            <TabsList className="bg-secondary" style={{ display:"grid", gridTemplateColumns:`repeat(${tabCount},1fr)`, width:"100%", maxWidth: canManageUsers ? 1150 : 1050 }}>
+              <TabsTrigger value="inicio" className="flex items-center gap-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                <Home className="h-4 w-4 shrink-0"/> <span className="hidden sm:inline">Inicio</span>
               </TabsTrigger>
-            )}
-          </TabsList>
+              <TabsTrigger value="historias" className="flex items-center gap-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                <BookOpen className="h-4 w-4 shrink-0"/> <span className="hidden sm:inline">Historias</span>
+              </TabsTrigger>
+              <TabsTrigger value="analytics" className="flex items-center gap-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                <BarChart2 className="h-4 w-4 shrink-0"/> <span className="hidden sm:inline">Analytics</span>
+              </TabsTrigger>
+              <TabsTrigger value="carga" className="flex items-center gap-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                <Users className="h-4 w-4 shrink-0"/> <span className="hidden sm:inline">Carga</span>
+              </TabsTrigger>
+              <TabsTrigger value="bloqueos" className="flex items-center gap-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground relative">
+                <ShieldAlert className="h-4 w-4 shrink-0"/> <span className="hidden sm:inline">Bloqueos</span>
+                {totalBloqueoActivos > 0 && (
+                  <span style={{
+                    display: "inline-flex", alignItems: "center", justifyContent: "center",
+                    minWidth: 16, height: 16, borderRadius: 999, fontSize: 9, fontWeight: 700,
+                    background: "var(--chart-4)", color: "#fff", padding: "0 4px",
+                  }}>
+                    {totalBloqueoActivos}
+                  </span>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="casos" className="flex items-center gap-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                <ClipboardList className="h-4 w-4 shrink-0"/> <span className="hidden sm:inline">Casos</span>
+              </TabsTrigger>
+              {canManageUsers && (
+                <TabsTrigger value="admin" className="flex items-center gap-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                  <Settings className="h-4 w-4 shrink-0"/> <span className="hidden sm:inline">Admin</span>
+                </TabsTrigger>
+              )}
+            </TabsList>
+          </div>
 
           <TabsContent value="inicio" className="mt-6">
             <HomeDashboard
@@ -737,6 +750,7 @@ export default function DashboardPage() {
               onBulkCambiarEstado={handleBulkCambiarEstado}
               onBulkCambiarResponsable={handleBulkCambiarResponsable}
               onBulkEliminar={handleBulkEliminar}
+              onImportCSV={canCreateHU ? () => setImportModalOpen(true) : undefined}
             />
           </TabsContent>
 
@@ -775,11 +789,11 @@ export default function DashboardPage() {
           </TabsContent>
 
           {canManageUsers && (
-            <TabsContent value="admin" className="mt-6">
-              <div style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
+            <TabsContent value="admin" className="mt-4 sm:mt-6">
+              <div className="flex flex-col sm:flex-row gap-4 sm:gap-5 items-start">
 
                 {/* ── Sidebar Admin ── */}
-                <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 190, flexShrink: 0 }}>
+                <div className="flex flex-row flex-wrap sm:flex-col gap-1 w-full sm:w-auto sm:min-w-47.5 shrink-0">
 
                   {/* Secciones principales */}
                   {(
@@ -801,7 +815,7 @@ export default function DashboardPage() {
                           border: `1px solid ${active ? "color-mix(in oklch, var(--primary) 35%, transparent)" : "transparent"}`,
                           background: active ? "color-mix(in oklch, var(--primary) 10%, transparent)" : "transparent",
                           color: active ? "var(--primary)" : "var(--muted-foreground)",
-                          cursor: "pointer", textAlign: "left", width: "100%",
+                          cursor: "pointer", textAlign: "left",
                           transition: "all 0.15s",
                         }}
                         className={active ? "" : "hover:bg-secondary/60 hover:text-foreground"}
@@ -814,12 +828,11 @@ export default function DashboardPage() {
 
                   {/* Sub-items de Configuración */}
                   {adminSeccion === "configuracion" && (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 4, paddingLeft: 10 }}>
-                      <div style={{ height: 1, background: "var(--border)", marginBottom: 4 }} />
+                    <div className="flex flex-row flex-wrap sm:flex-col gap-1 w-full sm:mt-1 sm:pl-2.5 mt-1 pt-1 border-t border-border sm:border-t-0 sm:pt-0">
                       {(
                         [
                           { id: "roles",        label: "Roles",               icon: <UserCog size={13} /> },
-                          { id: "tipos",        label: "Tipos de Aplicación",  icon: <Layers size={13} /> },
+                          { id: "tipos",        label: "Tipos de Aplic.",      icon: <Layers size={13} /> },
                           { id: "aplicaciones", label: "Aplicaciones",         icon: <Monitor size={13} /> },
                           { id: "ambientes",    label: "Ambientes",            icon: <Globe size={13} /> },
                           { id: "tipos_prueba", label: "Tipos de Prueba",      icon: <FlaskConical size={13} /> },
@@ -838,7 +851,7 @@ export default function DashboardPage() {
                               border: `1px solid ${active ? "color-mix(in oklch, var(--primary) 35%, transparent)" : "transparent"}`,
                               background: active ? "color-mix(in oklch, var(--primary) 10%, transparent)" : "transparent",
                               color: active ? "var(--primary)" : "var(--muted-foreground)",
-                              cursor: "pointer", textAlign: "left", width: "100%",
+                              cursor: "pointer", textAlign: "left",
                               transition: "all 0.15s",
                             }}
                             className={active ? "" : "hover:bg-secondary/60 hover:text-foreground"}
@@ -852,11 +865,13 @@ export default function DashboardPage() {
                   )}
                 </div>
 
-                {/* Separador */}
-                <div style={{ width: 1, background: "var(--border)", alignSelf: "stretch", flexShrink: 0 }} />
+                {/* Separador — solo visible en desktop */}
+                <div className="hidden sm:block w-px self-stretch shrink-0" style={{ background: "var(--border)" }} />
+                {/* Separador horizontal — solo en móvil */}
+                <div className="sm:hidden h-px w-full" style={{ background: "var(--border)" }} />
 
                 {/* ── Contenido ── */}
-                <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="flex-1 min-w-0 w-full">
                   {adminSeccion === "auditoria" && (
                     <AuditoriaPanel
                       historias={historias}
@@ -896,6 +911,16 @@ export default function DashboardPage() {
           tiposPrueba={tiposPrueba}
         />
       )}
+
+      <CSVImportModal
+        open={importModalOpen}
+        onClose={() => setImportModalOpen(false)}
+        onImport={handleImportarHUs}
+        tiposAplicacion={tiposAplicacion}
+        ambientes={ambientes}
+        currentUser={user?.nombre}
+        codigosExistentes={historias.map(h => h.codigo)}
+      />
 
       <HistoriaUsuarioDetail
         open={huDetailOpen}

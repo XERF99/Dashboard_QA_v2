@@ -502,13 +502,13 @@ export function HistoriaUsuarioDetail({
           )}
 
           {/* ── BODY 2 cols ── */}
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 300px", gap:20, alignItems:"start" }}>
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-5 items-start">
 
             {/* COL PRINCIPAL */}
             <div style={{ display:"flex", flexDirection:"column", gap:18, minWidth:0 }}>
 
               {/* Descripción + Criterios */}
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div style={PNL}>
                   <p style={SLBL}>Descripción</p>
                   <p style={{ fontSize:13, color:"var(--foreground)", lineHeight:1.6 }}>{hu.descripcion || "—"}</p>
@@ -527,7 +527,7 @@ export function HistoriaUsuarioDetail({
               </div>
 
               {/* Info adicional */}
-              <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10 }}>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                 {[
                   { label:"Aplicación", value: hu.aplicacion },
                   { label:"Requiriente", value: hu.requiriente },
@@ -1217,11 +1217,11 @@ interface CasoFormFieldsProps {
 function CasoFormFields({ titulo, onTitulo, desc, onDesc, entorno, onEntorno, tipo, onTipo, horas, onHoras, archivos, onArchivos, complejidad, onComplejidad, tiposPrueba }: CasoFormFieldsProps) {
   const tiposPruebaOpts = tiposPrueba?.length ? tiposPrueba : TIPOS_PRUEBA_PREDETERMINADOS
   return (
-    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:8 }}>
-      <div style={{ gridColumn:"1/3" }}>
+    <div className="grid grid-cols-2 gap-2 mb-2">
+      <div style={{ gridColumn:"1/-1" }}>
         <Input value={titulo} onChange={e => onTitulo(e.target.value)} placeholder="Título del caso de prueba *" style={{ fontSize:12 }} />
       </div>
-      <div style={{ gridColumn:"1/3" }}>
+      <div style={{ gridColumn:"1/-1" }}>
         <Textarea rows={2} value={desc} onChange={e => onDesc(e.target.value)} placeholder="Descripción..." style={{ fontSize:12, resize:"none" }} />
       </div>
       <div>
@@ -1281,11 +1281,11 @@ interface TareaFormFieldsProps {
 
 function TareaFormFields({ titulo, onTitulo, desc, onDesc, tipo, onTipo, prioridad, onPrioridad, horas, onHoras }: TareaFormFieldsProps) {
   return (
-    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6, marginBottom:6 }}>
-      <div style={{ gridColumn:"1/3" }}>
+    <div className="grid grid-cols-2 gap-1.5 mb-1.5">
+      <div style={{ gridColumn:"1/-1" }}>
         <Input value={titulo} onChange={e => onTitulo(e.target.value)} placeholder="Título de la tarea *" style={{ fontSize:11 }} />
       </div>
-      <div style={{ gridColumn:"1/3" }}>
+      <div style={{ gridColumn:"1/-1" }}>
         <Input value={desc} onChange={e => onDesc(e.target.value)} placeholder="Descripción (opcional)" style={{ fontSize:11 }} />
       </div>
       <div>

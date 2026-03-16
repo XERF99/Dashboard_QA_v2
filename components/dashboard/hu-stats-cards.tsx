@@ -22,8 +22,6 @@ export function HUStatsCards({ historias }: HUStatsCardsProps) {
     border: "1px solid var(--border)",
     borderRadius: 10,
     padding: "14px 18px",
-    flex: 1,
-    minWidth: 0,
   }
 
   const labelStyle: React.CSSProperties = {
@@ -50,9 +48,9 @@ export function HUStatsCards({ historias }: HUStatsCardsProps) {
   }
 
   return (
-    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6" style={{ gap: 10 }}>
       {/* PROGRESO */}
-      <div style={{ ...cardBase, minWidth: 160 }}>
+      <div style={{ ...cardBase }}>
         <p style={labelStyle}>Progreso</p>
         <p style={valueStyle("var(--primary)")}>{porcentaje}%</p>
         <Progress value={porcentaje} className="h-1.5 my-2" />

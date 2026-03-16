@@ -13,6 +13,7 @@ import {
   type HistoriaUsuario, type TipoAplicacion, type AmbientePrueba, type PrioridadHU, type TipoPrueba,
   type ConfigEtapas, type TipoAplicacionDef, type AmbienteDef, type TipoPruebaDef,
 } from "@/lib/types"
+import { PlantillasSelector, type PlantillaHU } from "./hu-templates"
 
 interface HUFormProps {
   open: boolean
@@ -83,6 +84,18 @@ export function HUForm({ open, onClose, onSubmit, huEditar, currentUser, configE
     }
   }, [open, huEditar])
 
+  const aplicarPlantilla = (campos: PlantillaHU["campos"]) => {
+    setHu(prev => ({
+      ...prev,
+      tipoAplicacion: campos.tipoAplicacion,
+      tipoPrueba: campos.tipoPrueba,
+      puntos: campos.puntos,
+      prioridad: campos.prioridad,
+      ambiente: campos.ambiente,
+      criteriosAceptacion: campos.criteriosAceptacion,
+    }))
+  }
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     const ahora = new Date()
@@ -135,7 +148,7 @@ export function HUForm({ open, onClose, onSubmit, huEditar, currentUser, configE
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="cambio-form-modal">
         <form onSubmit={handleSubmit}>
-          <div style={{ padding:"26px 30px" }}>
+          <div className="px-4 sm:px-7.5 py-6.5">
             {/* HEADER */}
             <div style={{ borderBottom:"1px solid var(--border)", paddingBottom:16, marginBottom:22, paddingRight:36 }}>
               <DialogTitle style={{ fontSize:19, fontWeight:700, color:"var(--foreground)", marginBottom:3 }}>
@@ -144,10 +157,15 @@ export function HUForm({ open, onClose, onSubmit, huEditar, currentUser, configE
               <p style={{ fontSize:12, color:"var(--muted-foreground)" }}>
                 {huEditar ? "Modifica los datos de la historia de usuario" : "Define el cambio que será asignado a un QA para pruebas"}
               </p>
+              {!huEditar && (
+                <div style={{ marginTop: 10 }}>
+                  <PlantillasSelector onSelect={aplicarPlantilla} />
+                </div>
+              )}
             </div>
 
             {/* BODY */}
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:24 }}>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
               {/* ── COL IZQ: datos principales ── */}
               <div style={{ display:"flex", flexDirection:"column", gap:16, minWidth:0 }}>
@@ -178,7 +196,7 @@ export function HUForm({ open, onClose, onSubmit, huEditar, currentUser, configE
 
                 <div style={PNL}>
                   <p style={{ fontSize:10, textTransform:"uppercase", letterSpacing:"0.1em", fontWeight:700, color:"var(--muted-foreground)", marginBottom:12 }}>Solicitante</p>
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     <div>
                       <label style={FL}>Requiriente *</label>
                       <Input value={hu.requiriente} required placeholder="Nombre del solicitante"
@@ -198,7 +216,7 @@ export function HUForm({ open, onClose, onSubmit, huEditar, currentUser, configE
 
                 <div style={PNL}>
                   <p style={{ fontSize:10, textTransform:"uppercase", letterSpacing:"0.1em", fontWeight:700, color:"var(--muted-foreground)", marginBottom:12 }}>Asignación</p>
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     <div>
                       <label style={FL}>QA Responsable *</label>
                       <Select value={hu.responsable} onValueChange={v => setHu(p => ({...p, responsable:v}))}>
@@ -227,7 +245,7 @@ export function HUForm({ open, onClose, onSubmit, huEditar, currentUser, configE
 
                 <div style={PNL}>
                   <p style={{ fontSize:10, textTransform:"uppercase", letterSpacing:"0.1em", fontWeight:700, color:"var(--muted-foreground)", marginBottom:12 }}>Configuración Técnica</p>
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     <div>
                       <label style={FL}>Aplicación / Sistema *</label>
                       {aplicaciones.length > 0 ? (

@@ -437,7 +437,7 @@ export function BloqueosPanel({
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
       {/* ── Tarjetas de resumen ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
           { label: "Bloqueos activos", count: countActivos, color: "var(--chart-4)", bg: "color-mix(in oklch, var(--chart-4) 8%, var(--card))", icon: <AlertTriangle size={18}/> },
           { label: "En HUs",           count: countHU,      color: "var(--primary)", bg: "color-mix(in oklch, var(--primary) 8%, var(--card))", icon: <BookOpen size={18}/> },

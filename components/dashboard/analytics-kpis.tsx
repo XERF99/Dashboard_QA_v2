@@ -344,7 +344,7 @@ export function AnalyticsKPIs({ historias, casos, tareas, isQA, currentUserName,
       </div>
 
       {/* ── Fila 1: KPIs principales ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <KpiCard label="Total HUs" value={kpi.total} sub={`${kpi.sinIniciar} sin iniciar`} color="var(--primary)" icon={<Layers size={16} />} />
         <KpiCard label="En Progreso" value={kpi.enProgreso} sub={`${kpi.bloqueos > 0 ? kpi.bloqueos + " bloqueo" + (kpi.bloqueos !== 1 ? "s" : "") : "sin bloqueos"}`} color="var(--chart-1)" icon={<Clock size={16} />} />
         <KpiCard label="Exitosas" value={kpi.exitosas} sub={`de ${kpi.cerradas} cerradas`} color="var(--chart-2)" icon={<CheckCircle size={16} />} />
@@ -352,7 +352,7 @@ export function AnalyticsKPIs({ historias, casos, tareas, isQA, currentUserName,
       </div>
 
       {/* ── Fila 2: Casos + horas + retesteos ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <KpiCard label="Casos de Prueba" value={kpi.totalCasos} sub={`${kpi.casosAprobados} aprobados`} color="var(--chart-1)" icon={<Target size={16} />} />
         <KpiCard label="Pend. Aprobación" value={kpi.casosPendientes} sub={`${kpi.casosRechazados} rechazados`} color={kpi.casosPendientes > 0 ? "var(--chart-3)" : "var(--muted-foreground)"} icon={<Zap size={16} />} />
         <KpiCard label="Retesteos" value={kpi.retesteos} sub={`${kpi.casosConRetesteo} caso${kpi.casosConRetesteo !== 1 ? "s" : ""} retrabaajado${kpi.casosConRetesteo !== 1 ? "s" : ""}`} color={kpi.retesteos > 0 ? "var(--chart-4)" : "var(--chart-2)"} icon={<RefreshCw size={16} />} />
@@ -360,7 +360,7 @@ export function AnalyticsKPIs({ historias, casos, tareas, isQA, currentUserName,
       </div>
 
       {/* ── Fila 3: Distribuciones ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
         {/* Distribución por estado */}
         <div style={{ padding: "18px 20px", borderRadius: 12, border: "1px solid var(--border)", background: "var(--card)" }}>
@@ -396,7 +396,7 @@ export function AnalyticsKPIs({ historias, casos, tareas, isQA, currentUserName,
       </div>
 
       {/* ── Fila 4: Casos + tipo/ambiente/tipoPrueba ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 16 }}>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
 
         {/* Casos por estado de aprobación */}
         <div style={{ padding: "18px 20px", borderRadius: 12, border: "1px solid var(--border)", background: "var(--card)" }}>
@@ -484,7 +484,7 @@ export function AnalyticsKPIs({ historias, casos, tareas, isQA, currentUserName,
 
       {/* ── Fila 5: Responsables (solo vista equipo/admin) + Story Points ── */}
       {!isPersonalView && (
-        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16 }}>
+        <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-4">
 
           {/* Tabla responsables */}
           <div style={{ padding: "18px 20px", borderRadius: 12, border: "1px solid var(--border)", background: "var(--card)" }}>
@@ -561,7 +561,7 @@ export function AnalyticsKPIs({ historias, casos, tareas, isQA, currentUserName,
 
       {/* ── Vista personal: bloqueos + story points compactos ── */}
       {isPersonalView && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div style={{ padding: "18px 20px", borderRadius: 12, border: "1px solid var(--border)", background: "var(--card)" }}>
             <SectionTitle icon={<AlertTriangle size={14} />} title="Bloqueos activos" />
             {kpi.bloqueos === 0 ? (
