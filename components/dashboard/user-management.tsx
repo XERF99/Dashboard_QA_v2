@@ -243,7 +243,7 @@ export function UserManagement() {
                   <span style={{ fontSize: 24, fontWeight: 700, lineHeight: 1, color: "var(--foreground)" }}>{users.length}</span>
                   <span style={{ fontSize: 10, fontWeight: 600, color: "var(--muted-foreground)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Total</span>
                 </div>
-                <div style={{ display: "flex", gap: 6, marginTop: 3, alignItems: "center" }}>
+                <div className="hidden sm:flex" style={{ gap: 6, marginTop: 3, alignItems: "center" }}>
                   <span style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 10 }}>
                     <span style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--chart-2)", display: "inline-block" }} />
                     <span style={{ color: "var(--chart-2)", fontWeight: 600 }}>{activeCount} activos</span>
@@ -256,7 +256,7 @@ export function UserManagement() {
                   )}
                 </div>
               </div>
-              <span style={{
+              <span className="hidden sm:inline-flex" style={{
                 fontSize: 10, fontWeight: 700, color: "var(--chart-2)", flexShrink: 0,
                 background: "color-mix(in oklch, var(--chart-2) 10%, transparent)",
                 padding: "1px 6px", borderRadius: 999,
@@ -293,7 +293,7 @@ export function UserManagement() {
                     <div style={{ fontSize: 24, fontWeight: 700, lineHeight: 1, color: "var(--foreground)" }}>{count}</div>
                     <div style={{ fontSize: 11, color: "var(--muted-foreground)", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.label}</div>
                   </div>
-                  <span style={{
+                  <span className="hidden sm:inline-flex" style={{
                     fontSize: 10, fontWeight: 700, color: accent, flexShrink: 0,
                     background: `color-mix(in oklch, ${accent} 10%, transparent)`,
                     padding: "1px 6px", borderRadius: 999,
@@ -325,7 +325,7 @@ export function UserManagement() {
             </div>
           </CardHeader>
           <CardContent className="p-0 overflow-x-auto">
-            <Table className="min-w-105">
+            <Table className="sm:min-w-105">
               <TableHeader>
                 <TableRow className="border-border hover:bg-transparent">
                   <TableHead className="text-muted-foreground pl-4">Usuario</TableHead>
@@ -397,13 +397,13 @@ export function UserManagement() {
       </div>
 
       {/* Header con botón */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Users className="h-5 w-5 text-muted-foreground" />
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2 min-w-0">
+          <Users className="h-5 w-5 text-muted-foreground shrink-0" />
           <h2 className="text-lg font-semibold text-foreground">Gestión de Usuarios</h2>
-          <span className="text-sm text-muted-foreground">({users.length})</span>
+          <span className="text-sm text-muted-foreground shrink-0">({users.length})</span>
         </div>
-        <Button onClick={handleOpenCreate} className="bg-primary hover:bg-primary/90">
+        <Button onClick={handleOpenCreate} className="bg-primary hover:bg-primary/90 shrink-0">
           <UserPlus className="h-4 w-4 mr-2" />
           Nuevo Usuario
         </Button>

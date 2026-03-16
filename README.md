@@ -106,7 +106,8 @@ Sistema integral de gestión de calidad para equipos QA. Permite administrar His
 - **Vista por Sprint** en Historias: barra de tabs por sprint con card de resumen (progreso %, distribución de estados, story points) que aparece al asignar el campo sprint a las HUs.
 - **Importación CSV**: modal de 3 pasos (cargar → preview → confirmar) para crear HUs masivamente desde archivos CSV. Compatible con el formato de exportación del propio sistema. Detecta y omite códigos duplicados.
 - **Plantillas de HU**: botón "Usar plantilla" en el formulario de nueva HU con 5 plantillas predefinidas (Despliegue, Rollback, Infraestructura, Base de Datos, Proceso Batch) que autocompletan tipo, prioridad, puntos, ambiente y criterios de aceptación.
-- **Diseño responsive completo**: todos los grids, tablas y paneles se adaptan correctamente a móvil, tablet y escritorio.
+- **Diseño responsive completo**: todos los grids, tablas y paneles se adaptan correctamente a móvil, tablet y escritorio. La tabla de casos de prueba usa un layout de tarjetas en móvil y grid en escritorio. Las etapas de ejecución usan CSS Grid auto-fit para distribuirse sin scroll horizontal en pantallas pequeñas.
+- **Arquitectura de servicios**: la capa de persistencia se extrajo a `lib/services/` con contratos explícitos (interfaces) y una capa de implementación intercambiable. Para conectar un backend basta con reemplazar los imports en `lib/services/index.ts` sin tocar ningún componente.
 
 ### v2.1
 - Configuración dinámica de etapas por tipo de aplicación.
@@ -138,6 +139,8 @@ Sistema integral de gestión de calidad para equipos QA. Permite administrar His
 ## Persistencia de datos
 
 Todos los datos se almacenan en `localStorage` del navegador bajo las claves `tcs_*`. No se requiere backend ni base de datos. Al limpiar el almacenamiento del navegador se restauran los datos de ejemplo.
+
+La capa de acceso a datos está abstraída detrás de contratos en `lib/services/interfaces.ts`. Para conectar un backend REST o una base de datos, basta con crear nuevas implementaciones del servicio y cambiar los imports en `lib/services/index.ts`. Ningún componente requiere modificación.
 
 ---
 
@@ -240,9 +243,21 @@ dashboard_v22/
 │   │   └── perfil-dialog.tsx           # Diálogo de perfil de usuario
 │   └── ui/                   # Componentes base de shadcn/ui
 ├── lib/
-│   ├── types.ts              # Tipos, interfaces y datos de ejemplo
+│   ├── types.ts              # Re-export de tipos (compatibilidad hacia atrás)
+│   ├── types/
+│   │   └── index.ts          # Declaraciones de tipos e interfaces del dominio
+│   ├── constants/
+│   │   └── index.ts          # Mapas de configuración (estados, roles, colores, etc.)
+│   ├── utils/
+│   │   └── domain.ts         # Funciones helpers del dominio
+│   ├── data/
+│   │   └── seed.ts           # Datos de ejemplo para desarrollo
+│   ├── services/
+│   │   ├── interfaces.ts     # Contratos de servicio (IHistoriaService, ICasoService, …)
+│   │   ├── index.ts          # Punto de entrada — swap único para conectar un backend
+│   │   └── localStorage/     # Implementaciones actuales (historia, caso, tarea, config)
 │   ├── auth-context.tsx      # Contexto de autenticación y lógica de roles
-│   ├── storage.ts            # Hook usePersistedState y claves de localStorage
+│   ├── storage.ts            # Helpers de localStorage y claves tcs_*
 │   └── utils.ts              # Utilidad cn()
 ├── public/                   # Assets estáticos
 ├── next.config.mjs

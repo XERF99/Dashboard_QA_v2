@@ -545,7 +545,7 @@ export function HistoriaUsuarioDetail({
               {hu.etapa !== "sin_iniciar" && (
                 <div style={PNL}>
                   <p style={SLBL}><Layers size={11}/>Etapas de Ejecución</p>
-                  <div style={{ display:"flex", gap:8 }}>
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(80px, 1fr))", gap:8 }}>
                     {etapasDisponibles.map((et, i) => {
                       const esCurrent = hu.etapa === et.id
                       const currentIdx = etapasDisponibles.findIndex(e => e.id === hu.etapa)
