@@ -11,7 +11,7 @@ import {
   PRIORIDAD_CFG,
   type HistoriaUsuario, type CasoPrueba, type Tarea,
 } from "@/lib/types"
-import { PanelRiesgos } from "./panel-riesgos"
+import { PanelRiesgos } from "../shared/panel-riesgos"
 
 interface Props {
   historias: HistoriaUsuario[]

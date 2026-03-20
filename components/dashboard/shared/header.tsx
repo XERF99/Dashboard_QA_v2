@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Search, Bell, LogOut, Shield, FlaskConical, Eye, Check, CheckCheck, Clock, X, UserCircle } from "lucide-react"
+import { Search, Bell, LogOut, Check, CheckCheck, Clock, X, UserCircle } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import {
@@ -31,8 +31,10 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge" 
 import { ThemeSwitcher } from "@/components/theme-switcher"
 import { useAuth } from "@/lib/auth-context"
-import { PerfilDialog } from "@/components/dashboard/perfil-dialog"
+import { PerfilDialog } from "../usuarios/perfil-dialog"
 import type { Notificacion, TipoNotificacion } from "@/lib/types"
+import { getInitials, getRoleIcon } from "@/lib/utils/user-utils"
+import { fmtFecha } from "@/lib/utils/date-utils"
 
 interface HeaderProps {
   busqueda: string
@@ -51,16 +53,6 @@ const NOTIF_CFG: Record<TipoNotificacion, { color: string; bg: string; label: st
   modificacion_habilitada: { color:"var(--chart-1)",  bg:"color-mix(in oklch, var(--chart-1) 10%, transparent)",  label:"Modificación habilitada", icon:<Check size={13}/> },
 }
 
-function fmtFecha(d: Date) {
-  const diff = Date.now() - d.getTime()
-  const mins = Math.floor(diff / 60000)
-  if (mins < 1) return "Ahora"
-  if (mins < 60) return `Hace ${mins} min`
-  const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `Hace ${hrs}h`
-  return d.toLocaleDateString("es", { day:"2-digit", month:"short" })
-}
-
 export function Header({ busqueda, onBusquedaChange, notificaciones, onMarcarLeida, onMarcarTodasLeidas }: HeaderProps) {
   const { user, logout, roles } = useAuth()
   const [confirmLogoutOpen, setConfirmLogoutOpen] = useState(false)
@@ -70,15 +62,6 @@ export function Header({ busqueda, onBusquedaChange, notificaciones, onMarcarLei
 
   const noLeidas = notificaciones.filter(n => !n.leida).length
 
-  const getRoleIcon = (rol: string) => {
-    switch (rol) {
-      case "admin":   return <Shield className="h-3 w-3" />
-      case "qa":      return <FlaskConical className="h-3 w-3" />
-      case "viewer":  return <Eye className="h-3 w-3" />
-      default:        return null
-    }
-  }
-
   const getRoleBadgeStyle = (rol: string) => {
     const found = roles.find(r => r.id === rol)
     return found?.cls ?? "bg-muted text-muted-foreground border-border"
@@ -86,10 +69,6 @@ export function Header({ busqueda, onBusquedaChange, notificaciones, onMarcarLei
 
   const getRoleLabel = (rol: string) => {
     return roles.find(r => r.id === rol)?.label ?? rol
-  }
-
-  const getInitials = (nombre: string) => {
-    return nombre.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)
   }
 
   // Función de búsqueda compartida para reutilizar en móvil y desktop
@@ -107,8 +86,7 @@ export function Header({ busqueda, onBusquedaChange, notificaciones, onMarcarLei
         <button
           onClick={() => onBusquedaChange("")}
           title="Limpiar búsqueda"
-          style={{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", cursor:"pointer", display:"flex", color:"var(--muted-foreground)", padding:2 }}
-          className="hover:text-foreground transition-colors"
+          className="absolute right-2.5 top-1/2 -translate-y-1/2 bg-transparent border-0 cursor-pointer flex items-center text-muted-foreground p-0.5 hover:text-foreground transition-colors"
         >
           <X className="h-3.5 w-3.5" />
         </button>
@@ -159,27 +137,20 @@ export function Header({ busqueda, onBusquedaChange, notificaciones, onMarcarLei
                 <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground relative">
                   <Bell className="h-5 w-5" />
                   {noLeidas > 0 && (
-                    <span style={{
-                      position:"absolute", top:6, right:6,
-                      width:16, height:16, borderRadius:"50%",
-                      background:"var(--chart-4)", color:"#fff",
-                      fontSize:9, fontWeight:700,
-                      display:"flex", alignItems:"center", justifyContent:"center",
-                      border:"2px solid var(--background)",
-                    }}>
+                    <span className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-chart-4 text-white text-[9px] font-bold flex items-center justify-center border-2 border-background">
                       {noLeidas > 9 ? "9+" : noLeidas}
                     </span>
                   )}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent align="end" className="p-0 w-[calc(100vw-2rem)] sm:w-90" style={{ maxHeight:480, display:"flex", flexDirection:"column" }}>
+              <PopoverContent align="end" className="p-0 w-[calc(100vw-2rem)] sm:w-90 max-h-120 flex flex-col">
                 {/* Cabecera */}
-                <div style={{ padding:"14px 16px 10px", borderBottom:"1px solid var(--border)", display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0 }}>
-                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                    <Bell size={15} style={{ color:"var(--primary)" }}/>
-                    <span style={{ fontSize:14, fontWeight:700, color:"var(--foreground)" }}>Notificaciones</span>
+                <div className="px-4 pt-3.5 pb-2.5 border-b border-border flex items-center justify-between shrink-0">
+                  <div className="flex items-center gap-2">
+                    <Bell size={15} className="text-primary"/>
+                    <span className="text-sm font-bold text-foreground">Notificaciones</span>
                     {noLeidas > 0 && (
-                      <Badge variant="outline" style={{ fontSize:10, padding:"0px 6px", color:"var(--chart-4)", borderColor:"var(--chart-4)", background:"color-mix(in oklch, var(--chart-4) 10%, transparent)" }}>
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-chart-4 border-chart-4 bg-chart-4/10">
                         {noLeidas} nueva{noLeidas !== 1 ? "s" : ""}
                       </Badge>
                     )}
@@ -187,7 +158,7 @@ export function Header({ busqueda, onBusquedaChange, notificaciones, onMarcarLei
                   {noLeidas > 0 && (
                     <button
                       onClick={onMarcarTodasLeidas}
-                      style={{ background:"none", border:"none", cursor:"pointer", display:"flex", alignItems:"center", gap:4, fontSize:11, color:"var(--primary)", fontWeight:600, padding:0 }}
+                      className="bg-transparent border-0 cursor-pointer flex items-center gap-1 text-[11px] text-primary font-semibold p-0 hover:opacity-80 transition-opacity"
                     >
                       <CheckCheck size={13}/> Marcar todas
                     </button>
@@ -195,11 +166,11 @@ export function Header({ busqueda, onBusquedaChange, notificaciones, onMarcarLei
                 </div>
 
                 {/* Lista */}
-                <div style={{ overflowY:"auto", flex:1 }}>
+                <div className="overflow-y-auto flex-1">
                   {notificaciones.length === 0 ? (
-                    <div style={{ padding:32, textAlign:"center" }}>
-                      <Bell size={28} style={{ margin:"0 auto 10px", opacity:0.25, display:"block" }}/>
-                      <p style={{ fontSize:13, color:"var(--muted-foreground)" }}>Sin notificaciones</p>
+                    <div className="p-8 text-center">
+                      <Bell size={28} className="mx-auto mb-2.5 opacity-25 block"/>
+                      <p className="text-sm text-muted-foreground">Sin notificaciones</p>
                     </div>
                   ) : notificaciones.map(n => {
                     const cfg = NOTIF_CFG[n.tipo]
@@ -207,43 +178,34 @@ export function Header({ busqueda, onBusquedaChange, notificaciones, onMarcarLei
                       <div
                         key={n.id}
                         onClick={() => onMarcarLeida(n.id)}
-                        style={{
-                          padding:"12px 16px",
-                          borderBottom:"1px solid var(--border)",
-                          background: n.leida ? "transparent" : "color-mix(in oklch, var(--primary) 4%, transparent)",
-                          cursor: n.leida ? "default" : "pointer",
-                          display:"flex", gap:10, alignItems:"flex-start",
-                          transition:"background 0.15s",
-                        }}
+                        className={`px-4 py-3 border-b border-border flex gap-2.5 items-start transition-[background] duration-150 ${n.leida ? "cursor-default" : "cursor-pointer"}`}
+                        style={{ background: n.leida ? "transparent" : "color-mix(in oklch, var(--primary) 4%, transparent)" }}
                       >
                         {/* Ícono */}
-                        <div style={{
-                          width:30, height:30, borderRadius:"50%", flexShrink:0,
-                          background:cfg.bg, color:cfg.color,
-                          display:"flex", alignItems:"center", justifyContent:"center",
-                          border:`1px solid ${cfg.color}`,
-                          opacity: n.leida ? 0.55 : 1,
-                        }}>
+                        <div
+                          className="w-7.5 h-7.5 rounded-full shrink-0 flex items-center justify-center border"
+                          style={{ background: cfg.bg, color: cfg.color, borderColor: cfg.color, opacity: n.leida ? 0.55 : 1 }}
+                        >
                           {cfg.icon}
                         </div>
 
                         {/* Contenido */}
-                        <div style={{ flex:1, minWidth:0 }}>
-                          <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:2 }}>
-                            <span style={{ fontSize:11, fontWeight:700, color:cfg.color, opacity: n.leida ? 0.7 : 1 }}>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 mb-0.5">
+                            <span className="text-[11px] font-bold" style={{ color: cfg.color, opacity: n.leida ? 0.7 : 1 }}>
                               {cfg.label}
                             </span>
                             {!n.leida && (
-                              <span style={{ width:6, height:6, borderRadius:"50%", background:cfg.color, flexShrink:0, display:"inline-block" }}/>
+                              <span className="w-1.5 h-1.5 rounded-full shrink-0 inline-block" style={{ background: cfg.color }}/>
                             )}
                           </div>
-                          <p style={{ fontSize:12, fontWeight:600, color:"var(--foreground)", marginBottom:3, opacity: n.leida ? 0.7 : 1 }}>
+                          <p className={`text-xs font-semibold text-foreground mb-0.5 ${n.leida ? "opacity-70" : ""}`}>
                             {n.titulo}
                           </p>
-                          <p style={{ fontSize:11, color:"var(--muted-foreground)", lineHeight:1.4, wordBreak:"break-word" }}>
+                          <p className="text-[11px] text-muted-foreground leading-snug wrap-break-word">
                             {n.descripcion}
                           </p>
-                          <p style={{ fontSize:10, color:"var(--muted-foreground)", marginTop:4, opacity:0.7 }}>
+                          <p className="text-[10px] text-muted-foreground mt-1 opacity-70">
                             {fmtFecha(n.fecha)}
                           </p>
                         </div>
@@ -305,46 +267,32 @@ export function Header({ busqueda, onBusquedaChange, notificaciones, onMarcarLei
       {/* Confirmación de cierre de sesión */}
       <AlertDialog open={confirmLogoutOpen} onOpenChange={setConfirmLogoutOpen}>
         <AlertDialogContent className="max-w-sm p-0 overflow-hidden">
-          <div style={{ background:"var(--card)", borderRadius:"inherit", overflow:"hidden" }}>
-            {/* Gradiente superior */}
-            <div style={{ height:3, background:"linear-gradient(90deg, var(--chart-4), var(--destructive))" }} />
-            <div style={{ padding:"24px" }}>
+          <div className="bg-card rounded-[inherit] overflow-hidden">
+            <div className="h-0.75 bg-linear-to-r from-chart-4 to-destructive" />
+            <div className="p-6">
               {/* Ícono + Título */}
-              <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:16 }}>
-                <div style={{
-                  width:44, height:44, borderRadius:"50%", flexShrink:0,
-                  display:"flex", alignItems:"center", justifyContent:"center",
-                  background:"color-mix(in oklch, var(--destructive) 12%, transparent)",
-                  border:"1px solid color-mix(in oklch, var(--destructive) 25%, transparent)"
-                }}>
-                  <LogOut size={20} style={{ color:"var(--destructive)" }} />
+              <div className="flex items-center gap-3.5 mb-4">
+                <div className="w-11 h-11 rounded-full shrink-0 flex items-center justify-center bg-destructive/10 border border-destructive/25">
+                  <LogOut size={20} className="text-destructive" />
                 </div>
                 <div>
                   <AlertDialogTitle className="text-base font-semibold leading-tight">
                     ¿Cerrar sesión?
                   </AlertDialogTitle>
-                  <p style={{ fontSize:12, color:"var(--muted-foreground)", marginTop:2 }}>
+                  <p className="text-xs text-muted-foreground mt-0.5">
                     Tu sesión actual será finalizada
                   </p>
                 </div>
               </div>
 
               {/* Info del usuario */}
-              <div style={{
-                display:"flex", alignItems:"center", gap:10,
-                padding:"10px 14px", borderRadius:10,
-                background:"var(--secondary)", border:"1px solid var(--border)", marginBottom:20
-              }}>
-                <div style={{
-                  width:32, height:32, borderRadius:"50%", flexShrink:0,
-                  background:"var(--primary)", display:"flex", alignItems:"center", justifyContent:"center",
-                  fontSize:12, fontWeight:700, color:"var(--primary-foreground)"
-                }}>
-                  {user?.nombre?.split(" ").map(n => n[0]).join("").toUpperCase().slice(0,2)}
+              <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-[10px] bg-secondary border border-border mb-5">
+                <div className="w-8 h-8 rounded-full shrink-0 bg-primary flex items-center justify-center text-xs font-bold text-primary-foreground">
+                  {user ? getInitials(user.nombre) : "?"}
                 </div>
                 <div>
-                  <p style={{ fontSize:13, fontWeight:600, color:"var(--foreground)" }}>{user?.nombre}</p>
-                  <p style={{ fontSize:11, color:"var(--muted-foreground)" }}>{user?.email}</p>
+                  <p className="text-[13px] font-semibold text-foreground">{user?.nombre}</p>
+                  <p className="text-[11px] text-muted-foreground">{user?.email}</p>
                 </div>
               </div>
 

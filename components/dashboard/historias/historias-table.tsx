@@ -1,10 +1,10 @@
 "use client"
 
-import { useState, useMemo, useRef, useEffect } from "react"
+import { useState, useRef, useEffect } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Eye, Edit, Trash2, Plus, BookOpen, AlertTriangle, Layers, Clock, Filter, X, ArrowUpDown, ArrowUp, ArrowDown, LayoutList, LayoutGrid, FileSpreadsheet, ChevronDown, Upload, CalendarDays } from "lucide-react"
+import { Eye, Edit, Trash2, Plus, BookOpen, AlertTriangle, Layers, Clock, Filter, X, ArrowUpDown, ArrowUp, ArrowDown, LayoutList, LayoutGrid, FileSpreadsheet, ChevronDown, Upload } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import {
   ESTADO_HU_CFG, PRIORIDAD_CFG,
@@ -16,12 +16,10 @@ import {
   exportarHUsCSV, exportarResultadosCSV,
   exportarHUsPDF, exportarResultadosPDF,
 } from "@/lib/export-utils"
-
-type SortCampo = "codigo" | "titulo" | "prioridad" | "estado" | "responsable" | "fecha"
-type SortDir = "asc" | "desc"
-
-const PRIORIDAD_ORDER: Record<string, number> = { critica: 0, alta: 1, media: 2, baja: 3 }
-const ESTADO_ORDER:    Record<string, number> = { en_progreso: 0, sin_iniciar: 1, fallida: 2, exitosa: 3, cancelada: 4 }
+import { HistoriasKanban } from "./historias-kanban"
+import { useHistoriasFilters, type SortCampo } from "@/lib/hooks/useHistoriasFilters"
+import { SprintPanel } from "../shared/sprint-panel"
+import { Paginador } from "@/components/ui/paginator"
 
 interface Props {
   historias: HistoriaUsuario[]
@@ -71,14 +69,6 @@ function UrgenciaBadge({ fecha, estado }: { fecha?: Date; estado: string }) {
   )
 }
 
-// ── Columnas del tablero Kanban ───────────────────────────
-const KANBAN_COLUMNAS = [
-  { key: "sin_iniciar", label: "Sin iniciar",      color: "var(--muted-foreground)", estados: ["sin_iniciar"] as EstadoHU[] },
-  { key: "en_progreso", label: "En progreso",      color: "var(--chart-1)",          estados: ["en_progreso"] as EstadoHU[] },
-  { key: "exitosa",     label: "Exitosa",           color: "var(--chart-2)",          estados: ["exitosa"] as EstadoHU[] },
-  { key: "cerrada",     label: "Fallida / Cancelada", color: "var(--chart-4)",        estados: ["fallida", "cancelada"] as EstadoHU[] },
-] as const
-
 // ── Dropdown de acción masiva ─────────────────────────────
 function BulkActionSelect({ label, options, onSelect }: {
   label: string
@@ -115,37 +105,6 @@ function BulkActionSelect({ label, options, onSelect }: {
   )
 }
 
-const PAGE_SIZE = 20
-
-// ── Paginador ─────────────────────────────────────────────────
-function Paginador({ pagina, total, pageSize, onCambiar }: {
-  pagina: number; total: number; pageSize: number; onCambiar: (p: number) => void
-}) {
-  const totalPags = Math.ceil(total / pageSize)
-  if (totalPags <= 1) return null
-  const inicio = (pagina - 1) * pageSize + 1
-  const fin    = Math.min(pagina * pageSize, total)
-  const pages: (number | "...")[] = []
-  for (let i = 1; i <= totalPags; i++) {
-    if (i === 1 || i === totalPags || (i >= pagina - 2 && i <= pagina + 2)) pages.push(i)
-    else if (pages[pages.length - 1] !== "...") pages.push("...")
-  }
-  const navBtn = (dis: boolean) => ({ display:"inline-flex", alignItems:"center", justifyContent:"center", minWidth:28, height:28, padding:"0 8px", borderRadius:6, fontSize:14, border:"1px solid var(--border)", background:"var(--card)", color: dis ? "var(--muted-foreground)" : "var(--foreground)", cursor: dis ? "default" : "pointer", opacity: dis ? 0.4 : 1 } as const)
-  return (
-    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", paddingTop:8, borderTop:"1px solid var(--border)", marginTop:2 }}>
-      <span style={{ fontSize:12, color:"var(--muted-foreground)" }}>Mostrando {inicio}–{fin} de {total}</span>
-      <div style={{ display:"flex", gap:4, alignItems:"center" }}>
-        <button onClick={() => onCambiar(pagina - 1)} disabled={pagina === 1} style={navBtn(pagina === 1)}>‹</button>
-        {pages.map((p, i) => p === "..."
-          ? <span key={`e${i}`} style={{ fontSize:12, color:"var(--muted-foreground)", padding:"0 2px" }}>…</span>
-          : <button key={p} onClick={() => onCambiar(p as number)} style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", minWidth:28, height:28, padding:"0 6px", borderRadius:6, fontSize:12, fontWeight: p===pagina ? 700 : 400, border:`1px solid ${p===pagina ? "var(--primary)" : "var(--border)"}`, background: p===pagina ? "var(--primary)" : "var(--card)", color: p===pagina ? "var(--primary-foreground)" : "var(--foreground)", cursor: p===pagina ? "default" : "pointer" }}>{p}</button>
-        )}
-        <button onClick={() => onCambiar(pagina + 1)} disabled={pagina === totalPags} style={navBtn(pagina === totalPags)}>›</button>
-      </div>
-    </div>
-  )
-}
-
 export function HistoriasTable({ historias, casos, onVerDetalle, onEditar, onEliminar, onNueva, canEdit=true, configEtapas = ETAPAS_PREDETERMINADAS, tiposAplicacion, ambientes, tiposPrueba, qaUsers, onBulkEliminar, onBulkCambiarEstado, onBulkCambiarResponsable, onImportCSV }: Props) {
   // ── Vista activa ──
   const [vistaKanban, setVistaKanban] = useState(false)
@@ -153,108 +112,36 @@ export function HistoriasTable({ historias, casos, onVerDetalle, onEditar, onEli
   // ── Exportar dropdown ──
   const [exportOpen, setExportOpen] = useState(false)
 
-  // ── Estado de filtros ──
-  const [filtroEstado,      setFiltroEstado]      = useState<EstadoHU | "todos">("todos")
-  const [filtroPrioridad,   setFiltroPrioridad]   = useState<PrioridadHU | "todos">("todos")
-  const [filtroResponsable, setFiltroResponsable] = useState<string>("todos")
-  const [filtroTipo,        setFiltroTipo]        = useState<TipoAplicacion | "todos">("todos")
-  const [filtroSprint,      setFiltroSprint]      = useState<string>("todos")
-  const [filtroAmbiente,    setFiltroAmbiente]    = useState<string>("todos")
-  const [filtroTipoPrueba,  setFiltroTipoPrueba]  = useState<string>("todos")
-  const [filtroFechaDesde,  setFiltroFechaDesde]  = useState<string>("")
-  const [filtroFechaHasta,  setFiltroFechaHasta]  = useState<string>("")
-  const [filtrosVisibles,   setFiltrosVisibles]   = useState(false)
+  // ── Filtros, orden y paginación (hook) ──
+  const {
+    filtroEstado,      setFiltroEstado,
+    filtroPrioridad,   setFiltroPrioridad,
+    filtroResponsable, setFiltroResponsable,
+    filtroTipo,        setFiltroTipo,
+    filtroSprint,      setFiltroSprint,
+    filtroAmbiente,    setFiltroAmbiente,
+    filtroTipoPrueba,  setFiltroTipoPrueba,
+    filtroFechaDesde,  setFiltroFechaDesde,
+    filtroFechaHasta,  setFiltroFechaHasta,
+    filtrosVisibles,   setFiltrosVisibles,
+    sortCampo, sortDir, toggleSort,
+    pagina, setPagina,
+    historiasFiltradas,
+    historiasOrdenadas,
+    husEnPagina,
+    filtrosActivos,
+    limpiarFiltros,
+    responsables,
+    tiposApp,
+    sprints,
+    ambientesUnicos,
+    tiposPruebaUnicos,
+    PAGE_SIZE,
+  } = useHistoriasFilters(historias)
 
   // ── Selección masiva ──
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const selectAllRef = useRef<HTMLInputElement>(null)
-
-  // ── Estado de ordenamiento ──
-  const [sortCampo, setSortCampo] = useState<SortCampo>("codigo")
-  const [sortDir,   setSortDir]   = useState<SortDir>("asc")
-
-  // ── Paginación ──
-  const [pagina, setPagina] = useState(1)
-
-  const toggleSort = (campo: SortCampo) => {
-    if (sortCampo === campo) setSortDir(d => d === "asc" ? "desc" : "asc")
-    else { setSortCampo(campo); setSortDir("asc") }
-  }
-
-  // Valores únicos para los selects
-  const responsables      = useMemo(() => [...new Set(historias.map(h => h.responsable))].sort(), [historias])
-  const tiposApp          = useMemo(() => [...new Set(historias.map(h => h.tipoAplicacion))], [historias])
-  const sprints           = useMemo(() => [...new Set(historias.map(h => h.sprint).filter(Boolean) as string[])].sort(), [historias])
-  const ambientesUnicos   = useMemo(() => [...new Set(historias.map(h => h.ambiente))], [historias])
-  const tiposPruebaUnicos = useMemo(() => [...new Set(historias.map(h => h.tipoPrueba).filter(Boolean))], [historias])
-
-  // Aplicar filtros
-  const historiasFiltradas = useMemo(() => historias.filter(hu => {
-    if (filtroEstado      !== "todos" && hu.estado          !== filtroEstado)      return false
-    if (filtroPrioridad   !== "todos" && hu.prioridad       !== filtroPrioridad)   return false
-    if (filtroResponsable !== "todos" && hu.responsable     !== filtroResponsable) return false
-    if (filtroTipo        !== "todos" && hu.tipoAplicacion  !== filtroTipo)        return false
-    if (filtroSprint !== "todos") {
-      const sprintBuscado = filtroSprint === "__sin_sprint__" ? "" : filtroSprint
-      if ((hu.sprint ?? "") !== sprintBuscado) return false
-    }
-    if (filtroAmbiente    !== "todos" && hu.ambiente        !== filtroAmbiente)    return false
-    if (filtroTipoPrueba  !== "todos" && hu.tipoPrueba      !== filtroTipoPrueba)  return false
-    if (filtroFechaDesde) {
-      const desde = new Date(filtroFechaDesde + "T00:00:00")
-      if (hu.fechaCreacion < desde) return false
-    }
-    if (filtroFechaHasta) {
-      const hasta = new Date(filtroFechaHasta + "T23:59:59")
-      if (hu.fechaCreacion > hasta) return false
-    }
-    return true
-  }), [historias, filtroEstado, filtroPrioridad, filtroResponsable, filtroTipo, filtroSprint, filtroAmbiente, filtroTipoPrueba, filtroFechaDesde, filtroFechaHasta])
-
-  // Aplicar ordenamiento
-  const historiasOrdenadas = useMemo(() => {
-    const arr = [...historiasFiltradas]
-    arr.sort((a, b) => {
-      let cmp = 0
-      switch (sortCampo) {
-        case "codigo":      cmp = a.codigo.localeCompare(b.codigo); break
-        case "titulo":      cmp = a.titulo.localeCompare(b.titulo); break
-        case "prioridad":   cmp = PRIORIDAD_ORDER[a.prioridad] - PRIORIDAD_ORDER[b.prioridad]; break
-        case "estado":      cmp = ESTADO_ORDER[a.estado] - ESTADO_ORDER[b.estado]; break
-        case "responsable": cmp = a.responsable.localeCompare(b.responsable); break
-        case "fecha": {
-          const fa = a.fechaFinEstimada?.getTime() ?? Infinity
-          const fb = b.fechaFinEstimada?.getTime() ?? Infinity
-          cmp = fa - fb; break
-        }
-      }
-      return sortDir === "asc" ? cmp : -cmp
-    })
-    return arr
-  }, [historiasFiltradas, sortCampo, sortDir])
-
-  // Resetear página al cambiar filtros u ordenamiento
-  useEffect(() => { setPagina(1) }, [filtroEstado, filtroPrioridad, filtroResponsable, filtroTipo, filtroSprint, filtroAmbiente, filtroTipoPrueba, filtroFechaDesde, filtroFechaHasta, sortCampo, sortDir])
-
-  const husEnPagina = useMemo(
-    () => historiasOrdenadas.slice((pagina - 1) * PAGE_SIZE, pagina * PAGE_SIZE),
-    [historiasOrdenadas, pagina]
-  )
-
-  const filtrosActivos = [filtroEstado, filtroPrioridad, filtroResponsable, filtroTipo, filtroSprint, filtroAmbiente, filtroTipoPrueba].filter(f => f !== "todos").length
-    + (filtroFechaDesde ? 1 : 0) + (filtroFechaHasta ? 1 : 0)
-
-  const limpiarFiltros = () => {
-    setFiltroEstado("todos")
-    setFiltroPrioridad("todos")
-    setFiltroResponsable("todos")
-    setFiltroTipo("todos")
-    setFiltroSprint("todos")
-    setFiltroAmbiente("todos")
-    setFiltroTipoPrueba("todos")
-    setFiltroFechaDesde("")
-    setFiltroFechaHasta("")
-  }
 
   // ── Selección: computed + handlers ──
   const allFilteredIds = historiasOrdenadas.map(h => h.id)
@@ -436,96 +323,12 @@ export function HistoriasTable({ historias, casos, onVerDetalle, onEditar, onEli
 
       {/* ── Selector de Sprint ── */}
       {sprints.length > 0 && (
-        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-          {/* Tabs de sprint */}
-          <div className="overflow-x-auto -mx-1 px-1 pb-0.5 no-scrollbar">
-            <div style={{ display:"flex", gap:5 }}>
-              <button
-                onClick={() => setFiltroSprint("todos")}
-                style={{
-                  display:"inline-flex", alignItems:"center", gap:5,
-                  padding:"5px 12px", borderRadius:7, fontSize:11, fontWeight:600, cursor:"pointer",
-                  border:`1px solid ${filtroSprint==="todos" ? "var(--primary)" : "var(--border)"}`,
-                  background: filtroSprint==="todos" ? "var(--primary)" : "var(--secondary)",
-                  color: filtroSprint==="todos" ? "var(--primary-foreground)" : "var(--muted-foreground)",
-                  whiteSpace:"nowrap",
-                }}
-              >
-                <CalendarDays size={11}/> Todos
-              </button>
-              {sprints.map(sp => {
-                const activo = filtroSprint === sp
-                const husEnSprint = historias.filter(h => h.sprint === sp)
-                const completadas = husEnSprint.filter(h => h.estado === "exitosa").length
-                return (
-                  <button
-                    key={sp}
-                    onClick={() => setFiltroSprint(activo ? "todos" : sp)}
-                    style={{
-                      display:"inline-flex", alignItems:"center", gap:5,
-                      padding:"5px 12px", borderRadius:7, fontSize:11, fontWeight:600, cursor:"pointer",
-                      border:`1px solid ${activo ? "var(--primary)" : "var(--border)"}`,
-                      background: activo ? "var(--primary)" : "var(--secondary)",
-                      color: activo ? "var(--primary-foreground)" : "var(--muted-foreground)",
-                      whiteSpace:"nowrap",
-                    }}
-                  >
-                    {sp}
-                    <span style={{
-                      fontSize:9, fontWeight:700, padding:"1px 5px", borderRadius:5,
-                      background: activo ? "rgba(255,255,255,0.25)" : "color-mix(in oklch, var(--primary) 15%, transparent)",
-                      color: activo ? "var(--primary-foreground)" : "var(--primary)",
-                    }}>
-                      {completadas}/{husEnSprint.length}
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Cards de resumen del sprint activo */}
-          {filtroSprint !== "todos" && filtroSprint !== "__sin_sprint__" && (() => {
-            const husEnSprint = historias.filter(h => h.sprint === filtroSprint)
-            const sinIniciar  = husEnSprint.filter(h => h.estado === "sin_iniciar").length
-            const enProgreso  = husEnSprint.filter(h => h.estado === "en_progreso").length
-            const exitosas    = husEnSprint.filter(h => h.estado === "exitosa").length
-            const fallidas    = husEnSprint.filter(h => h.estado === "fallida" || h.estado === "cancelada").length
-            const pct         = husEnSprint.length > 0 ? Math.round((exitosas / husEnSprint.length) * 100) : 0
-            const puntosTotales   = husEnSprint.reduce((s,h) => s + h.puntos, 0)
-            const puntosEjecutados = husEnSprint.filter(h => h.estado === "exitosa").reduce((s,h) => s + h.puntos, 0)
-
-            return (
-              <div style={{ padding:"14px 16px", borderRadius:10, border:"1px solid var(--border)", background:"var(--card)" }}>
-                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
-                  <p style={{ fontSize:12, fontWeight:700, color:"var(--foreground)" }}>{filtroSprint}</p>
-                  <span style={{ fontSize:11, color:"var(--muted-foreground)" }}>
-                    Progreso: <strong style={{ color:"var(--primary)" }}>{pct}%</strong>
-                    {" · "}{puntosTotales} pts ({puntosEjecutados} completados)
-                  </span>
-                </div>
-                {/* Barra de progreso */}
-                <div style={{ height:5, borderRadius:4, background:"var(--secondary)", overflow:"hidden", marginBottom:12 }}>
-                  <div style={{ width:`${pct}%`, height:"100%", background:"var(--chart-2)", borderRadius:4 }}/>
-                </div>
-                {/* Distribución de estados */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {[
-                    { label:"Sin iniciar",  value:sinIniciar, color:"var(--muted-foreground)" },
-                    { label:"En progreso",  value:enProgreso, color:"var(--chart-1)" },
-                    { label:"Exitosas",     value:exitosas,   color:"var(--chart-2)" },
-                    { label:"Fallidas/Canc",value:fallidas,   color:"var(--chart-4)" },
-                  ].map(s => (
-                    <div key={s.label} style={{ textAlign:"center", padding:"8px 4px", borderRadius:7, background:"var(--background)" }}>
-                      <p style={{ fontSize:20, fontWeight:800, color:s.value > 0 ? s.color : "var(--muted-foreground)", lineHeight:1 }}>{s.value}</p>
-                      <p style={{ fontSize:9, textTransform:"uppercase", letterSpacing:"0.06em", color:"var(--muted-foreground)", marginTop:3 }}>{s.label}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )
-          })()}
-        </div>
+        <SprintPanel
+          historias={historias}
+          sprints={sprints}
+          filtroSprint={filtroSprint}
+          onChangeSprint={setFiltroSprint}
+        />
       )}
 
       {/* ── Barra de acciones masivas ── */}
@@ -571,266 +374,40 @@ export function HistoriasTable({ historias, casos, onVerDetalle, onEditar, onEli
 
       {/* ── Panel de filtros ── */}
       {filtrosVisibles && (
-        <div style={{
-          display:"flex", gap:8, flexWrap:"wrap", alignItems:"center",
-          padding:"10px 14px", borderRadius:10, border:"1px solid var(--border)", background:"var(--card)",
-        }}>
-          <span style={{ fontSize:10, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700, color:"var(--muted-foreground)", flexShrink:0 }}>
-            Filtrar por
-          </span>
-
-          <Select value={filtroEstado} onValueChange={v => setFiltroEstado(v as EstadoHU | "todos")}>
-            <SelectTrigger className="h-7 text-xs w-36">
-              <SelectValue placeholder="Estado" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos">Todos los estados</SelectItem>
-              <SelectItem value="sin_iniciar">Sin Iniciar</SelectItem>
-              <SelectItem value="en_progreso">En Progreso</SelectItem>
-              <SelectItem value="exitosa">Exitosa</SelectItem>
-              <SelectItem value="fallida">Fallida</SelectItem>
-              <SelectItem value="cancelada">Cancelada</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Select value={filtroPrioridad} onValueChange={v => setFiltroPrioridad(v as PrioridadHU | "todos")}>
-            <SelectTrigger className="h-7 text-xs w-32">
-              <SelectValue placeholder="Prioridad" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos">Todas las prioridades</SelectItem>
-              <SelectItem value="critica">Crítica</SelectItem>
-              <SelectItem value="alta">Alta</SelectItem>
-              <SelectItem value="media">Media</SelectItem>
-              <SelectItem value="baja">Baja</SelectItem>
-            </SelectContent>
-          </Select>
-
-          {responsables.length > 1 && (
-            <Select value={filtroResponsable} onValueChange={setFiltroResponsable}>
-              <SelectTrigger className="h-7 text-xs w-40">
-                <SelectValue placeholder="Responsable" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos los responsables</SelectItem>
-                {responsables.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          )}
-
-          {tiposApp.length > 1 && (
-            <Select value={filtroTipo} onValueChange={v => setFiltroTipo(v as TipoAplicacion | "todos")}>
-              <SelectTrigger className="h-7 text-xs w-40">
-                <SelectValue placeholder="Tipo de app" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos los tipos</SelectItem>
-                {tiposApp.map(t => <SelectItem key={t} value={t}>{getTipoAplicacionLabel(t, tiposAplicacion)}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          )}
-
-          {sprints.length > 0 && (
-            <Select value={filtroSprint} onValueChange={setFiltroSprint}>
-              <SelectTrigger className="h-7 text-xs w-36">
-                <SelectValue placeholder="Sprint" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos los sprints</SelectItem>
-                <SelectItem value="__sin_sprint__">Sin sprint</SelectItem>
-                {sprints.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          )}
-
-          {ambientesUnicos.length > 1 && (
-            <Select value={filtroAmbiente} onValueChange={setFiltroAmbiente}>
-              <SelectTrigger className="h-7 text-xs w-36">
-                <SelectValue placeholder="Ambiente" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos los ambientes</SelectItem>
-                {ambientesUnicos.map(a => (
-                  <SelectItem key={a} value={a}>{getAmbienteLabel(a, ambientes)}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-
-          {tiposPruebaUnicos.length > 1 && (
-            <Select value={filtroTipoPrueba} onValueChange={setFiltroTipoPrueba}>
-              <SelectTrigger className="h-7 text-xs w-40">
-                <SelectValue placeholder="Tipo de prueba" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos los tipos</SelectItem>
-                {tiposPruebaUnicos.map(t => (
-                  <SelectItem key={t} value={t}>{getTipoPruebaLabel(t, tiposPrueba)}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-
-          {/* Rango de fechas (fecha de creación) */}
-          <div style={{ display:"flex", alignItems:"center", gap:4 }}>
-            <span style={{ fontSize:10, color:"var(--muted-foreground)", flexShrink:0 }}>Creación</span>
-            <input
-              type="date"
-              value={filtroFechaDesde}
-              onChange={e => setFiltroFechaDesde(e.target.value)}
-              title="Desde"
-              style={{
-                height:28, fontSize:11, padding:"0 6px", borderRadius:6,
-                border:"1px solid var(--border)", background:"var(--card)",
-                color:"var(--foreground)", cursor:"pointer", outline:"none",
-              }}
-            />
-            <span style={{ fontSize:10, color:"var(--muted-foreground)" }}>–</span>
-            <input
-              type="date"
-              value={filtroFechaHasta}
-              onChange={e => setFiltroFechaHasta(e.target.value)}
-              title="Hasta"
-              style={{
-                height:28, fontSize:11, padding:"0 6px", borderRadius:6,
-                border:"1px solid var(--border)", background:"var(--card)",
-                color:"var(--foreground)", cursor:"pointer", outline:"none",
-              }}
-            />
-          </div>
-        </div>
+        <HUFiltersPanel
+          filtroEstado={filtroEstado}            setFiltroEstado={setFiltroEstado}
+          filtroPrioridad={filtroPrioridad}      setFiltroPrioridad={setFiltroPrioridad}
+          filtroResponsable={filtroResponsable}  setFiltroResponsable={setFiltroResponsable}
+          filtroTipo={filtroTipo}                setFiltroTipo={setFiltroTipo}
+          filtroSprint={filtroSprint}            setFiltroSprint={setFiltroSprint}
+          filtroAmbiente={filtroAmbiente}        setFiltroAmbiente={setFiltroAmbiente}
+          filtroTipoPrueba={filtroTipoPrueba}    setFiltroTipoPrueba={setFiltroTipoPrueba}
+          filtroFechaDesde={filtroFechaDesde}    setFiltroFechaDesde={setFiltroFechaDesde}
+          filtroFechaHasta={filtroFechaHasta}    setFiltroFechaHasta={setFiltroFechaHasta}
+          responsables={responsables}
+          tiposApp={tiposApp}
+          sprints={sprints}
+          ambientesUnicos={ambientesUnicos}
+          tiposPruebaUnicos={tiposPruebaUnicos}
+          tiposAplicacion={tiposAplicacion}
+          ambientes={ambientes}
+          tiposPrueba={tiposPrueba}
+        />
       )}
 
       {/* ── TABLERO KANBAN ── */}
       {vistaKanban && (
-        <div className="overflow-x-auto -mx-1 px-1">
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10, alignItems:"start", minWidth: 700 }}>
-          {KANBAN_COLUMNAS.map(col => {
-            const husCol = historiasFiltradas
-              .filter(hu => (col.estados as readonly string[]).includes(hu.estado))
-              .sort((a, b) => PRIORIDAD_ORDER[a.prioridad] - PRIORIDAD_ORDER[b.prioridad])
-
-            return (
-              <div key={col.key} style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                {/* Cabecera columna */}
-                <div style={{
-                  padding:"8px 12px", borderRadius:8,
-                  borderTop:`3px solid ${col.color}`,
-                  background:"var(--secondary)", border:`1px solid var(--border)`,
-                  borderTopColor: col.color,
-                  display:"flex", alignItems:"center", justifyContent:"space-between",
-                }}>
-                  <span style={{ fontSize:11, fontWeight:700, color: col.color, textTransform:"uppercase", letterSpacing:"0.07em" }}>
-                    {col.label}
-                  </span>
-                  <span style={{
-                    background: husCol.length > 0 ? `color-mix(in oklch, ${col.color} 18%, transparent)` : "var(--muted)",
-                    color: husCol.length > 0 ? col.color : "var(--muted-foreground)",
-                    borderRadius:12, fontSize:10, fontWeight:700,
-                    padding:"1px 7px", minWidth:20, textAlign:"center",
-                  }}>
-                    {husCol.length}
-                  </span>
-                </div>
-
-                {/* Cards */}
-                {husCol.length === 0 && (
-                  <div style={{ textAlign:"center", padding:"24px 12px", color:"var(--muted-foreground)", border:"1px dashed var(--border)", borderRadius:8, fontSize:12 }}>
-                    Sin HUs
-                  </div>
-                )}
-
-                {husCol.map(hu => {
-                  const priCfg  = PRIORIDAD_CFG[hu.prioridad]
-                  const etaCfg  = getEtapaHUCfg(hu.etapa, configEtapas)
-                  const casosHU = casos.filter(c => hu.casosIds.includes(c.id))
-                  const tieneBloqueos = hu.bloqueos.some(b => !b.resuelto)
-                  const casosAprobados   = casosHU.filter(c => c.estadoAprobacion === "aprobado")
-                  const casosCompletados = casosAprobados.filter(c =>
-                    c.resultadosPorEtapa.length > 0 && c.resultadosPorEtapa.every(r => r.estado === "completado")
-                  )
-                  const pct = casosAprobados.length > 0 ? Math.round((casosCompletados.length / casosAprobados.length) * 100) : 0
-
-                  return (
-                    <div key={hu.id}
-                      onClick={() => onVerDetalle(hu)}
-                      className="hover:bg-secondary/60"
-                      style={{
-                        padding:"10px 12px", borderRadius:10, cursor:"pointer",
-                        border: tieneBloqueos
-                          ? "1px solid color-mix(in oklch, var(--chart-4) 45%, var(--border))"
-                          : "1px solid var(--border)",
-                        background:"var(--card)", transition:"background 0.15s",
-                        display:"flex", flexDirection:"column", gap:7,
-                      }}
-                    >
-                      {/* Fila 1: código + prioridad + urgencia + bloqueo */}
-                      <div style={{ display:"flex", alignItems:"center", gap:5, flexWrap:"wrap" }}>
-                        <span style={{ fontSize:10, fontFamily:"monospace", color:"var(--primary)", fontWeight:700, flexShrink:0 }}>
-                          {hu.codigo}
-                        </span>
-                        <Badge variant="outline" className={`${priCfg.cls} text-[9px]`} style={{ padding:"0px 5px" }}>
-                          {priCfg.label}
-                        </Badge>
-                        <UrgenciaBadge fecha={hu.fechaFinEstimada} estado={hu.estado} />
-                        {tieneBloqueos && <span title="Bloqueos activos"><AlertTriangle size={11} style={{ color:"var(--chart-4)", flexShrink:0 }}/></span>}
-                      </div>
-
-                      {/* Fila 2: título */}
-                      <p style={{ fontSize:12, fontWeight:600, color:"var(--foreground)", lineHeight:1.35,
-                        display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden",
-                        margin:0,
-                      }}>
-                        {hu.titulo}
-                      </p>
-
-                      {/* Fila 3: etapa + casos */}
-                      <div style={{ display:"flex", alignItems:"center", gap:5, flexWrap:"wrap" }}>
-                        <Badge variant="outline" className={`${etaCfg.cls} text-[9px]`} style={{ padding:"0px 5px" }}>
-                          {etaCfg.label}
-                        </Badge>
-                        <span style={{ display:"flex", alignItems:"center", gap:3, fontSize:10, color:"var(--muted-foreground)" }}>
-                          <Layers size={9}/> {casosHU.length}
-                        </span>
-                      </div>
-
-                      {/* Fila 4: barra de progreso (si hay casos aprobados) */}
-                      {casosAprobados.length > 0 && (
-                        <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                          <Progress value={pct} className="h-1" style={{ flex:1 }}/>
-                          <span style={{ fontSize:9, color:"var(--muted-foreground)", fontFamily:"monospace", flexShrink:0 }}>{pct}%</span>
-                        </div>
-                      )}
-
-                      {/* Fila 5: responsable + acciones */}
-                      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginTop:2 }}
-                        onClick={e => e.stopPropagation()}>
-                        <p style={{ fontSize:10, color:"var(--muted-foreground)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1, minWidth:0 }}>
-                          {hu.responsable}
-                        </p>
-                        <div style={{ display:"flex", gap:2, flexShrink:0 }}>
-                          {canEdit && <>
-                            <button onClick={() => onEditar(hu)} title="Editar"
-                              style={{ background:"none", border:"none", cursor:"pointer", padding:"2px 4px", color:"var(--muted-foreground)", borderRadius:4, display:"flex" }}
-                              className="hover:text-foreground hover:bg-secondary">
-                              <Edit size={11}/>
-                            </button>
-                            <button onClick={() => onEliminar(hu)} title="Eliminar"
-                              style={{ background:"none", border:"none", cursor:"pointer", padding:"2px 4px", color:"var(--chart-4)", borderRadius:4, display:"flex" }}
-                              className="hover:bg-secondary">
-                              <Trash2 size={11}/>
-                            </button>
-                          </>}
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )
-          })}
-        </div>
-        </div>
+        <HistoriasKanban
+          historias={historiasFiltradas}
+          casos={casos}
+          configEtapas={configEtapas}
+          tiposAplicacion={tiposAplicacion}
+          ambientes={ambientes}
+          canEdit={canEdit}
+          onVerDetalle={onVerDetalle}
+          onEditar={onEditar}
+          onEliminar={onEliminar}
+        />
       )}
 
       {/* ── VISTA LISTA ── */}
@@ -1009,6 +586,138 @@ export function HistoriasTable({ historias, casos, onVerDetalle, onEditar, onEli
       </div>
       <Paginador pagina={pagina} total={historiasOrdenadas.length} pageSize={PAGE_SIZE} onCambiar={setPagina} />
       </>}
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════
+// SUB-COMPONENTES
+// ══════════════════════════════════════════════════════════════
+
+interface HUFiltersPanelProps {
+  filtroEstado: EstadoHU | "todos";           setFiltroEstado: (v: EstadoHU | "todos") => void
+  filtroPrioridad: PrioridadHU | "todos";     setFiltroPrioridad: (v: PrioridadHU | "todos") => void
+  filtroResponsable: string;                  setFiltroResponsable: (v: string) => void
+  filtroTipo: TipoAplicacion | "todos";       setFiltroTipo: (v: TipoAplicacion | "todos") => void
+  filtroSprint: string;                       setFiltroSprint: (v: string) => void
+  filtroAmbiente: string;                     setFiltroAmbiente: (v: string) => void
+  filtroTipoPrueba: string;                   setFiltroTipoPrueba: (v: string) => void
+  filtroFechaDesde: string;                   setFiltroFechaDesde: (v: string) => void
+  filtroFechaHasta: string;                   setFiltroFechaHasta: (v: string) => void
+  responsables: string[]
+  tiposApp: TipoAplicacion[]
+  sprints: string[]
+  ambientesUnicos: string[]
+  tiposPruebaUnicos: string[]
+  tiposAplicacion?: TipoAplicacionDef[]
+  ambientes?: AmbienteDef[]
+  tiposPrueba?: TipoPruebaDef[]
+}
+
+function HUFiltersPanel({
+  filtroEstado, setFiltroEstado, filtroPrioridad, setFiltroPrioridad,
+  filtroResponsable, setFiltroResponsable, filtroTipo, setFiltroTipo,
+  filtroSprint, setFiltroSprint, filtroAmbiente, setFiltroAmbiente,
+  filtroTipoPrueba, setFiltroTipoPrueba, filtroFechaDesde, setFiltroFechaDesde,
+  filtroFechaHasta, setFiltroFechaHasta,
+  responsables, tiposApp, sprints, ambientesUnicos, tiposPruebaUnicos,
+  tiposAplicacion, ambientes, tiposPrueba,
+}: HUFiltersPanelProps) {
+  return (
+    <div style={{
+      display:"flex", gap:8, flexWrap:"wrap", alignItems:"center",
+      padding:"10px 14px", borderRadius:10, border:"1px solid var(--border)", background:"var(--card)",
+    }}>
+      <span style={{ fontSize:10, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700, color:"var(--muted-foreground)", flexShrink:0 }}>
+        Filtrar por
+      </span>
+
+      <Select value={filtroEstado} onValueChange={v => setFiltroEstado(v as EstadoHU | "todos")}>
+        <SelectTrigger className="h-7 text-xs w-36"><SelectValue placeholder="Estado" /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="todos">Todos los estados</SelectItem>
+          <SelectItem value="sin_iniciar">Sin Iniciar</SelectItem>
+          <SelectItem value="en_progreso">En Progreso</SelectItem>
+          <SelectItem value="exitosa">Exitosa</SelectItem>
+          <SelectItem value="fallida">Fallida</SelectItem>
+          <SelectItem value="cancelada">Cancelada</SelectItem>
+        </SelectContent>
+      </Select>
+
+      <Select value={filtroPrioridad} onValueChange={v => setFiltroPrioridad(v as PrioridadHU | "todos")}>
+        <SelectTrigger className="h-7 text-xs w-32"><SelectValue placeholder="Prioridad" /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="todos">Todas las prioridades</SelectItem>
+          <SelectItem value="critica">Crítica</SelectItem>
+          <SelectItem value="alta">Alta</SelectItem>
+          <SelectItem value="media">Media</SelectItem>
+          <SelectItem value="baja">Baja</SelectItem>
+        </SelectContent>
+      </Select>
+
+      {responsables.length > 1 && (
+        <Select value={filtroResponsable} onValueChange={setFiltroResponsable}>
+          <SelectTrigger className="h-7 text-xs w-40"><SelectValue placeholder="Responsable" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos los responsables</SelectItem>
+            {responsables.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      )}
+
+      {tiposApp.length > 1 && (
+        <Select value={filtroTipo} onValueChange={v => setFiltroTipo(v as TipoAplicacion | "todos")}>
+          <SelectTrigger className="h-7 text-xs w-40"><SelectValue placeholder="Tipo de app" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos los tipos</SelectItem>
+            {tiposApp.map(t => <SelectItem key={t} value={t}>{getTipoAplicacionLabel(t, tiposAplicacion)}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      )}
+
+      {sprints.length > 0 && (
+        <Select value={filtroSprint} onValueChange={setFiltroSprint}>
+          <SelectTrigger className="h-7 text-xs w-36"><SelectValue placeholder="Sprint" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos los sprints</SelectItem>
+            <SelectItem value="__sin_sprint__">Sin sprint</SelectItem>
+            {sprints.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      )}
+
+      {ambientesUnicos.length > 1 && (
+        <Select value={filtroAmbiente} onValueChange={setFiltroAmbiente}>
+          <SelectTrigger className="h-7 text-xs w-36"><SelectValue placeholder="Ambiente" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos los ambientes</SelectItem>
+            {ambientesUnicos.map(a => (
+              <SelectItem key={a} value={a}>{getAmbienteLabel(a, ambientes)}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+
+      {tiposPruebaUnicos.length > 1 && (
+        <Select value={filtroTipoPrueba} onValueChange={setFiltroTipoPrueba}>
+          <SelectTrigger className="h-7 text-xs w-40"><SelectValue placeholder="Tipo de prueba" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos los tipos</SelectItem>
+            {tiposPruebaUnicos.map(t => (
+              <SelectItem key={t} value={t}>{getTipoPruebaLabel(t, tiposPrueba)}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+
+      <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+        <span style={{ fontSize:10, color:"var(--muted-foreground)", flexShrink:0 }}>Creación</span>
+        <input type="date" value={filtroFechaDesde} onChange={e => setFiltroFechaDesde(e.target.value)} title="Desde"
+          style={{ height:28, fontSize:11, padding:"0 6px", borderRadius:6, border:"1px solid var(--border)", background:"var(--card)", color:"var(--foreground)", cursor:"pointer", outline:"none" }} />
+        <span style={{ fontSize:10, color:"var(--muted-foreground)" }}>–</span>
+        <input type="date" value={filtroFechaHasta} onChange={e => setFiltroFechaHasta(e.target.value)} title="Hasta"
+          style={{ height:28, fontSize:11, padding:"0 6px", borderRadius:6, border:"1px solid var(--border)", background:"var(--card)", color:"var(--foreground)", cursor:"pointer", outline:"none" }} />
+      </div>
     </div>
   )
 }

@@ -8,7 +8,7 @@ import {
   TIPOS_PRUEBA_PREDETERMINADOS,
 } from "@/lib/constants/index"
 import type { ConfigEtapas, TipoAplicacionDef, AmbienteDef, TipoPruebaDef } from "@/lib/types/index"
-import { APLICACIONES_PREDETERMINADAS } from "@/components/dashboard/aplicaciones-config"
+import { APLICACIONES_PREDETERMINADAS } from "@/components/dashboard/config/aplicaciones-config"
 
 /**
  * Gestiona toda la configuración de la aplicación:

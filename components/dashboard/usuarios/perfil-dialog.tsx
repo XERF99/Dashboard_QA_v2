@@ -11,25 +11,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { User, Mail, KeyRound, Check, Info, Shield, FlaskConical, Eye } from "lucide-react"
+import { User, Mail, KeyRound, Check, Info } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
+import { getInitials, getRoleIcon } from "@/lib/utils/user-utils"
 
 interface PerfilDialogProps {
   open: boolean
   onClose: () => void
-}
-
-function getInitials(nombre: string) {
-  return nombre.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)
-}
-
-function getRoleIcon(rol: string) {
-  switch (rol) {
-    case "admin":  return <Shield size={11} />
-    case "qa":     return <FlaskConical size={11} />
-    case "viewer": return <Eye size={11} />
-    default:       return null
-  }
 }
 
 export function PerfilDialog({ open, onClose }: PerfilDialogProps) {
@@ -105,7 +93,7 @@ export function PerfilDialog({ open, onClose }: PerfilDialogProps) {
                   className={`${rolDef?.cls ?? "bg-muted text-muted-foreground border-border"} text-[10px] flex items-center gap-1 w-fit`}
                   style={{ padding: "2px 8px" }}
                 >
-                  {getRoleIcon(user.rol)}
+                  {getRoleIcon(user.rol, 11)}
                   {rolDef?.label ?? user.rol}
                 </Badge>
               </div>

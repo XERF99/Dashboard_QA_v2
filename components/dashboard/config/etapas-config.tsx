@@ -13,17 +13,8 @@ import {
   type TipoAplicacionDef,
 } from "@/lib/types"
 
-// Paleta de clases CSS para badges de etapas personalizadas
-const BADGE_PALETA: { cls: string; sample: string }[] = [
-  { cls: "bg-chart-1/20 text-chart-1 border-chart-1/30",           sample: "#2563eb" },
-  { cls: "bg-chart-2/20 text-chart-2 border-chart-2/30",           sample: "#15803d" },
-  { cls: "bg-chart-3/20 text-chart-3 border-chart-3/30",           sample: "#ca8a04" },
-  { cls: "bg-chart-4/20 text-chart-4 border-chart-4/30",           sample: "#dc2626" },
-  { cls: "bg-purple-500/20 text-purple-500 border-purple-500/30",  sample: "#9333ea" },
-  { cls: "bg-pink-500/20 text-pink-500 border-pink-500/30",        sample: "#ec4899" },
-  { cls: "bg-cyan-600/20 text-cyan-600 border-cyan-600/30",        sample: "#0891b2" },
-  { cls: "bg-orange-500/20 text-orange-500 border-orange-500/30",  sample: "#f97316" },
-]
+import { BADGE_PALETA } from "@/lib/constants/badge-paleta"
+import { labelToId } from "@/lib/hooks/useListConfig"
 
 interface EtapasConfigProps {
   config: ConfigEtapas
@@ -54,11 +45,7 @@ export function EtapasConfig({ config, onChange, tipos: tiposProp }: EtapasConfi
   function agregarEtapa(tipo: string) {
     const label = (nuevoLabel[tipo] ?? "").trim()
     if (!label) return
-    const id = label
-      .toLowerCase()
-      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-      .replace(/\s+/g, "_")
-      .replace(/[^a-z0-9_]/g, "")
+    const id = labelToId(label)
     if (!id || config[tipo].some(e => e.id === id)) return
     const cls = nuevoCls[tipo] ?? BADGE_PALETA[config[tipo].length % BADGE_PALETA.length].cls
     onChange({ ...config, [tipo]: [...config[tipo], { id, label, cls }] })

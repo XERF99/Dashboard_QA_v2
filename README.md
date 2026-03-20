@@ -101,6 +101,29 @@ Sistema integral de gestión de calidad para equipos QA. Permite administrar His
 
 ## Changelog
 
+### v2.2 — Optimizaciones de código (opt4)
+- **`historia-usuario-detail.tsx`**: se extrajeron `HUBloqueos` (con su propio estado de formulario) y `HUHistorialPanel` como sub-componentes. El componente principal redujo ~80 líneas y 4 variables de estado.
+- **`historias-table.tsx`**: se extrajo `HUFiltersPanel` (~130 líneas). El panel de filtros tiene una interfaz explícita y vive al final del mismo archivo.
+- **`caso-prueba-card.tsx`**: se extrajo `TareaItem` (~80 líneas) con su propio estado de bloqueo (`showBloqueoForm`, `bloqueoTexto`). El componente principal eliminó 2 variables de estado y simplificó el `.map()`.
+
+### v2.2 — Optimizaciones de código (opt3)
+- **`NavTabGroup` badge**: prop `badge?: number` en `NavTabItem` para mostrar contadores en items del sidebar de administración.
+- **`COMPLEJIDAD_CFG` unificado**: `casos-table.tsx` ahora importa `COMPLEJIDAD_CFG` de `@/lib/types` en lugar de redefinirlo localmente (alinea con `caso-prueba-card.tsx`).
+
+### v2.2 — Optimizaciones de código (opt2)
+- **`lib/utils/user-utils.tsx`**: centraliza `getInitials` y `getRoleIcon`, eliminando duplicados en `header.tsx` y `perfil-dialog.tsx`.
+- **`lib/utils/date-utils.ts`**: centraliza `fmtFecha` (formato relativo de fechas), antes definida inline en `header.tsx`.
+- **`components/ui/paginator.tsx`**: componente `Paginador` compartido, elimina la función idéntica que estaba duplicada en 4 archivos (`casos-table`, `historias-table`, `bloqueos-panel`, `auditoria-panel`).
+- **`labelToId` unificado**: `etapas-config.tsx` ahora importa `labelToId` de `useListConfig` en lugar de redefinirlo inline.
+
+### v2.2 — Optimizaciones de código (opt)
+- **Organización por módulos**: `components/dashboard/` reorganizado en 6 subdirectorios por dominio (`shared/`, `historias/`, `casos/`, `analytics/`, `usuarios/`, `config/`), cada uno con barrel `index.ts`. Los 21 imports individuales en `page.tsx` quedaron en 6 imports agrupados.
+- **`GenericListConfig`**: componente reutilizable que reemplaza la lógica CRUD duplicada en `tipos-aplicacion-config`, `ambientes-config` y `tipos-prueba-config` (~280 líneas eliminadas).
+- **`useListConfig`**: hook genérico que encapsula agregar, eliminar, reordenar, editar y restaurar para listas `{ id, label }[]`.
+- **`NavTabGroup`**: componente de navegación lateral reutilizable que reemplaza los bloques de botones duplicados en el panel de administración (~50 líneas eliminadas).
+- **`lib/constants/badge-paleta.ts`**: paleta de colores compartida, elimina la constante duplicada en `etapas-config` y `roles-config`.
+- **`lib/export/`**: módulo de exportación separado (`hu-export.ts`, `analytics-export.ts`, `utils.ts`) con `export-utils.ts` como barrel de compatibilidad.
+
 ### v2.2
 - **Panel de Riesgos** en el tab Inicio: detecta automáticamente HUs vencidas, por vencer, bloqueadas y casos sin ejecutar. Cada alerta es clickeable para navegar a la HU afectada.
 - **Vista por Sprint** en Historias: barra de tabs por sprint con card de resumen (progreso %, distribución de estados, story points) que aparece al asignar el campo sprint a las HUs.
@@ -209,6 +232,8 @@ vercel --prod   # Despliegues posteriores a producción
 
 ## Estructura del proyecto
 
+`components/dashboard/` está organizado por **módulos de dominio**. Cada módulo tiene un `index.ts` barrel que centraliza los exports, permitiendo imports agrupados desde `page.tsx`.
+
 ```
 dashboard_v22/
 ├── app/
@@ -217,49 +242,72 @@ dashboard_v22/
 │   └── page.tsx              # Página principal — navegación y lógica de estado
 ├── components/
 │   ├── auth/
-│   │   └── login-screen.tsx  # Pantalla de inicio de sesión
+│   │   └── login-screen.tsx
 │   ├── dashboard/
-│   │   ├── home-dashboard.tsx          # Vista de inicio con KPIs y calendario
-│   │   ├── panel-riesgos.tsx           # Panel de alertas automáticas de riesgo ← v2.2
-│   │   ├── historias-table.tsx         # Tabla de HUs con filtros, sprints y acciones masivas
-│   │   ├── csv-import-modal.tsx        # Modal de importación desde CSV          ← v2.2
-│   │   ├── historia-usuario-detail.tsx # Modal detalle de HU con casos y tareas
-│   │   ├── hu-form.tsx                 # Formulario de creación/edición de HU
-│   │   ├── hu-templates.tsx            # Plantillas predefinidas para nuevas HUs ← v2.2
-│   │   ├── hu-stats-cards.tsx          # Tarjetas de estadísticas de HUs
-│   │   ├── casos-table.tsx             # Vista global de casos de prueba
-│   │   ├── analytics-kpis.tsx          # KPIs y gráficos de analytics
-│   │   ├── carga-ocupacional.tsx       # Gráficos de carga por usuario
-│   │   ├── bloqueos-panel.tsx          # Panel unificado de bloqueos
-│   │   ├── auditoria-panel.tsx         # Historial de auditoría
-│   │   ├── user-management.tsx         # CRUD de usuarios
-│   │   ├── roles-config.tsx            # Configuración de roles
-│   │   ├── tipos-aplicacion-config.tsx # Tipos de aplicación
-│   │   ├── aplicaciones-config.tsx     # Lista de aplicaciones
-│   │   ├── ambientes-config.tsx        # Ambientes de prueba
-│   │   ├── tipos-prueba-config.tsx     # Tipos de prueba
-│   │   ├── etapas-config.tsx           # Etapas por tipo de aplicación
-│   │   ├── header.tsx                  # Encabezado con búsqueda y notificaciones
-│   │   └── perfil-dialog.tsx           # Diálogo de perfil de usuario
+│   │   ├── shared/           # Componentes compartidos entre módulos
+│   │   │   ├── header.tsx
+│   │   │   ├── toast-container.tsx
+│   │   │   ├── confirm-delete-modal.tsx
+│   │   │   ├── bloqueos-panel.tsx
+│   │   │   ├── comment-thread.tsx
+│   │   │   ├── auditoria-panel.tsx
+│   │   │   ├── sprint-panel.tsx
+│   │   │   ├── panel-riesgos.tsx
+│   │   │   ├── nav-tab-group.tsx   # Navegación lateral reutilizable ← v2.2opt
+│   │   │   └── index.ts
+│   │   ├── historias/        # Módulo Historias de Usuario
+│   │   │   ├── historias-table.tsx
+│   │   │   ├── historias-kanban.tsx
+│   │   │   ├── historia-usuario-detail.tsx
+│   │   │   ├── hu-form.tsx
+│   │   │   ├── hu-stats-cards.tsx
+│   │   │   ├── hu-templates.tsx
+│   │   │   ├── csv-import-modal.tsx
+│   │   │   └── index.ts
+│   │   ├── casos/            # Módulo Casos de Prueba
+│   │   │   ├── casos-table.tsx
+│   │   │   ├── caso-prueba-card.tsx
+│   │   │   └── index.ts
+│   │   ├── analytics/        # Módulo Analíticas
+│   │   │   ├── home-dashboard.tsx
+│   │   │   ├── analytics-kpis.tsx
+│   │   │   ├── carga-ocupacional.tsx
+│   │   │   └── index.ts
+│   │   ├── usuarios/         # Módulo Usuarios
+│   │   │   ├── user-management.tsx
+│   │   │   ├── perfil-dialog.tsx
+│   │   │   └── index.ts
+│   │   └── config/           # Módulo Configuración
+│   │       ├── generic-list-config.tsx  # CRUD genérico de listas ← v2.2opt
+│   │       ├── etapas-config.tsx
+│   │       ├── roles-config.tsx
+│   │       ├── tipos-aplicacion-config.tsx
+│   │       ├── ambientes-config.tsx
+│   │       ├── tipos-prueba-config.tsx
+│   │       ├── aplicaciones-config.tsx
+│   │       └── index.ts
 │   └── ui/                   # Componentes base de shadcn/ui
 ├── lib/
-│   ├── types.ts              # Re-export de tipos (compatibilidad hacia atrás)
-│   ├── types/
-│   │   └── index.ts          # Declaraciones de tipos e interfaces del dominio
-│   ├── constants/
-│   │   └── index.ts          # Mapas de configuración (estados, roles, colores, etc.)
-│   ├── utils/
-│   │   └── domain.ts         # Funciones helpers del dominio
-│   ├── data/
-│   │   └── seed.ts           # Datos de ejemplo para desarrollo
-│   ├── services/
-│   │   ├── interfaces.ts     # Contratos de servicio (IHistoriaService, ICasoService, …)
-│   │   ├── index.ts          # Punto de entrada — swap único para conectar un backend
-│   │   └── localStorage/     # Implementaciones actuales (historia, caso, tarea, config)
+│   ├── types.ts              # Tipos e interfaces del dominio
 │   ├── auth-context.tsx      # Contexto de autenticación y lógica de roles
 │   ├── storage.ts            # Helpers de localStorage y claves tcs_*
-│   └── utils.ts              # Utilidad cn()
-├── public/                   # Assets estáticos
+│   ├── constants/
+│   │   └── badge-paleta.ts   # Paleta de colores compartida para badges ← v2.2opt
+│   ├── hooks/
+│   │   ├── useAuth.ts
+│   │   ├── useConfig.ts
+│   │   ├── useDomainData.ts        # Facade de datos del dominio
+│   │   ├── useHistoriasVisibles.ts
+│   │   ├── useHUModals.ts
+│   │   ├── useListConfig.ts        # Hook CRUD genérico para listas ← v2.2opt
+│   │   ├── useNotificaciones.ts
+│   │   ├── usePersistedState.ts
+│   │   └── useToast.ts
+│   └── export/
+│       ├── hu-export.ts            # Exportación de HUs
+│       ├── analytics-export.ts     # Exportación de Analíticas
+│       └── utils.ts
+├── public/
 ├── next.config.mjs
 ├── tsconfig.json
 └── package.json
@@ -284,3 +332,31 @@ dashboard_v22/
 ## Variables de entorno
 
 Actualmente el proyecto no requiere variables de entorno. Si en el futuro se conecta a una API externa, crear un archivo `.env.local` con las claves necesarias (no incluir en el repositorio).
+
+---
+
+## Changelog
+
+### v2.2 — Migración Tailwind + Responsive + Dark Mode (opt5)
+
+**Responsive (mobile / tablet)**
+- `app/page.tsx`: badge de bloqueos y footer migrados a clases Tailwind; `min-h-[calc(100vh-124px)]` reemplaza inline style
+- `globals.css`: media query `@media (max-width: 640px)` ajusta modales a ancho total con `border-radius: 14px`; dialogs shadcn limitados a `92vh` en móvil
+
+**Dark mode más robusto**
+- `globals.css`: `color-scheme: dark` aplicado a `input`, `select` y `textarea` en `.dark` para que los controles nativos (ej. `<input type="date">`) respeten el tema oscuro
+- `globals.css`: transición suave `background-color / color 0.2s ease` al cambiar de tema
+- `header.tsx`: badge de notificaciones y botón de búsqueda eliminan `color:"#fff"` y `background:"var(--...)"` hardcodeados; todo pasa por clases semánticas Tailwind (`bg-chart-4`, `text-white`, `border-background`, etc.)
+
+**Limpieza de inline styles**
+- `header.tsx`: panel de notificaciones completo (~60 líneas de `style={{...}}`) → Tailwind; diálogo de logout (~40 líneas) → Tailwind
+- `hu-stats-cards.tsx`: archivo reescrito completamente en Tailwind (eliminados 3 objetos `React.CSSProperties`); colores de valores condicionales usando `text-chart-2 / text-chart-4 / text-muted-foreground`
+
+### v2.2 — Optimizaciones de código (opt4)
+- `historia-usuario-detail.tsx`: `HUBloqueos` + `HUHistorialPanel` extraídos como sub-componentes (~80 líneas, 4 variables de estado movidas)
+- `historias-table.tsx`: `HUFiltersPanel` extraído (~130 líneas, 21 props con contrato tipado)
+- `caso-prueba-card.tsx`: `TareaItem` extraído (~80 líneas, 2 variables de estado movidas)
+
+### v2.2 — Optimizaciones de código (opt3)
+- `nav-tab-group.tsx`: prop `badge?: number` añadida para mostrar contador visual en tabs
+- `casos-table.tsx`: `COMPLEJIDAD_CFG` eliminado del archivo, importado desde `@/lib/types`

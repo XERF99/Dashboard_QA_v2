@@ -166,6 +166,29 @@
   padding: 0 !important;
 }
 
+/* Modales más compactos en móvil */
+@media (max-width: 640px) {
+  .cambio-detail-modal,
+  .cambio-form-modal {
+    width: calc(100vw - 16px) !important;
+    max-width: calc(100vw - 16px) !important;
+    max-height: 94vh !important;
+    border-radius: 14px !important;
+  }
+}
+
+/* Transición suave al cambiar tema claro/oscuro */
+html {
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Dark mode: inputs y selects nativos con color-scheme correcto */
+.dark input,
+.dark select,
+.dark textarea {
+  color-scheme: dark;
+}
+
 /* ── Scrollbars invisibles globalmente (scroll sigue funcionando) ── */
 * {
   scrollbar-width: none;       /* Firefox */
