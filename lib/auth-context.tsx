@@ -91,6 +91,8 @@ export interface User {
   debeCambiarPassword: boolean  // true = debe cambiar en próximo login
   equipoIds?: string[]          // IDs de usuarios asignados a este líder
   historialConexiones?: { entrada: Date; salida?: Date }[]  // últimas 50 sesiones
+  intentosFallidos?: number     // contador de intentos de login incorrectos consecutivos
+  bloqueado?: boolean           // true = bloqueado por exceder intentos (requiere desbloqueo admin)
 }
 
 export type UserSafe = Omit<User, "password">
@@ -167,6 +169,7 @@ interface AuthContextType {
   deleteUser: (id: string) => { success: boolean; error?: string }
   toggleUserActive: (id: string) => void
   resetPassword: (userId: string) => { success: boolean; error?: string }
+  desbloquearUsuario: (userId: string) => { success: boolean; error?: string }
   addRole: (data: Omit<RoleDef, "id" | "esBase">) => { success: boolean; error?: string }
   updateRole: (role: RoleDef) => { success: boolean; error?: string }
   deleteRole: (id: string) => { success: boolean; error?: string }
@@ -209,16 +212,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const found = users.find(u => u.email.toLowerCase() === email.toLowerCase())
     if (!found) return { success: false, error: "Usuario no encontrado" }
     if (!found.activo) return { success: false, error: "Tu cuenta está desactivada. Contacta al administrador." }
-    if (found.password !== password) return { success: false, error: "Contraseña incorrecta" }
+    if (found.bloqueado) return { success: false, error: "Tu cuenta está bloqueada por demasiados intentos fallidos. Contacta al administrador para desbloquearla." }
+
+    if (found.password !== password) {
+      const intentos = (found.intentosFallidos ?? 0) + 1
+      const bloqueadoNow = intentos >= 5
+      setUsers(prev => prev.map(u =>
+        u.id === found.id ? { ...u, intentosFallidos: intentos, bloqueado: bloqueadoNow } : u
+      ))
+      if (bloqueadoNow)
+        return { success: false, error: "Cuenta bloqueada por demasiados intentos fallidos. Contacta al administrador." }
+      const restantes = 5 - intentos
+      return { success: false, error: `Contraseña incorrecta. ${restantes} intento${restantes !== 1 ? "s" : ""} restante${restantes !== 1 ? "s" : ""}.` }
+    }
 
     const { password: _, ...safe } = found
     setUser(safe)
 
-    // Registrar entrada de sesión (mantener solo las últimas 50)
+    // Login exitoso: resetear contador y registrar entrada de sesión
     const ahora = new Date()
     setUsers(prev => prev.map(u =>
       u.id === found.id
-        ? { ...u, historialConexiones: [...(u.historialConexiones ?? []).slice(-49), { entrada: ahora }] }
+        ? { ...u, intentosFallidos: 0, bloqueado: false, historialConexiones: [...(u.historialConexiones ?? []).slice(-49), { entrada: ahora }] }
         : u
     ))
 
@@ -274,6 +289,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (targetRolDef?.permisos.includes("canManageUsers") && !currentIsOwner)
       return { success: false, error: "Solo un Owner puede crear usuarios con rol de Administrador" }
 
+    // Solo puede existir un Owner en el sistema
+    if (targetRolDef?.permisos.includes("isSuperAdmin")) {
+      const ownerCount = users.filter(u => roles.find(r => r.id === u.rol)?.permisos.includes("isSuperAdmin")).length
+      if (ownerCount >= 1) return { success: false, error: "Solo puede existir un Owner en el sistema" }
+    }
+
     const maxId = Math.max(...users.map(u => parseInt(u.id.split("-")[1])))
     const id = `usr-${String(maxId + 1).padStart(3, "0")}`
 
@@ -305,6 +326,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       !currentIsOwner &&
       existingUser?.rol !== updatedUser.rol
     ) return { success: false, error: "Solo un Owner puede asignar el rol de Administrador" }
+
+    // Prevenir promover a un segundo Owner
+    if (
+      targetRolDef?.permisos.includes("isSuperAdmin") &&
+      existingUser?.rol !== updatedUser.rol
+    ) {
+      const ownerCount = users.filter(u => roles.find(r => r.id === u.rol)?.permisos.includes("isSuperAdmin")).length
+      if (ownerCount >= 1) return { success: false, error: "Solo puede existir un Owner en el sistema" }
+    }
 
     setUsers(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u))
 
@@ -369,7 +399,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!target) return { success: false, error: "Usuario no encontrado" }
 
     setUsers(prev => prev.map(u =>
-      u.id === userId ? { ...u, password: PASSWORD_GENERICA, debeCambiarPassword: true } : u
+      u.id === userId
+        ? { ...u, password: PASSWORD_GENERICA, debeCambiarPassword: true, intentosFallidos: 0, bloqueado: false }
+        : u
+    ))
+    return { success: true }
+  }, [users])
+
+  const desbloquearUsuario = useCallback((userId: string) => {
+    const target = users.find(u => u.id === userId)
+    if (!target) return { success: false, error: "Usuario no encontrado" }
+    setUsers(prev => prev.map(u =>
+      u.id === userId ? { ...u, intentosFallidos: 0, bloqueado: false } : u
     ))
     return { success: true }
   }, [users])
@@ -431,7 +472,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user, users, roles, isAuthenticated: user !== null,
       pendientePassword,
       login, logout, cambiarPassword, updateProfile,
-      addUser, updateUser, deleteUser, toggleUserActive, resetPassword,
+      addUser, updateUser, deleteUser, toggleUserActive, resetPassword, desbloquearUsuario,
       addRole, updateRole, deleteRole,
       canEdit, canManageUsers, canView, isAdmin, isQALead, isQA,
       canApproveCases, canCreateHU, verSoloPropios, isOwner,

@@ -65,6 +65,8 @@ import {
   UserCheck,
   Star,
   History,
+  Lock,
+  Unlock,
 } from "lucide-react"
 
 // ── Helpers de formato para conexiones ───────────────────
@@ -86,13 +88,15 @@ function formatDuracion(ms: number): string {
 }
 
 export function UserManagement() {
-  const { users, roles, user: currentUser, isOwner, addUser, updateUser, deleteUser, resetPassword } = useAuth()
+  const { users, roles, user: currentUser, isOwner, addUser, updateUser, deleteUser, resetPassword, desbloquearUsuario } = useAuth()
   const [formOpen, setFormOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [resetDialogOpen, setResetDialogOpen] = useState(false)
   const [userToEdit, setUserToEdit] = useState<User | null>(null)
   const [userToDelete, setUserToDelete] = useState<User | null>(null)
   const [userToReset, setUserToReset] = useState<User | null>(null)
+  const [unlockDialogOpen, setUnlockDialogOpen] = useState(false)
+  const [userToUnlock, setUserToUnlock] = useState<User | null>(null)
 
   // Form state
   const [nombre, setNombre] = useState("")
@@ -182,6 +186,19 @@ export function UserManagement() {
     }
   }
 
+  const confirmUnlock = (user: User) => {
+    setUserToUnlock(user)
+    setUnlockDialogOpen(true)
+  }
+
+  const handleUnlock = () => {
+    if (userToUnlock) {
+      desbloquearUsuario(userToUnlock.id)
+      setUnlockDialogOpen(false)
+      setUserToUnlock(null)
+    }
+  }
+
   const getRoleIcon = (rolId: string) => {
     switch (rolId) {
       case "owner":   return <Star className="h-3.5 w-3.5" />
@@ -200,6 +217,11 @@ export function UserManagement() {
 
   const activeCount   = users.filter(u => u.activo).length
   const inactiveCount = users.length - activeCount
+
+  // Si ya existe un Owner diferente al usuario que se está editando, no se puede crear otro
+  const ownerYaExiste = users.some(u =>
+    roles.find(r => r.id === u.rol)?.permisos.includes("isSuperAdmin") && u.id !== userToEdit?.id
+  )
 
   const getRoleAccentColor = (rolId: string) => {
     switch (rolId) {
@@ -483,19 +505,27 @@ export function UserManagement() {
                       </div>
                     </TableCell>
 
-                    {/* Estado activo/inactivo */}
+                    {/* Estado activo/inactivo/bloqueado */}
                     <TableCell className="hidden sm:table-cell">
-                      {u.activo ? (
-                        <div className="flex items-center gap-1.5 text-chart-2">
-                          <CheckCircle2 className="h-4 w-4" />
-                          <span className="text-xs font-medium">Activo</span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-1.5 text-muted-foreground">
-                          <XCircle className="h-4 w-4" />
-                          <span className="text-xs font-medium">Inactivo</span>
-                        </div>
-                      )}
+                      <div className="flex flex-col gap-1">
+                        {u.activo ? (
+                          <div className="flex items-center gap-1.5 text-chart-2">
+                            <CheckCircle2 className="h-4 w-4" />
+                            <span className="text-xs font-medium">Activo</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5 text-muted-foreground">
+                            <XCircle className="h-4 w-4" />
+                            <span className="text-xs font-medium">Inactivo</span>
+                          </div>
+                        )}
+                        {u.bloqueado && (
+                          <div className="flex items-center gap-1.5 text-chart-4">
+                            <Lock className="h-3.5 w-3.5" />
+                            <span className="text-[11px] font-medium">Bloqueado</span>
+                          </div>
+                        )}
+                      </div>
                     </TableCell>
 
                     {/* Contraseña */}
@@ -528,6 +558,12 @@ export function UserManagement() {
                             <DropdownMenuItem onClick={() => confirmResetPassword(u)}>
                               <KeyRound className="mr-2 h-4 w-4" />
                               Resetear contraseña
+                            </DropdownMenuItem>
+                          )}
+                          {u.bloqueado && u.id !== currentUser?.id && (
+                            <DropdownMenuItem onClick={() => confirmUnlock(u)}>
+                              <Unlock className="mr-2 h-4 w-4" />
+                              Desbloquear cuenta
                             </DropdownMenuItem>
                           )}
                           {canDeleteTarget(u) && (
@@ -601,7 +637,11 @@ export function UserManagement() {
                   </SelectTrigger>
                   <SelectContent>
                     {roles
-                      .filter(r => isOwner || (!r.permisos.includes("canManageUsers") && !r.permisos.includes("isSuperAdmin")))
+                      .filter(r => {
+                        if (!isOwner && (r.permisos.includes("canManageUsers") || r.permisos.includes("isSuperAdmin"))) return false
+                        if (r.permisos.includes("isSuperAdmin") && ownerYaExiste) return false
+                        return true
+                      })
                       .map(r => (
                         <SelectItem key={r.id} value={r.id}>
                           <div className="flex items-center gap-2">
@@ -627,7 +667,7 @@ export function UserManagement() {
                   const msg = isOwnerRole
                     ? "Ve la carga de todos los usuarios"
                     : isAdminRole
-                    ? "Ve su propia carga y la de su equipo asignado (o todos si sin equipo)"
+                    ? "Ve su propia carga y la de su equipo asignado (solo la propia si no tiene equipo)"
                     : isLeadRole
                     ? "Ve su propia carga y la de su equipo asignado"
                     : isQARole
@@ -749,6 +789,29 @@ export function UserManagement() {
             >
               <KeyRound className="h-4 w-4 mr-2" />
               Resetear
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Diálogo confirmación desbloqueo */}
+      <AlertDialog open={unlockDialogOpen} onOpenChange={setUnlockDialogOpen}>
+        <AlertDialogContent className="bg-card border-border sm:max-w-sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-foreground">Desbloquear Cuenta</AlertDialogTitle>
+            <AlertDialogDescription>
+              La cuenta de <strong>{userToUnlock?.nombre}</strong> está bloqueada por demasiados intentos
+              fallidos. Al desbloquearla podrá volver a iniciar sesión normalmente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleUnlock}
+              className="bg-chart-2 hover:bg-chart-2/90 text-white"
+            >
+              <Unlock className="h-4 w-4 mr-2" />
+              Desbloquear
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

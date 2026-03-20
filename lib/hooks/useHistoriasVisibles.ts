@@ -37,7 +37,7 @@ export function useHistoriasVisibles({
         const teamNombres = users.filter(u => user.equipoIds!.includes(u.id) && u.activo).map(u => u.nombre)
         return [...new Set([user.nombre, ...teamNombres])]
       }
-      return undefined
+      return [user.nombre]
     }
     if (isQALead && user) {
       if (user.equipoIds && user.equipoIds.length > 0) {
@@ -53,9 +53,12 @@ export function useHistoriasVisibles({
   const historiasVisibles = useMemo(() =>
     historias.filter(hu => {
       if (verSoloPropios && user) return hu.responsable.toLowerCase() === user.nombre.toLowerCase()
-      if (isAdmin && !isOwner && user && user.equipoIds && user.equipoIds.length > 0) {
-        const teamNombres = users.filter(u => user.equipoIds!.includes(u.id)).map(u => u.nombre.toLowerCase())
-        return teamNombres.includes(hu.responsable.toLowerCase()) || hu.responsable.toLowerCase() === user.nombre.toLowerCase()
+      if (isAdmin && !isOwner && user) {
+        if (user.equipoIds && user.equipoIds.length > 0) {
+          const teamNombres = users.filter(u => user.equipoIds!.includes(u.id)).map(u => u.nombre.toLowerCase())
+          return teamNombres.includes(hu.responsable.toLowerCase()) || hu.responsable.toLowerCase() === user.nombre.toLowerCase()
+        }
+        return hu.responsable.toLowerCase() === user.nombre.toLowerCase()
       }
       if (isQALead && user && user.equipoIds && user.equipoIds.length > 0) {
         const teamNombres = users.filter(u => user.equipoIds!.includes(u.id)).map(u => u.nombre.toLowerCase())

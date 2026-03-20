@@ -199,11 +199,7 @@ export default function DashboardPage() {
 
           <TabsContent value="casos" className="mt-6">
             <CasosTable
-              casos={domain.casos.filter(c => {
-                if (!verSoloPropios || !user) return true
-                const hu = domain.historias.find(h => h.id === c.huId)
-                return hu?.responsable.toLowerCase() === user.nombre.toLowerCase()
-              })}
+              casos={domain.casos.filter(c => historiasVisibles.some(h => h.id === c.huId))}
               historias={historiasVisibles}
               onVerHU={abrirHU}
               tiposPrueba={config.tiposPrueba}
@@ -250,7 +246,7 @@ export default function DashboardPage() {
 
                 <div className="flex-1 min-w-0 w-full">
                   {adminSeccion === "auditoria" && (
-                    <AuditoriaPanel historias={domain.historias} onVerHU={abrirHU} />
+                    <AuditoriaPanel historias={historiasVisibles} onVerHU={abrirHU} />
                   )}
                   {adminSeccion === "usuarios" && <UserManagement />}
                   {adminSeccion === "configuracion" && (
