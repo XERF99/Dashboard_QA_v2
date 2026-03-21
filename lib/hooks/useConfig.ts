@@ -3,11 +3,12 @@
 import { usePersistedState, STORAGE_KEYS } from "@/lib/storage"
 import {
   ETAPAS_PREDETERMINADAS,
+  RESULTADOS_PREDETERMINADOS,
   TIPOS_APLICACION_PREDETERMINADOS,
   AMBIENTES_PREDETERMINADOS,
   TIPOS_PRUEBA_PREDETERMINADOS,
 } from "@/lib/constants/index"
-import type { ConfigEtapas, TipoAplicacionDef, AmbienteDef, TipoPruebaDef, Sprint } from "@/lib/types/index"
+import type { ConfigEtapas, TipoAplicacionDef, AmbienteDef, TipoPruebaDef, ResultadoDef, Sprint } from "@/lib/types/index"
 import { APLICACIONES_PREDETERMINADAS } from "@/components/dashboard/config/aplicaciones-config"
 
 /**
@@ -20,6 +21,9 @@ import { APLICACIONES_PREDETERMINADAS } from "@/components/dashboard/config/apli
 export function useConfig() {
   const [configEtapas, setConfigEtapas] = usePersistedState<ConfigEtapas>(
     STORAGE_KEYS.configEtapas, ETAPAS_PREDETERMINADAS
+  )
+  const [configResultados, setConfigResultados] = usePersistedState<ResultadoDef[]>(
+    STORAGE_KEYS.configResultados, RESULTADOS_PREDETERMINADOS
   )
   const [aplicaciones, setAplicaciones] = usePersistedState<string[]>(
     STORAGE_KEYS.aplicaciones, APLICACIONES_PREDETERMINADAS
@@ -70,6 +74,7 @@ export function useConfig() {
     refetch: () => { /* noop con localStorage */ },
     // Estado
     configEtapas, setConfigEtapas,
+    configResultados, setConfigResultados,
     aplicaciones, setAplicaciones,
     tiposAplicacion, setTiposAplicacion, handleTiposChange,
     ambientes, setAmbientes,

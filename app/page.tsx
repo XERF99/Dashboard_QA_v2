@@ -9,7 +9,7 @@ import { HistoriasTable, HistoriaUsuarioDetail, HUForm, CSVImportModal, HUStatsC
 import { CasosTable } from "@/components/dashboard/casos"
 import { HomeDashboard, CargaOcupacional, AnalyticsKPIs } from "@/components/dashboard/analytics"
 import { UserManagement } from "@/components/dashboard/usuarios"
-import { RolesConfig, EtapasConfig, AplicacionesConfig, TiposAplicacionConfig, AmbientesConfig, TiposPruebaConfig, SprintsConfig } from "@/components/dashboard/config"
+import { RolesConfig, EtapasConfig, ResultadosConfig, AplicacionesConfig, TiposAplicacionConfig, AmbientesConfig, TiposPruebaConfig, SprintsConfig } from "@/components/dashboard/config"
 import { LoginScreen } from "@/components/auth/login-screen"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
@@ -52,7 +52,7 @@ export default function DashboardPage() {
   // ── Hooks de dominio ──────────────────────────────────────
   const config = useConfig()
   const notif  = useNotificaciones()
-  const domain = useDomainData({ user, configEtapas: config.configEtapas, addToast, addNotificacion: notif.addNotificacion })
+  const domain = useDomainData({ user, configEtapas: config.configEtapas, configResultados: config.configResultados, addToast, addNotificacion: notif.addNotificacion })
 
   // ── UI state ──────────────────────────────────────────────
   const {
@@ -276,6 +276,7 @@ export default function DashboardPage() {
                           { id: "ambientes",    label: "Ambientes",           icon: <Globe size={13} /> },
                           { id: "tipos_prueba", label: "Tipos de Prueba",     icon: <FlaskConical size={13} /> },
                           { id: "etapas",       label: "Etapas",              icon: <Settings2 size={13} /> },
+                          { id: "resultados",   label: "Resultados",          icon: <ClipboardList size={13} /> },
                           { id: "sprints",      label: "Sprints",             icon: <CalendarRange size={13} /> },
                         ]}
                         activeId={configSeccion}
@@ -301,7 +302,8 @@ export default function DashboardPage() {
                       {configSeccion === "aplicaciones" && <AplicacionesConfig aplicaciones={config.aplicaciones} onChange={config.setAplicaciones} />}
                       {configSeccion === "ambientes"    && <AmbientesConfig ambientes={config.ambientes} onChange={config.setAmbientes} />}
                       {configSeccion === "tipos_prueba" && <TiposPruebaConfig tipos={config.tiposPrueba} onChange={config.setTiposPrueba} />}
-                      {configSeccion === "etapas"       && <EtapasConfig config={config.configEtapas} onChange={config.setConfigEtapas} tipos={config.tiposAplicacion} />}
+                      {configSeccion === "etapas"       && <EtapasConfig config={config.configEtapas} onChange={config.setConfigEtapas} tipos={config.tiposAplicacion} historias={domain.historias} />}
+                      {configSeccion === "resultados"   && <ResultadosConfig resultados={config.configResultados} onChange={config.setConfigResultados} />}
                       {configSeccion === "sprints"      && <SprintsConfig sprints={config.sprints} onAdd={config.addSprint} onUpdate={config.updateSprint} onDelete={config.deleteSprint} />}
                     </>
                   )}
@@ -345,6 +347,7 @@ export default function DashboardPage() {
         isQA,
         currentUser: user?.nombre,
         configEtapas: config.configEtapas,
+        configResultados: config.configResultados,
         tiposAplicacion: config.tiposAplicacion,
         ambientes: config.ambientes,
         tiposPrueba: config.tiposPrueba,
@@ -354,6 +357,8 @@ export default function DashboardPage() {
         onAprobarCasos: domain.handleAprobarCasos,
         onRechazarCasos: domain.handleRechazarCasos,
         onIniciarEjecucion: domain.handleIniciarEjecucion,
+        onAvanzarEtapa: domain.handleAvanzarEtapa,
+        onFallarHU: domain.handleFallarHU,
         onPermitirCasosAdicionales: domain.handlePermitirCasosAdicionales,
         onAddBloqueo: domain.handleAddBloqueo,
         onResolverBloqueo: domain.handleResolverBloqueo,

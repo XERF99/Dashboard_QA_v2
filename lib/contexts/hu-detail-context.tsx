@@ -3,7 +3,7 @@
 import { createContext, useContext, type ReactNode } from "react"
 import type {
   CasoPrueba, Tarea, Bloqueo, EtapaEjecucion,
-  ConfigEtapas, TipoAplicacionDef, AmbienteDef, TipoPruebaDef,
+  ConfigEtapas, TipoAplicacionDef, AmbienteDef, TipoPruebaDef, ResultadoDef,
 } from "@/lib/types"
 
 // ── Tipo del contexto ──────────────────────────────────────────
@@ -16,6 +16,7 @@ export type HUDetailCtxType = {
 
   // Configuración
   configEtapas: ConfigEtapas
+  configResultados: ResultadoDef[]
   tiposAplicacion?: TipoAplicacionDef[]
   ambientes?: AmbienteDef[]
   tiposPrueba?: TipoPruebaDef[]
@@ -27,6 +28,8 @@ export type HUDetailCtxType = {
   onAprobarCasos: (huId: string) => void
   onRechazarCasos: (huId: string, motivo: string) => void
   onIniciarEjecucion: (huId: string, etapa: EtapaEjecucion) => void
+  onAvanzarEtapa: (huId: string) => void
+  onFallarHU: (huId: string, motivo: string) => void
   onPermitirCasosAdicionales: (huId: string, motivo: string) => void
   onAddBloqueo: (huId: string, b: Bloqueo) => void
   onResolverBloqueo: (huId: string, bId: string, nota: string) => void
@@ -39,7 +42,7 @@ export type HUDetailCtxType = {
   onEnviarCasoAprobacion: (casoId: string, huId: string) => void
   onSolicitarModificacionCaso: (casoId: string, huId: string) => void
   onHabilitarModificacionCaso: (casoId: string, huId: string) => void
-  onCompletarCasoEtapa: (casoId: string, etapa: EtapaEjecucion, resultado: "exitoso" | "fallido", comentarioFallo?: string) => void
+  onCompletarCasoEtapa: (casoId: string, etapa: EtapaEjecucion, resultado: string, comentarioFallo?: string) => void
   onRetestearCaso: (casoId: string, etapa: EtapaEjecucion, comentarioCorreccion: string) => void
   onAddComentarioCaso: (casoId: string, texto: string) => void
 

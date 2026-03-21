@@ -1,8 +1,9 @@
 import { cargarDeStorage, guardarEnStorage } from "@/lib/storage"
 import { STORAGE_KEYS } from "@/lib/storage"
-import type { ConfigEtapas, TipoAplicacionDef, AmbienteDef, TipoPruebaDef } from "@/lib/types/index"
+import type { ConfigEtapas, TipoAplicacionDef, AmbienteDef, TipoPruebaDef, ResultadoDef } from "@/lib/types/index"
 import {
   ETAPAS_PREDETERMINADAS,
+  RESULTADOS_PREDETERMINADOS,
   TIPOS_APLICACION_PREDETERMINADOS,
   AMBIENTES_PREDETERMINADOS,
   TIPOS_PRUEBA_PREDETERMINADOS,
@@ -15,6 +16,13 @@ export const configStorageService: IConfigService = {
   },
   saveEtapas(config: ConfigEtapas): void {
     guardarEnStorage(STORAGE_KEYS.configEtapas, config)
+  },
+
+  getResultados(): ResultadoDef[] {
+    return cargarDeStorage<ResultadoDef[]>(STORAGE_KEYS.configResultados, RESULTADOS_PREDETERMINADOS)
+  },
+  saveResultados(resultados: ResultadoDef[]): void {
+    guardarEnStorage(STORAGE_KEYS.configResultados, resultados)
   },
 
   getTiposAplicacion(): TipoAplicacionDef[] {

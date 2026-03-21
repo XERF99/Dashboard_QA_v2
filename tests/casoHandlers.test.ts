@@ -92,6 +92,7 @@ function makeCtx(
       debeCambiarPassword: false,
     },
     configEtapas: {},
+    configResultados: [],
     addToast: vi.fn(),
     addNotificacion: vi.fn(),
     ...overrides,

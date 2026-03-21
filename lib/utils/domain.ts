@@ -6,7 +6,7 @@
 import type {
   TipoAplicacion, TipoAplicacionDef, AmbienteDef, TipoPruebaDef,
   ConfigEtapas, EtapaEjecucion, EtapaDefinicion,
-  CasoPrueba, ResultadoEtapa, HistoriaUsuario, PrioridadHU,
+  CasoPrueba, ResultadoEtapa, ResultadoDef, HistoriaUsuario, PrioridadHU,
   TipoEvento, EventoHistorial,
 } from "@/lib/types/index"
 
@@ -87,6 +87,7 @@ export function siguienteEtapa(
 export function etapaCompletada(
   casos: CasoPrueba[],
   etapa: EtapaEjecucion,
+  configResultados?: ResultadoDef[],
 ): { completa: boolean; exitosa: boolean; fallida: boolean } {
   const resultados = casos
     .map(c => c.resultadosPorEtapa.find(r => r.etapa === etapa))
@@ -99,9 +100,18 @@ export function etapaCompletada(
   const todosCompletados = resultados.every(r => r.estado === "completado")
   if (!todosCompletados) return { completa: false, exitosa: false, fallida: false }
 
-  const todosExitosos = resultados.every(r => r.resultado === "exitoso")
-  const algunoFallido = resultados.some(r => r.resultado === "fallido")
-  return { completa: true, exitosa: todosExitosos, fallida: algunoFallido }
+  const esAceptado = (resultado: string): boolean => {
+    if (configResultados) {
+      const def = configResultados.find(d => d.id === resultado)
+      if (def) return def.esAceptado
+    }
+    // Fallback: hardcoded para compatibilidad sin config
+    return resultado === "exitoso" || resultado === "error_preexistente" || resultado === "bloqueado"
+  }
+
+  const todosAceptados = resultados.every(r => esAceptado(r.resultado))
+  const algunoNoAceptado = resultados.some(r => !esAceptado(r.resultado))
+  return { completa: true, exitosa: todosAceptados, fallida: algunoNoAceptado }
 }
 
 // ── Cálculo de fechas ─────────────────────────────────────────

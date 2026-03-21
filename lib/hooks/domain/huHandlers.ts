@@ -1,9 +1,9 @@
-import { crearEvento, etapasParaTipo } from "@/lib/types"
-import type { HistoriaUsuario, EstadoHU } from "@/lib/types"
+import { crearEvento, etapasParaTipo, etapaCompletada, siguienteEtapa } from "@/lib/types"
+import type { HistoriaUsuario, EstadoHU, EtapaEjecucion } from "@/lib/types"
 import type { DomainCtx } from "./types"
 
 /** Handlers de CRUD y ciclo de vida de Historias de Usuario. */
-export function createHUHandlers({ historias, setHistorias, setCasos, setTareas, user, configEtapas, addToast }: DomainCtx) {
+export function createHUHandlers({ historias, casos, setHistorias, setCasos, setTareas, user, configEtapas, configResultados, addToast }: DomainCtx) {
   const handleSubmitHU = (hu: HistoriaUsuario, isEdit: boolean) => {
     setHistorias(prev => prev.find(h => h.id === hu.id) ? prev.map(h => h.id === hu.id ? hu : h) : [...prev, hu])
     addToast({ type: "success", title: hu.titulo, desc: isEdit ? "Historia actualizada" : "Historia creada" })
@@ -67,6 +67,41 @@ export function createHUHandlers({ historias, setHistorias, setCasos, setTareas,
     addToast({ type: "error", title: "HU cancelada", desc: motivo.slice(0, 60) })
   }
 
+  const handleAvanzarEtapa = (huId: string) => {
+    const hu = historias.find(h => h.id === huId)
+    if (!hu || hu.etapa === "completada" || hu.etapa === "cambio_cancelado" || hu.etapa === "sin_iniciar") return
+
+    const casosAprobados = casos.filter(c => c.huId === huId && c.estadoAprobacion === "aprobado")
+    const check = etapaCompletada(casosAprobados, hu.etapa as EtapaEjecucion, configResultados)
+    if (!check.completa || !check.exitosa) return
+
+    const next = siguienteEtapa(hu.etapa as EtapaEjecucion, hu.tipoAplicacion, configEtapas)
+    if (next) {
+      setCasos(prev => prev.map(c => {
+        if (c.huId !== huId || c.estadoAprobacion !== "aprobado") return c
+        const yaExiste = c.resultadosPorEtapa.some(r => r.etapa === next)
+        return yaExiste ? c : { ...c, resultadosPorEtapa: [...c.resultadosPorEtapa, { etapa: next, estado: "pendiente" as const, resultado: "pendiente" as const, intentos: [] }] }
+      }))
+      const etapaLabel = next.charAt(0).toUpperCase() + next.slice(1)
+      const ev = crearEvento("hu_etapa_avanzada", `Etapa avanzó a ${etapaLabel}`, user?.nombre || "Sistema")
+      setHistorias(prev => prev.map(h => h.id === huId ? { ...h, etapa: next, historial: [...h.historial, ev] } : h))
+      addToast({ type: "success", title: "Etapa completada", desc: `Avanzando a ${etapaLabel}` })
+    } else {
+      const ev = crearEvento("hu_completada", "Todas las etapas completadas exitosamente", user?.nombre || "Sistema")
+      setHistorias(prev => prev.map(h => h.id === huId ? { ...h, estado: "exitosa", etapa: "completada", fechaCierre: new Date(), historial: [...h.historial, ev] } : h))
+      addToast({ type: "success", title: "HU completada", desc: "Todas las etapas exitosas" })
+    }
+  }
+
+  const handleFallarHU = (huId: string, motivo: string) => {
+    const ev = crearEvento("hu_fallida", `HU fallida: ${motivo}`, user?.nombre || "Sistema")
+    setHistorias(prev => prev.map(h => h.id !== huId ? h : {
+      ...h, estado: "fallida", etapa: "cambio_cancelado", motivoCancelacion: motivo, fechaCierre: new Date(),
+      historial: [...h.historial, ev],
+    }))
+    addToast({ type: "error", title: "HU fallida", desc: motivo.slice(0, 60) })
+  }
+
   const handlePermitirCasosAdicionales = (huId: string, motivo: string) => {
     const ev = crearEvento("casos_adicionales_habilitados", `Admin habilitó agregar casos: ${motivo}`, user?.nombre || "Sistema")
     setHistorias(prev => prev.map(h => h.id !== huId ? h : {
@@ -84,6 +119,8 @@ export function createHUHandlers({ historias, setHistorias, setCasos, setTareas,
     handleImportarHUs,
     handleIniciarHU,
     handleCancelarHU,
+    handleAvanzarEtapa,
+    handleFallarHU,
     handlePermitirCasosAdicionales,
   }
 }

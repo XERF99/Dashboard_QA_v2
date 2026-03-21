@@ -6,7 +6,7 @@
 import type {
   EstadoHU, PrioridadHU, EstadoAprobacion, ComplejidadCaso,
   TipoTarea, TipoPrueba, ConfigEtapas, TipoAplicacionDef,
-  AmbienteDef, TipoPruebaDef,
+  AmbienteDef, TipoPruebaDef, ResultadoDef,
 } from "@/lib/types/index"
 
 // ── Etapas predeterminadas por tipo de aplicación ───────────
@@ -48,6 +48,14 @@ export const AMBIENTES_PREDETERMINADOS: AmbienteDef[] = [
   { id: "test",          label: "Test" },
   { id: "preproduccion", label: "Pre-Producción" },
   { id: "produccion",    label: "Producción" },
+]
+
+// ── Resultados de ejecución predeterminados ───────────────────
+export const RESULTADOS_PREDETERMINADOS: ResultadoDef[] = [
+  { id: "exitoso",           label: "Exitoso",           esAceptado: true,  esBase: true, cls: "bg-chart-2/20 text-chart-2 border-chart-2/30", icono: "✓" },
+  { id: "fallido",           label: "Fallido",           esAceptado: false, esBase: true, cls: "bg-chart-4/20 text-chart-4 border-chart-4/30", icono: "✗" },
+  { id: "error_preexistente",label: "Error preexistente",esAceptado: true,  esBase: true, cls: "bg-chart-3/20 text-chart-3 border-chart-3/30", icono: "⚠" },
+  { id: "bloqueado",         label: "Bloqueado",         esAceptado: true,  esBase: true, cls: "bg-chart-5/20 text-chart-5 border-chart-5/30", icono: "⊘" },
 ]
 
 // ── Tipos de prueba predeterminados ───────────────────────────

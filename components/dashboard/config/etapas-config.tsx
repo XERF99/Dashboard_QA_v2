@@ -4,13 +4,14 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Trash2, ArrowUp, ArrowDown, RotateCcw, ChevronDown, ChevronUp, Settings2 } from "lucide-react"
+import { AlertTriangle, Plus, Trash2, ArrowUp, ArrowDown, RotateCcw, ChevronDown, ChevronUp, Settings2 } from "lucide-react"
 import {
   ETAPAS_PREDETERMINADAS,
   TIPOS_APLICACION_PREDETERMINADOS,
   type ConfigEtapas,
   type EtapaDefinicion,
   type TipoAplicacionDef,
+  type HistoriaUsuario,
 } from "@/lib/types"
 
 import { BADGE_PALETA } from "@/lib/constants/badge-paleta"
@@ -20,9 +21,10 @@ interface EtapasConfigProps {
   config: ConfigEtapas
   onChange: (config: ConfigEtapas) => void
   tipos?: TipoAplicacionDef[]
+  historias?: HistoriaUsuario[]
 }
 
-export function EtapasConfig({ config, onChange, tipos: tiposProp }: EtapasConfigProps) {
+export function EtapasConfig({ config, onChange, tipos: tiposProp, historias }: EtapasConfigProps) {
   const [expandedTipo, setExpandedTipo] = useState<string | null>(null)
   const [nuevoLabel, setNuevoLabel] = useState<Partial<Record<string, string>>>({})
   const [nuevoCls, setNuevoCls] = useState<Partial<Record<string, string>>>({})
@@ -141,6 +143,29 @@ export function EtapasConfig({ config, onChange, tipos: tiposProp }: EtapasConfi
             {/* Panel expandible */}
             {expanded && (
               <div style={{ padding: "14px 16px", borderTop: "1px solid var(--border)", background: "var(--background)" }}>
+                {/* Aviso: HUs en progreso afectadas */}
+                {(() => {
+                  const huAfectadas = (historias ?? []).filter(h => h.tipoAplicacion === tid && h.estado === "en_progreso")
+                  if (huAfectadas.length === 0) return null
+                  return (
+                    <div style={{
+                      display: "flex", alignItems: "flex-start", gap: 9,
+                      padding: "9px 13px", borderRadius: 8, marginBottom: 12,
+                      background: "color-mix(in oklch, var(--chart-3) 8%, transparent)",
+                      border: "1px solid color-mix(in oklch, var(--chart-3) 30%, transparent)",
+                    }}>
+                      <AlertTriangle size={13} style={{ color: "var(--chart-3)", flexShrink: 0, marginTop: 1 }} />
+                      <p style={{ fontSize: 11, color: "var(--foreground)", lineHeight: 1.55 }}>
+                        <strong style={{ color: "var(--chart-3)" }}>
+                          {huAfectadas.length} HU{huAfectadas.length !== 1 ? "s" : ""} en progreso
+                        </strong>
+                        {" "}de tipo <strong>{tipoDef.label}</strong>.
+                        {" "}Los casos existentes no tendrán resultados para las nuevas etapas hasta que inicien ejecución en esa etapa.
+                      </p>
+                    </div>
+                  )
+                })()}
+
                 {/* Lista de etapas */}
                 <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
                   {etapas.length === 0 && (

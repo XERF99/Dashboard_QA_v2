@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { usePersistedState, STORAGE_KEYS } from "@/lib/storage"
 import { historiasEjemplo, casosPruebaEjemplo, tareasEjemplo } from "@/lib/types"
-import type { HistoriaUsuario, CasoPrueba, Tarea, ConfigEtapas, TipoNotificacion, RolDestinatario, Notificacion } from "@/lib/types"
+import type { HistoriaUsuario, CasoPrueba, Tarea, ConfigEtapas, ResultadoDef, TipoNotificacion, RolDestinatario, Notificacion } from "@/lib/types"
 import type { UserSafe } from "@/lib/auth-context"
 import { createHUHandlers }          from "./domain/huHandlers"
 import { createCasoHandlers }        from "./domain/casoHandlers"
@@ -15,6 +15,7 @@ import type { DomainCtx } from "./domain/types"
 interface DomainDataOptions {
   user: UserSafe | null
   configEtapas: ConfigEtapas
+  configResultados: ResultadoDef[]
   addToast: (t: { type: "success" | "warning" | "error" | "info"; title: string; desc?: string }) => void
   addNotificacion: (
     tipo: TipoNotificacion,
@@ -33,7 +34,7 @@ interface DomainDataOptions {
  * Al conectar un backend: reemplazar usePersistedState por llamadas a API
  * dentro de los módulos domain/*.
  */
-export function useDomainData({ user, configEtapas, addToast, addNotificacion }: DomainDataOptions) {
+export function useDomainData({ user, configEtapas, configResultados, addToast, addNotificacion }: DomainDataOptions) {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError]         = useState<string | null>(null)
   const refetch = () => { /* noop — implementar fetch al conectar backend */ }
@@ -47,7 +48,7 @@ export function useDomainData({ user, configEtapas, addToast, addNotificacion }:
     setHistorias: setHistorias as DomainCtx["setHistorias"],
     setCasos:     setCasos     as DomainCtx["setCasos"],
     setTareas:    setTareas    as DomainCtx["setTareas"],
-    user, configEtapas, addToast, addNotificacion,
+    user, configEtapas, configResultados, addToast, addNotificacion,
   }
 
   return {

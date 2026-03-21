@@ -1,9 +1,9 @@
-import { crearEvento, etapaCompletada, siguienteEtapa } from "@/lib/types"
+import { crearEvento } from "@/lib/types"
 import type { CasoPrueba, EstadoAprobacion, EtapaEjecucion } from "@/lib/types"
 import type { DomainCtx } from "./types"
 
 /** Handlers de gestión de Casos de Prueba: CRUD, aprobación y ejecución. */
-export function createCasoHandlers({ historias, casos, setHistorias, setCasos, setTareas, user, configEtapas, addToast, addNotificacion }: DomainCtx) {
+export function createCasoHandlers({ historias, casos, setHistorias, setCasos, setTareas, user, addToast, addNotificacion }: DomainCtx) {
   const handleAddCaso = (caso: CasoPrueba) => {
     setCasos(prev => [...prev, caso])
     setHistorias(p => p.map(h => h.id !== caso.huId ? h : {
@@ -128,11 +128,13 @@ export function createCasoHandlers({ historias, casos, setHistorias, setCasos, s
     addToast({ type: "info", title: "Ejecución iniciada", desc: `Etapa: ${etapa}` })
   }
 
-  const handleCompletarCasoEtapa = (casoId: string, etapa: EtapaEjecucion, resultado: "exitoso" | "fallido", comentarioFallo?: string) => {
+  const handleCompletarCasoEtapa = (casoId: string, etapa: EtapaEjecucion, resultado: string, comentarioFallo?: string) => {
     let huIdAfectada = ""
+    let tituloAfectado = ""
     setCasos(prev => prev.map(c => {
       if (c.id !== casoId) return c
       huIdAfectada = c.huId
+      tituloAfectado = c.titulo
       return {
         ...c, resultadosPorEtapa: c.resultadosPorEtapa.map(r => {
           if (r.etapa !== etapa) return r
@@ -148,39 +150,12 @@ export function createCasoHandlers({ historias, casos, setHistorias, setCasos, s
       }
     }))
 
-    setTimeout(() => {
-      if (!huIdAfectada) return
-      const hu = historias.find(h => h.id === huIdAfectada)
-      if (!hu || hu.etapa === "completada" || hu.etapa === "cambio_cancelado" || hu.etapa === "sin_iniciar") return
+    if (huIdAfectada) {
+      const ev = crearEvento("caso_completado", `Caso "${tituloAfectado}" completado: ${resultado} — etapa ${etapa}`, user?.nombre || "Sistema")
+      setHistorias(prev => prev.map(h => h.id === huIdAfectada ? { ...h, historial: [...h.historial, ev] } : h))
+    }
 
-      const casosHU = casos.filter(c => c.huId === huIdAfectada).map(c =>
-        c.id === casoId
-          ? { ...c, resultadosPorEtapa: c.resultadosPorEtapa.map(r => r.etapa === etapa ? { ...r, estado: "completado" as const, resultado, fechaFin: new Date(), intentos: r.intentos || [] } : r) }
-          : c
-      )
-      const check = etapaCompletada(casosHU, hu.etapa as EtapaEjecucion)
-      if (!check.completa) return
-
-      if (check.exitosa) {
-        const next = siguienteEtapa(hu.etapa as EtapaEjecucion, hu.tipoAplicacion, configEtapas)
-        if (next) {
-          setCasos(prevC => prevC.map(c => {
-            if (c.huId !== huIdAfectada) return c
-            const yaExiste = c.resultadosPorEtapa.some(r => r.etapa === next)
-            return yaExiste ? c : { ...c, resultadosPorEtapa: [...c.resultadosPorEtapa, { etapa: next, estado: "pendiente" as const, resultado: "pendiente" as const, intentos: [] }] }
-          }))
-          const ev = crearEvento("hu_etapa_avanzada", `Etapa avanzó a ${next.charAt(0).toUpperCase() + next.slice(1)}`, "Sistema")
-          setHistorias(prev => prev.map(h => h.id === huIdAfectada ? { ...h, etapa: next, historial: [...h.historial, ev] } : h))
-          addToast({ type: "success", title: "Etapa completada", desc: `Avanzando a ${next}` })
-        } else {
-          const ev = crearEvento("hu_completada", "Todas las etapas completadas exitosamente", "Sistema")
-          setHistorias(prev => prev.map(h => h.id === huIdAfectada ? { ...h, estado: "exitosa", etapa: "completada", fechaCierre: new Date(), historial: [...h.historial, ev] } : h))
-          addToast({ type: "success", title: "HU completada", desc: "Todas las etapas exitosas" })
-        }
-      }
-    }, 100)
-
-    addToast({ type: resultado === "exitoso" ? "success" : "error", title: `Caso ${resultado}`, desc: `Etapa ${etapa}` })
+    addToast({ type: resultado === "exitoso" ? "success" : resultado === "fallido" ? "error" : "info", title: `Caso: ${resultado}`, desc: `Etapa ${etapa}` })
   }
 
   const handleRetestearCaso = (casoId: string, etapa: EtapaEjecucion, comentarioCorreccion: string) => {
@@ -190,7 +165,7 @@ export function createCasoHandlers({ historias, casos, setHistorias, setCasos, s
       huIdAfectada = c.huId
       return {
         ...c, resultadosPorEtapa: c.resultadosPorEtapa.map(r => {
-          if (r.etapa !== etapa || r.resultado !== "fallido") return r
+          if (r.etapa !== etapa || r.resultado === "pendiente") return r
           const intentosUpd = [...(r.intentos || [])]
           if (intentosUpd.length > 0) {
             intentosUpd[intentosUpd.length - 1] = { ...intentosUpd[intentosUpd.length - 1], comentarioCorreccion }

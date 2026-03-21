@@ -11,17 +11,17 @@ import {
   CheckSquare, Star, TrendingUp,
   AlertTriangle, Plus, CheckCircle2, ShieldAlert, Layers,
   User, Play, XCircle, Send, ThumbsUp, ThumbsDown,
-  Lock, Unlock, FileText,
+  Lock, Unlock, FileText, ArrowRight,
   Pencil, MessageSquare,
 } from "lucide-react"
 import {
   ESTADO_HU_CFG, PRIORIDAD_CFG,
-  etapaDefsParaTipo, getEtapaHUCfg, ETAPAS_PREDETERMINADAS,
+  etapaDefsParaTipo, getEtapaHUCfg, ETAPAS_PREDETERMINADAS, siguienteEtapa,
   getTipoAplicacionLabel, getAmbienteLabel, getTipoPruebaLabel, getTipoPruebaColor,
   TIPOS_PRUEBA_PREDETERMINADOS,
   fmtCorto, fmtHora,
   type HistoriaUsuario, type CasoPrueba, type Tarea, type Bloqueo,
-  type EtapaEjecucion, type TipoPrueba, type ComplejidadCaso, type EntornoCaso,
+  type EtapaEjecucion, type ResultadoEtapa, type TipoPrueba, type ComplejidadCaso, type EntornoCaso,
   type TipoPruebaDef,
 } from "@/lib/types"
 import { CommentThread } from "../shared/comment-thread"
@@ -484,8 +484,14 @@ interface HUCasosPanelProps {
 function HUCasosPanel({ casosHU, hu, tareas, puedeAgregarCasos, pasoPrimeraEtapa }: HUCasosPanelProps) {
   const {
     isQA, isAdmin, isQALead, currentUser,
-    tiposPrueba, onAddCaso, onEditarCaso,
+    configEtapas, configResultados, tiposPrueba, onAddCaso, onEditarCaso, onAvanzarEtapa, onFallarHU,
   } = useHUDetail()
+
+  const esAceptadoResultado = (resultado: string): boolean => {
+    const def = configResultados.find(d => d.id === resultado)
+    if (def) return def.esAceptado
+    return resultado === "exitoso" || resultado === "error_preexistente" || resultado === "bloqueado"
+  }
 
   const huCerrada = hu.estado === "exitosa" || hu.estado === "cancelada" || hu.estado === "fallida"
 
@@ -543,6 +549,25 @@ function HUCasosPanel({ casosHU, hu, tareas, puedeAgregarCasos, pasoPrimeraEtapa
     setCasoComplejidad(caso.complejidad)
     setShowCasoForm(false)
   }
+
+  // ── Cómputo de progreso de etapa actual ──
+  const etapaActualH = hu.etapa as EtapaEjecucion
+  const enEjecucionActiva = !huCerrada && hu.estado === "en_progreso" &&
+    hu.etapa !== "sin_iniciar" && hu.etapa !== "completada" && hu.etapa !== "cambio_cancelado"
+  const aprobadosHU = casosHU.filter(c => c.estadoAprobacion === "aprobado")
+  const resultadosEtapa: ResultadoEtapa[] = aprobadosHU
+    .map(c => c.resultadosPorEtapa.find(r => r.etapa === etapaActualH))
+    .filter((r): r is ResultadoEtapa => r !== undefined)
+  const completadosEtapa     = resultadosEtapa.filter(r => r.estado === "completado")
+  const exitososEtapa        = completadosEtapa.filter(r => r.resultado === "exitoso")
+  const aceptadosNoExitosos  = completadosEtapa.filter(r => r.resultado !== "exitoso" && esAceptadoResultado(r.resultado))
+  const fallidosEtapa        = completadosEtapa.filter(r => !esAceptadoResultado(r.resultado))
+  const enEjecucionEtapa     = resultadosEtapa.filter(r => r.estado === "en_ejecucion")
+  const todosCompletados     = aprobadosHU.length > 0 && completadosEtapa.length === aprobadosHU.length
+  // Todos aceptados: ningún resultado no-aceptado — QA decide si avanzar con aceptados parciales
+  const todosAceptados       = todosCompletados && fallidosEtapa.length === 0
+  const hayFallidos          = fallidosEtapa.length > 0
+  const nextEtapa            = enEjecucionActiva ? siguienteEtapa(etapaActualH, hu.tipoAplicacion, configEtapas) : null
 
   return (
     <div>
@@ -623,6 +648,88 @@ function HUCasosPanel({ casosHU, hu, tareas, puedeAgregarCasos, pasoPrimeraEtapa
           />
         ))}
       </div>
+
+      {/* ── Panel de avance de etapa ── */}
+      {enEjecucionActiva && aprobadosHU.length > 0 && (
+        <div style={{
+          marginTop:14,
+          padding:"14px 16px",
+          borderRadius:10,
+          border:`1px solid ${todosAceptados ? "var(--chart-2)" : hayFallidos ? "var(--chart-4)" : "var(--border)"}`,
+          background: todosAceptados
+            ? "color-mix(in oklch, var(--chart-2) 6%, var(--background))"
+            : hayFallidos
+            ? "color-mix(in oklch, var(--chart-4) 5%, var(--background))"
+            : "var(--background)",
+        }}>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, flexWrap:"wrap" }}>
+            <div style={{ flex:1, minWidth:0 }}>
+              <p style={{ fontSize:10, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700, color:"var(--muted-foreground)", marginBottom:5 }}>
+                Avance de etapa — {getEtapaHUCfg(etapaActualH, configEtapas).label}
+              </p>
+              {todosAceptados ? (
+                <div>
+                  <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                    <CheckCircle2 size={14} style={{ color:"var(--chart-2)", flexShrink:0 }}/>
+                    <p style={{ fontSize:13, fontWeight:600, color:"var(--chart-2)" }}>
+                      {exitososEtapa.length === aprobadosHU.length
+                        ? `Todos los casos exitosos (${aprobadosHU.length}/${aprobadosHU.length})`
+                        : `${exitososEtapa.length} exitoso${exitososEtapa.length !== 1 ? "s" : ""}${aceptadosNoExitosos.length > 0 ? `, ${aceptadosNoExitosos.length} aceptado${aceptadosNoExitosos.length !== 1 ? "s" : ""} (no exitoso)` : ""} — listo para avanzar`
+                      }
+                    </p>
+                  </div>
+                  {aceptadosNoExitosos.length > 0 && (
+                    <p style={{ fontSize:11, color:"var(--muted-foreground)", marginTop:3 }}>
+                      Los casos aceptados con resultado no exitoso no bloquean el avance — criterio del QA.
+                    </p>
+                  )}
+                </div>
+              ) : hayFallidos ? (
+                <div>
+                  <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                    <AlertTriangle size={14} style={{ color:"var(--chart-4)", flexShrink:0 }}/>
+                    <p style={{ fontSize:13, fontWeight:600, color:"var(--chart-4)" }}>
+                      {fallidosEtapa.length} caso{fallidosEtapa.length > 1 ? "s" : ""} fallido{fallidosEtapa.length > 1 ? "s" : ""} — aplica retesteo
+                    </p>
+                  </div>
+                  <p style={{ fontSize:11, color:"var(--muted-foreground)", marginTop:3 }}>
+                    Corrige los fallos y solicita retesteo, o declara el cambio como fallido.
+                  </p>
+                </div>
+              ) : (
+                <p style={{ fontSize:13, fontWeight:600, color:"var(--foreground)" }}>
+                  {completadosEtapa.length} de {aprobadosHU.length} caso{aprobadosHU.length > 1 ? "s" : ""} completado{completadosEtapa.length !== 1 ? "s" : ""}
+                  {enEjecucionEtapa.length > 0 ? ` · ${enEjecucionEtapa.length} en ejecución` : ""}
+                </p>
+              )}
+            </div>
+            <div style={{ display:"flex", gap:6, flexShrink:0, flexWrap:"wrap" }}>
+              {(isQA || isAdmin || isQALead) && hayFallidos && todosCompletados && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  style={{ borderColor:"var(--chart-4)", color:"var(--chart-4)" }}
+                  onClick={() => onFallarHU(hu.id, "Casos de prueba fallidos sin retesteo exitoso")}
+                >
+                  <XCircle size={12} className="mr-1"/>Declarar cambio fallido
+                </Button>
+              )}
+              {(isQA || isAdmin || isQALead) && todosAceptados && (
+                <Button
+                  size="sm"
+                  onClick={() => onAvanzarEtapa(hu.id)}
+                  className={nextEtapa ? "" : "bg-chart-2 hover:bg-chart-2/90 text-white"}
+                >
+                  {nextEtapa
+                    ? <><ArrowRight size={12} className="mr-1"/>Avanzar a {getEtapaHUCfg(nextEtapa, configEtapas).label}</>
+                    : <><CheckCircle2 size={12} className="mr-1"/>Completar HU</>
+                  }
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

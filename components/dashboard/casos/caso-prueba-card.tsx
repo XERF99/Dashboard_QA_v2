@@ -84,12 +84,16 @@ export interface CasoPruebaCardProps {
 export function CasoPruebaCard({ caso, hu, tareasCaso, onAbrirEditar }: CasoPruebaCardProps) {
   const {
     isAdmin, isQALead, isQA, currentUser,
-    configEtapas, tiposPrueba,
+    configEtapas, configResultados, tiposPrueba,
     onEliminarCaso, onEnviarCasoAprobacion,
     onSolicitarModificacionCaso, onHabilitarModificacionCaso,
     onCompletarCasoEtapa, onRetestearCaso,
     onAddTarea, onEditarTarea, onAddComentarioCaso,
   } = useHUDetail()
+
+  // Helper: look up a ResultadoDef by id, with fallback
+  const getResultadoDef = (id: string) =>
+    configResultados.find(r => r.id === id) ?? { id, label: id, esAceptado: true, esBase: false, cls: "bg-muted text-muted-foreground border-border" }
 
   const huCerrada = hu.estado === "exitosa" || hu.estado === "cancelada" || hu.estado === "fallida"
 
@@ -119,6 +123,7 @@ export function CasoPruebaCard({ caso, hu, tareasCaso, onAbrirEditar }: CasoPrue
   const [comentarioFallo, setComentarioFallo] = useState("")
   const [showRetestForm, setShowRetestForm] = useState(false)
   const [comentarioCorreccion, setComentarioCorreccion] = useState("")
+  const [showConfirmHabilitar, setShowConfirmHabilitar] = useState(false)
 
   const aprobCfg = ESTADO_APROBACION_CFG[caso.estadoAprobacion]
   const compCfg = COMPLEJIDAD_CFG[caso.complejidad]
@@ -129,7 +134,7 @@ export function CasoPruebaCard({ caso, hu, tareasCaso, onAbrirEditar }: CasoPrue
   const resultadoEtapaActual = caso.resultadosPorEtapa.find(r => r.etapa === etapaActual)
 
   const casoCompletado = caso.resultadosPorEtapa.length > 0 &&
-    caso.resultadosPorEtapa.every(r => r.resultado === "exitoso")
+    caso.resultadosPorEtapa.every(r => getResultadoDef(r.resultado).esAceptado)
 
   const puedeEditar = !huCerrada && (isQA || isAdmin || isQALead) && (
     caso.estadoAprobacion === "borrador" ||
@@ -184,16 +189,12 @@ export function CasoPruebaCard({ caso, hu, tareasCaso, onAbrirEditar }: CasoPrue
           {caso.resultadosPorEtapa.map(r => {
             const retests = (r.intentos?.length || 0)
             const retestLabel = retests > 1 ? ` (${retests})` : ""
+            const rDef = r.resultado !== "pendiente" ? getResultadoDef(r.resultado) : null
+            const cls = rDef ? rDef.cls : r.estado === "en_ejecucion" ? "bg-chart-1/20 text-chart-1 border-chart-1/30" : "bg-muted text-muted-foreground border-border"
+            const icono = rDef ? ` ${rDef.icono ?? "●"}` : r.estado === "en_ejecucion" ? " ▶" : ""
             return (
-              <Badge key={r.etapa} variant="outline" className={`hidden sm:inline-flex text-[8px] ${
-                r.resultado === "exitoso" ? "bg-chart-2/20 text-chart-2 border-chart-2/30" :
-                r.resultado === "fallido" ? "bg-chart-4/20 text-chart-4 border-chart-4/30" :
-                r.estado === "en_ejecucion" ? "bg-chart-1/20 text-chart-1 border-chart-1/30" :
-                "bg-muted text-muted-foreground border-border"
-              }`} style={{ padding:"1px 4px" }}>
-                {getEtapaHUCfg(r.etapa, configEtapas).label.slice(0,3)}
-                {r.resultado === "exitoso" ? " ✓" : r.resultado === "fallido" ? " ✗" : r.estado === "en_ejecucion" ? " ▶" : ""}
-                {retestLabel}
+              <Badge key={r.etapa} variant="outline" className={`hidden sm:inline-flex text-[8px] ${cls}`} style={{ padding:"1px 4px" }}>
+                {getEtapaHUCfg(r.etapa, configEtapas).label.slice(0,3)}{icono}{retestLabel}
               </Badge>
             )
           })}
@@ -245,13 +246,39 @@ export function CasoPruebaCard({ caso, hu, tareasCaso, onAbrirEditar }: CasoPrue
                 <Bell size={10} className="mr-1"/> Solicitar modificación
               </Button>
             )}
-            {adminVeSolicitud && (
+            {adminVeSolicitud && !showConfirmHabilitar && (
               <Button size="sm" variant="outline" style={{ height:26, fontSize:10, padding:"0 10px" }}
-                onClick={() => onHabilitarModificacionCaso(caso.id, hu.id)}>
+                onClick={() => setShowConfirmHabilitar(true)}>
                 <Unlock size={10} className="mr-1"/> Habilitar modificación
               </Button>
             )}
           </div>
+
+          {/* Confirmación: habilitar modificación */}
+          {showConfirmHabilitar && (
+            <div style={{ padding:"10px 12px", borderRadius:7, background:"color-mix(in oklch, var(--chart-3) 8%, transparent)", border:"1px solid color-mix(in oklch, var(--chart-3) 35%, var(--border))", marginBottom:8, fontSize:11 }}>
+              <p style={{ fontWeight:600, color:"var(--chart-3)", marginBottom:4 }}>
+                <Unlock size={11} style={{ display:"inline", marginRight:4 }}/>
+                ¿Habilitar modificación?
+              </p>
+              <p style={{ color:"var(--muted-foreground)", marginBottom:8, lineHeight:1.5 }}>
+                El caso volverá a estado <strong>borrador</strong> y deberá ser re-aprobado.
+                {caso.resultadosPorEtapa.some(r => r.intentos.length > 0) && (
+                  <> Los resultados de ejecución registrados se conservan en el historial.</>
+                )}
+              </p>
+              <div style={{ display:"flex", gap:6 }}>
+                <Button size="sm" variant="outline" style={{ height:24, fontSize:10, padding:"0 10px", borderColor:"var(--chart-3)", color:"var(--chart-3)" }}
+                  onClick={() => { onHabilitarModificacionCaso(caso.id, hu.id); setShowConfirmHabilitar(false) }}>
+                  <Unlock size={10} className="mr-1"/> Confirmar
+                </Button>
+                <Button size="sm" variant="ghost" style={{ height:24, fontSize:10, padding:"0 8px" }}
+                  onClick={() => setShowConfirmHabilitar(false)}>
+                  Cancelar
+                </Button>
+              </div>
+            </div>
+          )}
 
           {/* Motivo de rechazo */}
           {caso.estadoAprobacion === "rechazado" && caso.motivoRechazo && (
@@ -261,53 +288,87 @@ export function CasoPruebaCard({ caso, hu, tareasCaso, onAbrirEditar }: CasoPrue
             </div>
           )}
 
-          {/* Acciones de ejecución */}
+          {/* Acciones de ejecución — dinámicas según configResultados */}
           {caso.estadoAprobacion === "aprobado" && resultadoEtapaActual?.estado === "en_ejecucion" && (isQA || isAdmin || isQALead) && (
             <div style={{ marginBottom:10, marginTop:6 }}>
               {!showFalloForm ? (
-                <div style={{ display:"flex", gap:6 }}>
-                  <Button size="sm" className="bg-chart-2 hover:bg-chart-2/90 text-white"
-                    style={{ height:26, fontSize:10, padding:"0 10px" }}
-                    onClick={() => onCompletarCasoEtapa(caso.id, etapaActual, "exitoso")}>
-                    <CheckCircle2 size={11} className="mr-1"/> Exitoso
-                  </Button>
-                  <Button size="sm" variant="outline" style={{ color:"var(--chart-4)", height:26, fontSize:10, padding:"0 10px" }}
-                    onClick={() => { setShowFalloForm(true); setComentarioFallo("") }}>
-                    <XCircle size={11} className="mr-1"/> Fallido
-                  </Button>
+                <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+                  {configResultados.map(rDef => (
+                    rDef.esAceptado ? (
+                      // Resultado aceptado → botón directo
+                      <Button key={rDef.id} size="sm" variant="outline"
+                        style={{ height:26, fontSize:10, padding:"0 10px" }}
+                        className={rDef.id === "exitoso" ? "bg-chart-2 hover:bg-chart-2/90 text-white border-chart-2" : ""}
+                        onClick={() => onCompletarCasoEtapa(caso.id, etapaActual, rDef.id)}>
+                        {rDef.icono && <span style={{ marginRight:4, fontSize:11 }}>{rDef.icono}</span>}
+                        {rDef.label}
+                      </Button>
+                    ) : (
+                      // Resultado no aceptado → abre formulario de comentario
+                      <Button key={rDef.id} size="sm" variant="outline"
+                        style={{ height:26, fontSize:10, padding:"0 10px", color:"var(--chart-4)", borderColor:"var(--chart-4)" }}
+                        onClick={() => { setShowFalloForm(true); setComentarioFallo("") }}>
+                        {rDef.icono && <span style={{ marginRight:4, fontSize:11 }}>{rDef.icono}</span>}
+                        {rDef.label}
+                      </Button>
+                    )
+                  ))}
                 </div>
               ) : (
-                <div style={{ padding:"10px 12px", borderRadius:8, border:"1px solid var(--chart-4)", background:"color-mix(in oklch, var(--chart-4) 4%, var(--background))" }}>
-                  <p style={{ fontSize:11, fontWeight:600, color:"var(--chart-4)", marginBottom:6 }}>Describe qué falló en la prueba *</p>
-                  <Textarea rows={2} value={comentarioFallo} onChange={e => setComentarioFallo(e.target.value)}
-                    placeholder="Ej: El endpoint retorna 500 cuando se envían credenciales con caracteres especiales..."
-                    style={{ fontSize:12, resize:"none", marginBottom:8 }} />
-                  <div style={{ display:"flex", gap:6, justifyContent:"flex-end" }}>
-                    <Button variant="outline" size="sm" style={{ height:26, fontSize:10 }}
-                      onClick={() => { setShowFalloForm(false); setComentarioFallo("") }}>Cancelar</Button>
-                    <Button size="sm" style={{ height:26, fontSize:10 }} disabled={!comentarioFallo.trim()}
-                      className="bg-chart-4 hover:bg-chart-4/90 text-white"
-                      onClick={() => {
-                        onCompletarCasoEtapa(caso.id, etapaActual, "fallido", comentarioFallo.trim())
-                        setShowFalloForm(false); setComentarioFallo("")
-                      }}>
-                      <XCircle size={10} className="mr-1"/> Confirmar fallo
-                    </Button>
-                  </div>
-                </div>
+                // Formulario de comentario para resultado no aceptado
+                (() => {
+                  const noAceptados = configResultados.filter(r => !r.esAceptado)
+                  return (
+                    <div style={{ padding:"10px 12px", borderRadius:8, border:"1px solid var(--chart-4)", background:"color-mix(in oklch, var(--chart-4) 4%, var(--background))" }}>
+                      <p style={{ fontSize:11, fontWeight:600, color:"var(--chart-4)", marginBottom:6 }}>Describe qué falló en la prueba *</p>
+                      <Textarea rows={2} value={comentarioFallo} onChange={e => setComentarioFallo(e.target.value)}
+                        placeholder="Ej: El endpoint retorna 500 cuando se envían credenciales con caracteres especiales..."
+                        style={{ fontSize:12, resize:"none", marginBottom:8 }} />
+                      <div style={{ display:"flex", gap:6, justifyContent:"flex-end", flexWrap:"wrap" }}>
+                        <Button variant="outline" size="sm" style={{ height:26, fontSize:10 }}
+                          onClick={() => { setShowFalloForm(false); setComentarioFallo("") }}>Cancelar</Button>
+                        {noAceptados.map(rDef => (
+                          <Button key={rDef.id} size="sm" style={{ height:26, fontSize:10 }} disabled={!comentarioFallo.trim()}
+                            className="bg-chart-4 hover:bg-chart-4/90 text-white"
+                            onClick={() => {
+                              onCompletarCasoEtapa(caso.id, etapaActual, rDef.id, comentarioFallo.trim())
+                              setShowFalloForm(false); setComentarioFallo("")
+                            }}>
+                            <XCircle size={10} className="mr-1"/> Confirmar: {rDef.label}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })()
               )}
             </div>
           )}
 
-          {/* Retesteo */}
-          {caso.estadoAprobacion === "aprobado" && resultadoEtapaActual?.resultado === "fallido" && (isQA || isAdmin || isQALead) && (
+          {/* Retesteo — disponible cuando el resultado no es aceptado */}
+          {caso.estadoAprobacion === "aprobado" && resultadoEtapaActual?.resultado && resultadoEtapaActual.resultado !== "pendiente" && !getResultadoDef(resultadoEtapaActual.resultado).esAceptado && (isQA || isAdmin || isQALead) && (
             <div style={{ marginBottom:10, marginTop:6 }}>
-              {!showRetestForm ? (
-                <Button size="sm" variant="outline" style={{ borderColor:"var(--chart-1)", color:"var(--chart-1)" }}
-                  onClick={() => { setShowRetestForm(true); setComentarioCorreccion("") }}>
-                  <RefreshCw size={12} className="mr-1"/> Solicitar Retesteo
-                </Button>
-              ) : (
+              {(() => {
+                const resDef = getResultadoDef(resultadoEtapaActual.resultado)
+                const intentosActuales = resultadoEtapaActual.intentos?.length || 0
+                const limiteAlcanzado = resDef.maxRetesteos !== undefined && intentosActuales >= resDef.maxRetesteos
+                if (limiteAlcanzado) {
+                  return (
+                    <div style={{ padding:"7px 11px", borderRadius:7, background:"color-mix(in oklch, var(--chart-4) 7%, transparent)", border:"1px solid color-mix(in oklch, var(--chart-4) 28%, var(--border))", fontSize:11 }}>
+                      <span style={{ fontWeight:600, color:"var(--chart-4)" }}>Límite de retesteos alcanzado</span>
+                      <span style={{ color:"var(--muted-foreground)" }}> — {intentosActuales} de {resDef.maxRetesteos} intento{resDef.maxRetesteos !== 1 ? "s" : ""} permitido{resDef.maxRetesteos !== 1 ? "s" : ""}.</span>
+                    </div>
+                  )
+                }
+                return !showRetestForm ? (
+                  <Button size="sm" variant="outline" style={{ borderColor:"var(--chart-1)", color:"var(--chart-1)" }}
+                    onClick={() => { setShowRetestForm(true); setComentarioCorreccion("") }}>
+                    <RefreshCw size={12} className="mr-1"/> Solicitar Retesteo
+                    {resDef.maxRetesteos !== undefined && (
+                      <span style={{ marginLeft:5, fontSize:9, opacity:0.7 }}>({intentosActuales}/{resDef.maxRetesteos})</span>
+                    )}
+                  </Button>
+                ) : (
                 <div style={{ padding:"10px 12px", borderRadius:8, border:"1px solid var(--chart-1)", background:"color-mix(in oklch, var(--chart-1) 4%, var(--background))" }}>
                   <p style={{ fontSize:11, fontWeight:600, color:"var(--chart-1)", marginBottom:6 }}>Describe qué se corrigió para re-probar *</p>
                   <Textarea rows={2} value={comentarioCorreccion} onChange={e => setComentarioCorreccion(e.target.value)}
@@ -326,7 +387,8 @@ export function CasoPruebaCard({ caso, hu, tareasCaso, onAbrirEditar }: CasoPrue
                     </Button>
                   </div>
                 </div>
-              )}
+                )
+              })()}
             </div>
           )}
 
@@ -338,29 +400,32 @@ export function CasoPruebaCard({ caso, hu, tareasCaso, onAbrirEditar }: CasoPrue
               </p>
               <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
                 {caso.resultadosPorEtapa.flatMap(r =>
-                  (r.intentos || []).map((intento, idx) => (
-                    <div key={`${r.etapa}-${idx}`} style={{
-                      padding:"8px 10px", borderRadius:7, fontSize:11, lineHeight:1.5,
-                      border:`1px solid ${intento.resultado === "exitoso" ? "color-mix(in oklch, var(--chart-2) 30%, var(--border))" : "color-mix(in oklch, var(--chart-4) 30%, var(--border))"}`,
-                      background: intento.resultado === "exitoso" ? "color-mix(in oklch, var(--chart-2) 5%, transparent)" : "color-mix(in oklch, var(--chart-4) 5%, transparent)",
-                    }}>
-                      <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:3, flexWrap:"wrap" }}>
-                        <Badge variant="outline" className="text-[9px] bg-muted text-muted-foreground border-border" style={{ padding:"1px 5px" }}>
-                          {getEtapaHUCfg(r.etapa, configEtapas).label}
-                        </Badge>
-                        <Badge variant="outline" className={`text-[9px] ${intento.resultado === "exitoso" ? "bg-chart-2/20 text-chart-2 border-chart-2/30" : "bg-chart-4/20 text-chart-4 border-chart-4/30"}`} style={{ padding:"1px 5px" }}>
-                          Intento #{intento.numero} — {intento.resultado === "exitoso" ? "Exitoso" : "Fallido"}
-                        </Badge>
-                        <span style={{ fontSize:10, color:"var(--muted-foreground)" }}>{fmtCorto(intento.fecha)} · {intento.ejecutadoPor}</span>
+                  (r.intentos || []).map((intento, idx) => {
+                    const iDef = getResultadoDef(intento.resultado)
+                    return (
+                      <div key={`${r.etapa}-${idx}`} style={{
+                        padding:"8px 10px", borderRadius:7, fontSize:11, lineHeight:1.5,
+                        border:`1px solid ${iDef.esAceptado ? "color-mix(in oklch, var(--chart-2) 30%, var(--border))" : "color-mix(in oklch, var(--chart-4) 30%, var(--border))"}`,
+                        background: iDef.esAceptado ? "color-mix(in oklch, var(--chart-2) 5%, transparent)" : "color-mix(in oklch, var(--chart-4) 5%, transparent)",
+                      }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:3, flexWrap:"wrap" }}>
+                          <Badge variant="outline" className="text-[9px] bg-muted text-muted-foreground border-border" style={{ padding:"1px 5px" }}>
+                            {getEtapaHUCfg(r.etapa, configEtapas).label}
+                          </Badge>
+                          <Badge variant="outline" className={`text-[9px] ${iDef.cls}`} style={{ padding:"1px 5px" }}>
+                            Intento #{intento.numero} — {iDef.icono ? `${iDef.icono} ` : ""}{iDef.label}
+                          </Badge>
+                          <span style={{ fontSize:10, color:"var(--muted-foreground)" }}>{fmtCorto(intento.fecha)} · {intento.ejecutadoPor}</span>
+                        </div>
+                        {intento.comentarioFallo && (
+                          <p style={{ color:"var(--chart-4)", fontSize:11 }}><strong>Fallo:</strong> {intento.comentarioFallo}</p>
+                        )}
+                        {intento.comentarioCorreccion && (
+                          <p style={{ color:"var(--chart-2)", fontSize:11 }}><strong>Corrección:</strong> {intento.comentarioCorreccion}</p>
+                        )}
                       </div>
-                      {intento.comentarioFallo && (
-                        <p style={{ color:"var(--chart-4)", fontSize:11 }}><strong>Fallo:</strong> {intento.comentarioFallo}</p>
-                      )}
-                      {intento.comentarioCorreccion && (
-                        <p style={{ color:"var(--chart-2)", fontSize:11 }}><strong>Corrección:</strong> {intento.comentarioCorreccion}</p>
-                      )}
-                    </div>
-                  ))
+                    )
+                  })
                 )}
               </div>
             </div>

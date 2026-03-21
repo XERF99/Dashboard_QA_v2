@@ -10,7 +10,7 @@
 import type {
   HistoriaUsuario, CasoPrueba, Tarea,
   ConfigEtapas, TipoAplicacionDef, AmbienteDef, TipoPruebaDef,
-  Notificacion,
+  ResultadoDef, Notificacion,
 } from "@/lib/types/index"
 
 export interface IHistoriaService {
@@ -31,6 +31,9 @@ export interface ITareaService {
 export interface IConfigService {
   getEtapas(): ConfigEtapas
   saveEtapas(config: ConfigEtapas): void
+
+  getResultados(): ResultadoDef[]
+  saveResultados(resultados: ResultadoDef[]): void
 
   getTiposAplicacion(): TipoAplicacionDef[]
   saveTiposAplicacion(tipos: TipoAplicacionDef[]): void

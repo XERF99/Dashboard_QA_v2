@@ -1,4 +1,4 @@
-import type { HistoriaUsuario, CasoPrueba, Tarea, ConfigEtapas, TipoNotificacion, RolDestinatario, Notificacion } from "@/lib/types"
+import type { HistoriaUsuario, CasoPrueba, Tarea, ConfigEtapas, ResultadoDef, TipoNotificacion, RolDestinatario, Notificacion } from "@/lib/types"
 import type { UserSafe } from "@/lib/auth-context"
 
 export type ToastPayload = { type: "success" | "warning" | "error" | "info"; title: string; desc?: string }
@@ -23,6 +23,7 @@ export interface DomainCtx {
   setTareas: (updater: (prev: Tarea[]) => Tarea[]) => void
   user: UserSafe | null
   configEtapas: ConfigEtapas
+  configResultados: ResultadoDef[]
   addToast: (t: ToastPayload) => void
   addNotificacion: AddNotificacionFn
 }

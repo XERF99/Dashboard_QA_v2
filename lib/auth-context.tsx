@@ -344,8 +344,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUsers(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u))
 
     if (user?.id === updatedUser.id) {
-      const { password: _, ...safe } = updatedUser
-      setUser(safe)
+      if (!updatedUser.activo) {
+        // La cuenta del usuario activo fue desactivada → cerrar sesión inmediatamente
+        setUser(null)
+        setPendientePassword(false)
+      } else {
+        // Rol u otros datos cambiaron → refrescar sesión para recalcular permisos
+        const { password: _, ...safe } = updatedUser
+        setUser(safe)
+      }
     }
 
     return { success: true }

@@ -63,13 +63,24 @@ export type EstadoAprobacion =
   | "aprobado"
   | "rechazado"
 
+// ── Resultados de ejecución configurables ─────────────────────
+export interface ResultadoDef {
+  id: string          // e.g. "exitoso", "fallido", "bloqueado"
+  label: string       // display name
+  esAceptado: boolean // true → cuenta como válido para avanzar etapa
+  esBase: boolean     // true → no se puede eliminar
+  cls: string         // badge CSS classes
+  icono?: string      // carácter/emoji para badge (ej: "✓", "✗", "⚠", "🔒")
+  maxRetesteos?: number // solo aplica a resultados !esAceptado; undefined = ilimitado
+}
+
 // ── Ejecución por etapa ───────────────────────────────────────
 export type EstadoEjecucion = "pendiente" | "en_ejecucion" | "completado"
-export type ResultadoEjecucion = "pendiente" | "exitoso" | "fallido"
+export type ResultadoEjecucion = string   // ID de ResultadoDef o "pendiente"
 
 export interface IntentoEjecucion {
   numero: number
-  resultado: "exitoso" | "fallido"
+  resultado: string   // ID de ResultadoDef
   comentarioFallo?: string
   comentarioCorreccion?: string
   fecha: Date

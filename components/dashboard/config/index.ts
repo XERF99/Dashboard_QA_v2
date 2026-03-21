@@ -1,5 +1,6 @@
 export * from "./sprints-config"
 export * from "./etapas-config"
+export * from "./resultados-config"
 export * from "./roles-config"
 export * from "./list-configs"
 export * from "./aplicaciones-config"
