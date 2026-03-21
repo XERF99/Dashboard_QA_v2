@@ -1,4 +1,4 @@
-# QAControl — Dashboard de Gestión de Pruebas · v2.2
+# QAControl — Dashboard de Gestión de Pruebas · v2.3
 
 Sistema integral de gestión de calidad para equipos QA. Permite administrar Historias de Usuario, casos de prueba, flujos de aprobación, bloqueos y carga ocupacional del equipo, con control de acceso basado en roles.
 
@@ -14,7 +14,7 @@ Sistema integral de gestión de calidad para equipos QA. Permite administrar His
 | Componentes | shadcn/ui + Radix UI |
 | Iconos | Lucide React |
 | Gráficos | Recharts 2.15 |
-| Persistencia | localStorage (sin backend) |
+| Persistencia | localStorage (frontend) / PostgreSQL + Prisma (backend) |
 | Tests | Vitest 3 + React Testing Library 16 |
 | Package manager | pnpm |
 | Despliegue | Vercel |
@@ -104,7 +104,210 @@ Sistema integral de gestión de calidad para equipos QA. Permite administrar His
 
 ---
 
+## Backend (PostgreSQL + Prisma + MVC + Joi)
+
+El backend corre como **API Routes de Next.js** dentro del mismo proyecto, siguiendo una arquitectura MVC.
+El sistema está **completamente conectado a PostgreSQL** — login, datos y configuración se sincronizan con la DB en tiempo real.
+
+### Estructura
+
+```
+lib/backend/
+  prisma.ts                        ← singleton PrismaClient
+  middleware/
+    auth.middleware.ts             ← JWT (jose): signToken, verifyToken, requireAuth, requireAdmin
+    rate-limit.ts                  ← Rate limiter en memoria por IP (10 req / 15 min)
+  services/
+    auth.service.ts                ← login, logout, cambiarPassword, createUser, resetPassword
+    historia.service.ts            ← CRUD HistoriaUsuario
+    caso.service.ts                ← CRUD CasoPrueba
+    tarea.service.ts               ← CRUD Tarea
+    config.service.ts              ← upsert singleton Config
+    notificacion.service.ts        ← CRUD Notificacion + rolToDestinatario + marcarTodasLeidas
+  validators/
+    auth.validator.ts              ← Joi: login, cambiarPassword, createUser, updateUser
+    historia.validator.ts          ← Joi: createHistoria, updateHistoria
+    caso.validator.ts              ← Joi: createCaso, updateCaso
+    tarea.validator.ts             ← Joi: createTarea, updateTarea
+    config.validator.ts            ← Joi: updateConfig
+
+app/api/
+  auth/login/route.ts              ← POST  /api/auth/login
+  auth/logout/route.ts             ← POST  /api/auth/logout
+  auth/me/route.ts                 ← GET   /api/auth/me
+  auth/password/route.ts           ← PUT   /api/auth/password
+  users/route.ts                   ← GET   /api/users  · POST  /api/users
+  users/[id]/route.ts              ← PUT   /api/users/[id] · DELETE /api/users/[id]
+  historias/route.ts               ← GET   /api/historias  · POST  /api/historias
+  historias/[id]/route.ts          ← GET · PUT · DELETE  /api/historias/[id]
+  casos/route.ts                   ← GET   /api/casos  · POST  /api/casos
+  casos/[id]/route.ts              ← GET · PUT · DELETE  /api/casos/[id]
+  tareas/route.ts                  ← GET   /api/tareas  · POST  /api/tareas
+  tareas/[id]/route.ts             ← GET · PUT · DELETE  /api/tareas/[id]
+  config/route.ts                  ← GET   /api/config  · PUT  /api/config
+  notificaciones/route.ts          ← GET   /api/notificaciones  · POST /api/notificaciones
+  notificaciones/[id]/route.ts     ← PATCH /api/notificaciones/[id]  (marcar leída)
+  notificaciones/marcar-todas/route.ts ← PATCH /api/notificaciones/marcar-todas
+```
+
+### Schema Prisma
+
+Tablas: `users`, `roles`, `historias_usuario`, `casos_prueba`, `tareas`, `sprints`, `notificaciones`, `config`.
+
+Los campos con arrays complejos (`bloqueos`, `historial`, `comentarios`, `resultadosPorEtapa`) se almacenan como `Json` para preservar los tipos TypeScript sin cambios en el frontend. Se pueden normalizar a tablas relacionales en fases posteriores.
+
+### Setup inicial (requiere PostgreSQL)
+
+```bash
+# 1. Ajustar credenciales en .env
+#    DATABASE_URL="postgresql://usuario:password@localhost:5432/tcs_dashboard"
+#    JWT_SECRET="un-string-aleatorio-largo"
+
+# 2. Crear la base de datos y migrar el schema
+npx prisma migrate dev --name init
+
+# 3. Generar el cliente Prisma (tipos TypeScript)
+npx prisma generate
+```
+
+Una vez ejecutado `prisma generate`, los `any` temporales en los services se pueden reemplazar por los tipos generados (`Prisma.HistoriaUsuarioCreateInput`, etc.).
+
+### Swap frontend → backend
+
+Editar `lib/services/index.ts`:
+```ts
+// Cambiar esto:
+export { historiaStorageService as historiaService } from "./localStorage/historia.service"
+// Por esto:
+export { historiaApiService as historiaService } from "./api/historia.service"
+```
+
+El resto del frontend no cambia.
+
+---
+
+## Seguridad
+
+El sistema implementa múltiples capas de defensa en los endpoints de la API.
+
+### Mecanismos activos
+
+| Capa | Implementación |
+|---|---|
+| Autenticación | JWT HS256 firmado con `jose`, expiración 8h, cookie `httpOnly` |
+| Protección de cookies | `httpOnly`, `secure` (producción), `sameSite: lax` |
+| Hashing de contraseñas | bcryptjs con 10 rondas de salt |
+| Bloqueo por intentos | Cuenta bloqueada automáticamente tras 5 intentos fallidos |
+| Rate limiting | Máximo 10 intentos de login por IP cada 15 minutos → HTTP 429 |
+| Control de acceso | Guards `requireAuth` y `requireAdmin` en todos los endpoints |
+| Validación de entrada | Joi en todos los POST/PUT — rechaza campos desconocidos y tipos inválidos |
+| Whitelist de roles | El campo `rol` solo acepta: `owner`, `admin`, `qa_lead`, `qa`, `viewer` |
+| Prevención de enumeración | El login devuelve "Credenciales inválidas" tanto para email inexistente como para contraseña incorrecta |
+| Seguridad HTTP | Headers configurados en `next.config.mjs`: `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Strict-Transport-Security`, `Content-Security-Policy`, `Referrer-Policy`, `Permissions-Policy` |
+| Inyección SQL | Prisma ORM con queries parametrizadas — sin SQL raw |
+| Secreto JWT | `JWT_SECRET` obligatorio en producción — lanza error al arrancar si no está definido |
+
+### Variables de entorno requeridas en producción
+
+```bash
+JWT_SECRET="string-aleatorio-largo-min-32-caracteres"
+DATABASE_URL="postgresql://..."
+DIRECT_URL="postgresql://..."   # solo necesario con Neon / connection pooler
+```
+
+> En desarrollo local el servidor arranca con un secret de fallback y muestra una advertencia. En producción (`NODE_ENV=production`) el arranque falla explícitamente si `JWT_SECRET` no está configurado.
+
+### Archivos clave
+
+```
+lib/backend/middleware/
+  auth.middleware.ts    ← JWT: signToken, verifyToken, requireAuth, requireAdmin
+  rate-limit.ts         ← Rate limiter en memoria por IP (10 req / 15 min)
+lib/backend/validators/
+  auth.validator.ts     ← Whitelist de roles, mínimo 8 chars en contraseña
+lib/backend/services/
+  auth.service.ts       ← Mensaje genérico para evitar enumeración de usuarios
+next.config.mjs         ← Headers de seguridad HTTP
+```
+
+---
+
+## Tests
+
+El proyecto cuenta con **99 tests automatizados** en 9 archivos usando Vitest 3 + React Testing Library 16. Los tests de API routes corren en entorno `node`; los de UI/hooks en `jsdom`.
+
+### Comandos
+
+```bash
+pnpm test        # Modo watch (desarrollo)
+pnpm test:run    # Ejecución única (CI)
+pnpm test:ui     # Interfaz visual de Vitest
+```
+
+### Cobertura
+
+| Archivo | Entorno | Tests | Qué cubre |
+|---|---|---|---|
+| `tests/auth-login.test.ts` | jsdom | 12 | Login, bloqueo por intentos, guards de addUser/deleteUser |
+| `tests/casoHandlers.test.ts` | jsdom | 14 | Flujo de aprobación, retesteo, notificaciones por rol |
+| `tests/useHistoriasVisibles.test.ts` | jsdom | 12 | Scoping por rol: Owner, Admin, QA Lead, QA |
+| `tests/api-auth-endpoints.test.ts` | node | 7 | GET /me · POST /logout · PUT /password |
+| `tests/api-historias.test.ts` | node | 10 | CRUD + sync de historias de usuario |
+| `tests/api-casos.test.ts` | node | 11 | CRUD + filtros + sync de casos de prueba |
+| `tests/api-tareas.test.ts` | node | 12 | CRUD + filtros + sync de tareas |
+| `tests/api-users.test.ts` | node | 10 | CRUD usuarios + reset-password + desbloquear |
+| `tests/api-config.test.ts` | node | 7 | GET/PUT config con guards de rol |
+
+Los tests de API usan **Prisma y servicios mockeados** con `vi.mock` y generan JWTs reales con `signToken` — no requieren base de datos activa.
+
+---
+
 ## Changelog
+
+### v2.3 — Notificaciones conectadas al backend (notif-backend)
+- **`lib/backend/services/notificacion.service.ts`** — nuevo service con `getNotificacionesByDestinatario`, `createNotificacion`, `marcarLeida`, `marcarTodasLeidas` y `rolToDestinatario` (mapea `owner/admin` → `"admin"`, resto → `"qa"`).
+- **`GET /api/notificaciones`** — devuelve las notificaciones del usuario autenticado filtradas por su rol (destinatario). Protegido con `requireAuth`.
+- **`POST /api/notificaciones`** — crea una nueva notificación en la BD. Llamado automáticamente por `addNotificacion` en el frontend.
+- **`PATCH /api/notificaciones/[id]`** — marca una notificación como leída.
+- **`PATCH /api/notificaciones/marcar-todas`** — marca todas las no leídas del usuario como leídas.
+- **`lib/hooks/useNotificaciones.ts`** reescrito: carga desde localStorage al instante → reemplaza con datos de la API en mount → `addNotificacion` hace POST con actualización optimista (id temporal reemplazado por id real de BD) → `handleMarcarLeida`/`handleMarcarTodasLeidas` hacen PATCH en segundo plano. Fallback silencioso a localStorage si la API no responde.
+- **`lib/services/api/client.ts`** — añadido método `patch` al helper `api`.
+- Las notificaciones ya son persistentes entre usuarios y sesiones.
+- **`pnpm tsc --noEmit` → 0 errores.**
+
+### v2.3 — Hardening de seguridad (security)
+- **Rate limiting** (`lib/backend/middleware/rate-limit.ts`): módulo en memoria que limita a 10 intentos de login por IP cada 15 minutos. Responde HTTP 429 con header `Retry-After` si se supera el límite.
+- **JWT_SECRET obligatorio en producción**: `auth.middleware.ts` lanza un error explícito al arrancar si `JWT_SECRET` no está definido en `NODE_ENV=production`. Elimina el riesgo de deployar con el secret hardcodeado del repositorio.
+- **Whitelist de roles**: `createUserSchema` y `updateUserSchema` en `auth.validator.ts` limitan el campo `rol` a los valores válidos del sistema (`owner`, `admin`, `qa_lead`, `qa`, `viewer`) mediante `Joi.valid()`.
+- **Prevención de enumeración de usuarios**: el login ya no distingue entre "email no existe" y "contraseña incorrecta"; ambos devuelven "Credenciales inválidas".
+- **Headers de seguridad HTTP** (`next.config.mjs`): `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Strict-Transport-Security` (HSTS 2 años), `Content-Security-Policy`, `Referrer-Policy` y `Permissions-Policy` aplicados a todas las rutas.
+- **Contraseña mínima 8 caracteres**: `cambiarPasswordSchema` actualizado de `min(6)` a `min(8)`.
+- **`pnpm tsc --noEmit` → 0 errores.**
+
+### v2.3 — Conexión completa a PostgreSQL (backend-connect)
+- **Login/logout via API** (`auth-context.tsx`): `login()` ahora es `async` y llama a `POST /api/auth/login`. JWT en cookie `httpOnly`. La sesión persiste entre recargas y es válida 8h.
+- **`useApiMirroredState`** (`lib/hooks/useApiMirroredState.ts`): hook que carga desde la API en mount y sincroniza a la DB en cada cambio de estado. Fallback a `localStorage` si la API no responde.
+- **Datos sincronizados**: `useDomainData` usa `useApiMirroredState` para `historias`, `casos` y `tareas`. Cualquier cambio (crear, editar, eliminar HU/caso/tarea) se persiste en PostgreSQL automáticamente.
+- **Config sincronizada**: `useConfig` carga la config desde `GET /api/config` en mount y la sincroniza con `PUT /api/config` en cada cambio (etapas, resultados, tipos, ambientes, etc.).
+- **Endpoints bulk sync**: `POST /api/historias/sync`, `POST /api/casos/sync`, `POST /api/tareas/sync` — reciben el array completo, hacen upsert de los registros existentes y eliminan los que ya no están.
+- **`prisma/seed.ts`** — script de seed con 7 usuarios iniciales, 5 roles base y config vacía. Ejecutar con `pnpm db:seed`.
+- **`lib/services/api/client.ts`** — helper `apiFetch` con revisor de fechas ISO → `Date`, manejo de errores HTTP y helpers `api.get/post/put/delete`.
+- **Tests actualizados**: `tests/auth-login.test.ts` reescrito con mock de `fetch` y `async/await` para adaptarse al nuevo login API.
+- **`pnpm tsc --noEmit` → 0 errores.**
+
+### v2.3 — Backend PostgreSQL + Prisma + MVC + Joi (backend-init)
+- **Prisma v5** instalado (`@prisma/client`, `prisma`) — compatible con Node.js 20.11+.
+- **`bcryptjs` + `jose` + `joi`** instalados para auth y validación.
+- **`prisma/schema.prisma`** completo con 8 modelos: `User`, `Role`, `HistoriaUsuario`, `CasoPrueba`, `Tarea`, `Sprint`, `Notificacion`, `Config`. Campos complejos como `Json`.
+- **`lib/backend/prisma.ts`** — singleton `PrismaClient` con guard para hot-reload en desarrollo.
+- **`lib/backend/middleware/auth.middleware.ts`** — `signToken`, `verifyToken`, `requireAuth`, `requireAdmin` usando `jose` (JWT HS256, 8h de expiración). Token en cookie `httpOnly` o header `Authorization: Bearer`.
+- **Validators Joi**: `auth.validator.ts`, `historia.validator.ts`, `caso.validator.ts`, `tarea.validator.ts`, `config.validator.ts`.
+- **Services**: `auth.service.ts` (login con bcrypt, bloqueo por intentos, historial de sesiones, cambio de password), `historia.service.ts`, `caso.service.ts`, `tarea.service.ts`, `config.service.ts` (upsert singleton).
+- **API Routes** (13 archivos): CRUD completo para `auth`, `users`, `historias`, `casos`, `tareas`, `config`. Params como `Promise<{id}>` — compatible con Next.js 16.
+- **`.env`** actualizado con `DATABASE_URL` y `JWT_SECRET` de ejemplo.
+- **README** actualizado: stack, sección de backend, instrucciones de setup.
+- **El frontend no cambia** — sigue usando `localStorage` hasta que se ejecute `prisma migrate` y se haga el swap en `lib/services/index.ts`.
+- **`pnpm tsc --noEmit` → 0 errores.**
 
 ### v2.2 — Límite de retesteos y aviso de etapa mid-flight (opt18)
 - **Límite configurable de retesteos** (`ResultadoDef.maxRetesteos?: number`): campo opcional en cada resultado no aceptado. Si se configura, el botón "Solicitar Retesteo" muestra el contador `(N/max)` y, al alcanzar el límite, se reemplaza por un aviso "Límite de retesteos alcanzado" bloqueando nuevos intentos.
@@ -174,11 +377,22 @@ Sistema integral de gestión de calidad para equipos QA. Permite administrar His
 - **`useReducer` en `useHistoriasFilters`**: los 10 `useState` independientes (9 filtros + `filtrosVisibles`) se consolidaron en un único `useReducer` con estado atómico (`FiltersState`) y 13 acciones tipadas (`FiltersAction`). Beneficios: `RESET_FILTROS` es atómico (antes era 9 `setState` secuenciales), `TOGGLE_SORT` y los filtros de paginación resetean `pagina: 1` de forma garantizada en el mismo dispatch, y el estado es fácilmente serializable para deep linking. La API pública del hook (`setFiltroEstado`, `toggleSort`, `limpiarFiltros`, etc.) no cambió — ningún consumidor requirió modificación.
 - **Fix oculto**: `guardarEnStorage` no estaba exportada desde `lib/storage.ts` aunque 4 servicios en `lib/services/localStorage/` la importaban, lo que causaba errores TS silenciosos. Corregido con `export`.
 
-### v2.2 — Suite de tests con Vitest (opt11)
-- **Stack de testing**: Vitest 3 + React Testing Library 16 + jsdom. Compatible con React 19 y con el path alias `@/` del proyecto. Scripts disponibles: `pnpm test` (watch), `pnpm test:run` (CI), `pnpm test:ui` (interfaz visual).
+### v2.2 — Suite de tests con Vitest (opt11) — ampliada con cobertura de API Routes
+- **Stack de testing**: Vitest 3 + React Testing Library 16 + jsdom (UI) / node (API routes). Compatible con React 19 y con el path alias `@/` del proyecto. Scripts disponibles: `pnpm test` (watch), `pnpm test:run` (CI), `pnpm test:ui` (interfaz visual).
+- **Total: 99 tests — 9 archivos — 0 fallos**
+
+#### Tests de UI / Hooks (jsdom)
 - **`tests/casoHandlers.test.ts`** — 14 tests sobre el flujo de aprobación de casos de prueba: `handleEnviarAprobacion` (borrador/rechazado → pendiente, aprobado intacto, HUs ajenas intactas), `handleAprobarCasos` (metadatos `aprobadoPor`/`fechaAprobacion`), `handleRechazarCasos` (motivo de rechazo), `handleSolicitarModificacionCaso`, `handleHabilitarModificacionCaso` (reset a borrador), `handleAddCaso`, `handleEliminarCaso` e `handleRetestearCaso`. Todos verifican también que `addNotificacion` se dispare con el destinatario correcto (`admin` vs `qa`).
 - **`tests/useHistoriasVisibles.test.ts`** — 12 tests de scoping por rol: Owner ve todo / `filtroNombresCarga` undefined; QA solo ve sus HUs; Admin sin equipo solo las propias; Admin con equipo ve equipo+sí mismo; QA Lead ídem. También tests de búsqueda por título, código y responsable.
-- **`tests/auth-login.test.ts`** — 13 tests de lógica de autenticación y permisos: login con usuario inexistente / inactivo / bloqueado, contador de intentos fallidos con mensaje de intentos restantes, bloqueo en el 5.° intento, generación de `pendingBlockEvents`, reset del contador tras login exitoso, `debeCambiarPassword`, `desbloquearUsuario`, `resetPassword`, y guards de `addUser`/`deleteUser` (admin no puede crear admin, no puede existir segundo owner, email duplicado, no puede eliminarse a sí mismo).
+- **`tests/auth-login.test.ts`** — 12 tests de lógica de autenticación y permisos: login con usuario inexistente / inactivo / bloqueado, contador de intentos fallidos con mensaje de intentos restantes, bloqueo en el 5.° intento, generación de `pendingBlockEvents`, y guards de `addUser`/`deleteUser` (admin no puede crear admin, no puede existir segundo owner, email duplicado, no puede eliminarse a sí mismo).
+
+#### Tests de API Routes (node) — Prisma y servicios mockeados, JWT real con `signToken`
+- **`tests/api-auth-endpoints.test.ts`** — 7 tests: `GET /api/auth/me` (sin token→401, usuario válido→200, usuario no en DB→404), `POST /api/auth/logout` (sin token→401, con token→200 + cookie borrada), `PUT /api/auth/password` (sin token→401, contraseña corta→400, actual incorrecta→400, cambio exitoso→200).
+- **`tests/api-historias.test.ts`** — 10 tests: listar (sin token→401, con token→200), crear (body inválido→400, exitoso→201), obtener por id (no existe→404, existe→200), actualizar→200, eliminar→200, sync (sin token→401, array completo→200+count).
+- **`tests/api-casos.test.ts`** — 11 tests: listar todos→200, filtrar por `huId`→200, crear (inválido→400, exitoso→201), obtener por id (no existe→404, existe→200), actualizar→200, eliminar→200, sync (array vacío→count 0, con casos→count correcto).
+- **`tests/api-tareas.test.ts`** — 12 tests: listar todos→200, filtrar por `casoPruebaId`→200, filtrar por `huId`→200, crear (inválido→400, exitoso→201), obtener por id (no existe→404, existe→200), actualizar→200, eliminar→200, sync (sin token→401, con tareas→count correcto).
+- **`tests/api-users.test.ts`** — 10 tests: listar (QA→403, admin→200), crear (sin email→400, email duplicado→409, exitoso→201), actualizar→200, reset-password→200, desbloquear→200, eliminar propia cuenta→400, eliminar otro→200.
+- **`tests/api-config.test.ts`** — 7 tests: leer (sin token→401, autenticado→200), actualizar (QA→403, body inválido→400, aplicaciones→200, etapas con formato correcto→200).
 
 ### v2.2 — Refactorización de componentes grandes y consolidación de config (opt10)
 - **`user-management.tsx` dividido**: Dialog de creación/edición extraído a `user-form-modal.tsx` (~160 líneas) con estado de formulario propio y sync vía `useEffect`. Los 3 AlertDialogs de confirmación (eliminar, resetear contraseña, desbloquear) extraídos a `user-confirm-dialogs.tsx` (~80 líneas). El componente principal redujo de 830 a ~480 líneas.
@@ -274,9 +488,11 @@ Sistema integral de gestión de calidad para equipos QA. Permite administrar His
 
 ## Persistencia de datos
 
-Todos los datos se almacenan en `localStorage` del navegador bajo las claves `tcs_*`. No se requiere backend ni base de datos. Al limpiar el almacenamiento del navegador se restauran los datos de ejemplo.
+El sistema usa **PostgreSQL como fuente de verdad** a través de Prisma ORM. Todos los cambios (HUs, casos, tareas, config) se sincronizan en tiempo real con la base de datos.
 
-La capa de acceso a datos está abstraída detrás de contratos en `lib/services/interfaces.ts`. Para conectar un backend REST o una base de datos, basta con crear nuevas implementaciones del servicio y cambiar los imports en `lib/services/index.ts`. Ningún componente requiere modificación.
+Como fallback de disponibilidad, `useApiMirroredState` mantiene una copia en `localStorage` y la usa si la API no responde. Esto garantiza que el frontend no quede bloqueado ante una interrupción temporal de red.
+
+La capa de acceso a datos está abstraída en `lib/services/interfaces.ts`. Las implementaciones API viven en `lib/services/api/` y las de localStorage en `lib/services/localStorage/`. Para cambiar la fuente de datos basta con editar los imports en `lib/services/index.ts` — ningún componente requiere modificación.
 
 ---
 
@@ -314,30 +530,58 @@ Abrir [http://localhost:3000](http://localhost:3000) en el navegador.
 ## Comandos disponibles
 
 ```bash
-pnpm dev      # Servidor de desarrollo con hot-reload
-pnpm build    # Build de producción
-pnpm start    # Servidor de producción (requiere build previo)
-pnpm lint     # Linting con ESLint
+# Desarrollo
+pnpm dev           # Servidor de desarrollo con hot-reload
+pnpm build         # Build de producción
+pnpm start         # Servidor de producción (requiere build previo)
+pnpm lint          # Linting con ESLint
+
+# Tests
+pnpm test          # Modo watch (desarrollo)
+pnpm test:run      # Ejecución única (CI / pre-push)
+pnpm test:ui       # Interfaz visual de Vitest
+
+# Base de datos
+pnpm db:migrate    # Aplica migraciones Prisma a la DB
+pnpm db:seed       # Carga usuarios y config iniciales
+pnpm db:studio     # Abre Prisma Studio (explorador visual de la DB)
 ```
 
 ---
 
 ## Despliegue en Vercel
 
-### Opción 1 — Vercel CLI
+### Requisitos previos
+
+El sistema requiere **PostgreSQL accesible desde la nube**. Se recomienda [Neon](https://neon.tech) (serverless PostgreSQL con tier gratuito). Neon provee dos URLs: una para el connection pooler (app) y otra directa (migraciones).
+
+### Variables de entorno requeridas en Vercel
+
+Configurar en **Settings → Environment Variables** del proyecto en Vercel:
+
+| Variable | Descripción |
+|---|---|
+| `DATABASE_URL` | URL del connection pooler de Neon (o PostgreSQL en producción) |
+| `DIRECT_URL` | URL directa de Neon (para migraciones Prisma; igual a `DATABASE_URL` si no usas pooler) |
+| `JWT_SECRET` | String aleatorio largo (mín. 32 caracteres) — **obligatorio en producción** |
+
+> Si `JWT_SECRET` no está definido, el servidor lanza un error explícito al arrancar. No es posible deployar accidentalmente con el secret por defecto.
+
+### Opción 1 — Importar desde GitHub (recomendado)
+
+1. Subir el repositorio a GitHub
+2. Ir a [vercel.com/new](https://vercel.com/new) e importar el repositorio
+3. Vercel detecta Next.js automáticamente
+4. Configurar las 3 variables de entorno antes del primer deploy
+5. Cada `git push` a `main` despliega automáticamente a producción
+
+### Opción 2 — Vercel CLI
 
 ```bash
 npm install -g vercel
 vercel          # Primera vez (configura el proyecto)
 vercel --prod   # Despliegues posteriores a producción
 ```
-
-### Opción 2 — Importar desde GitHub (recomendado)
-
-1. Subir el repositorio a GitHub
-2. Ir a [vercel.com/new](https://vercel.com/new) e importar el repositorio
-3. Vercel detecta Next.js automáticamente — no requiere configuración adicional
-4. Cada `git push` a `main` despliega automáticamente a producción
 
 > El paquete `@vercel/analytics` ya está instalado. Para activar Analytics, habilitar la integración desde el dashboard de Vercel.
 
@@ -422,11 +666,17 @@ dashboard_v22/
 │       ├── hu-export.ts            # Exportación de HUs
 │       ├── analytics-export.ts     # Exportación de Analíticas
 │       └── utils.ts
-├── tests/                        # Suite de tests (Vitest + RTL)
+├── tests/                        # Suite de tests (Vitest + RTL) — 99 tests
 │   ├── setup.ts                  # Mock de localStorage + jest-dom
-│   ├── casoHandlers.test.ts      # Tests del flujo de aprobación
-│   ├── useHistoriasVisibles.test.ts # Tests de scoping por rol
-│   └── auth-login.test.ts        # Tests de login, bloqueo y permisos
+│   ├── casoHandlers.test.ts      # Tests del flujo de aprobación (jsdom)
+│   ├── useHistoriasVisibles.test.ts # Tests de scoping por rol (jsdom)
+│   ├── auth-login.test.ts        # Tests de login, bloqueo y permisos (jsdom)
+│   ├── api-auth-endpoints.test.ts   # Tests /api/auth/me, logout, password (node)
+│   ├── api-historias.test.ts     # Tests CRUD + sync historias (node)
+│   ├── api-casos.test.ts         # Tests CRUD + sync casos (node)
+│   ├── api-tareas.test.ts        # Tests CRUD + sync tareas (node)
+│   ├── api-users.test.ts         # Tests CRUD + acciones usuarios (node)
+│   └── api-config.test.ts        # Tests GET/PUT configuración (node)
 ├── public/
 ├── vitest.config.ts
 ├── next.config.mjs

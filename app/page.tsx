@@ -43,7 +43,7 @@ function DashboardSkeleton() {
 
 export default function DashboardPage() {
   const isHydrated = useIsHydrated()
-  const { isAuthenticated, canManageUsers, verSoloPropios, isAdmin, isQALead, isQA, canCreateHU, isOwner, user, users, roles, pendingBlockEvents, clearBlockEvents } = useAuth()
+  const { isAuthenticated, sessionLoading, canManageUsers, verSoloPropios, isAdmin, isQALead, isQA, canCreateHU, isOwner, user, users, roles, pendingBlockEvents, clearBlockEvents } = useAuth()
   const qaUsers = users.filter(u => u.activo && (roles.find(r => r.id === u.rol)?.permisos.includes("canEdit") ?? false)).map(u => u.nombre)
 
   // ── Toasts ────────────────────────────────────────────────
@@ -109,6 +109,14 @@ export default function DashboardPage() {
   }, [pendingBlockEvents]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!isHydrated) return (
+    <div className="min-h-screen bg-background">
+      <main className="container mx-auto px-3 sm:px-6">
+        <DashboardSkeleton />
+      </main>
+    </div>
+  )
+
+  if (sessionLoading) return (
     <div className="min-h-screen bg-background">
       <main className="container mx-auto px-3 sm:px-6">
         <DashboardSkeleton />

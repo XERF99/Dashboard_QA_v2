@@ -43,7 +43,7 @@ export function LoginScreen() {
     if (!email.trim()) { setError("Ingresa tu email"); setIsLoading(false); return }
     if (!password.trim()) { setError("Ingresa tu contraseña"); setIsLoading(false); return }
     await new Promise(resolve => setTimeout(resolve, 600))
-    const result = login(email, password)
+    const result = await login(email, password)
     if (!result.success) setError(result.error || "Credenciales incorrectas")
     else if (result.debeCambiar) {
       setCurrentPass(password)

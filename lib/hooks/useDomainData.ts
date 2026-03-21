@@ -1,8 +1,10 @@
 "use client"
 
 import { useState } from "react"
-import { usePersistedState, STORAGE_KEYS } from "@/lib/storage"
+import { STORAGE_KEYS } from "@/lib/storage"
 import { historiasEjemplo, casosPruebaEjemplo, tareasEjemplo } from "@/lib/types"
+import { useApiMirroredState } from "@/lib/hooks/useApiMirroredState"
+import { api } from "@/lib/services/api/client"
 import type { HistoriaUsuario, CasoPrueba, Tarea, ConfigEtapas, ResultadoDef, TipoNotificacion, RolDestinatario, Notificacion } from "@/lib/types"
 import type { UserSafe } from "@/lib/auth-context"
 import { createHUHandlers }          from "./domain/huHandlers"
@@ -37,11 +39,26 @@ interface DomainDataOptions {
 export function useDomainData({ user, configEtapas, configResultados, addToast, addNotificacion }: DomainDataOptions) {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError]         = useState<string | null>(null)
-  const refetch = () => { /* noop — implementar fetch al conectar backend */ }
 
-  const [historias, setHistorias] = usePersistedState<HistoriaUsuario[]>(STORAGE_KEYS.historias, historiasEjemplo)
-  const [casos, setCasos]         = usePersistedState<CasoPrueba[]>(STORAGE_KEYS.casos, casosPruebaEjemplo)
-  const [tareas, setTareas]       = usePersistedState<Tarea[]>(STORAGE_KEYS.tareas, tareasEjemplo)
+  const [historias, setHistorias] = useApiMirroredState<HistoriaUsuario[]>(
+    STORAGE_KEYS.historias, historiasEjemplo,
+    () => api.get<{ historias: HistoriaUsuario[] }>("/api/historias").then(r => r.historias),
+    (data) => api.post("/api/historias/sync", { historias: data }).then(() => void 0),
+  )
+
+  const [casos, setCasos] = useApiMirroredState<CasoPrueba[]>(
+    STORAGE_KEYS.casos, casosPruebaEjemplo,
+    () => api.get<{ casos: CasoPrueba[] }>("/api/casos").then(r => r.casos),
+    (data) => api.post("/api/casos/sync", { casos: data }).then(() => void 0),
+  )
+
+  const [tareas, setTareas] = useApiMirroredState<Tarea[]>(
+    STORAGE_KEYS.tareas, tareasEjemplo,
+    () => api.get<{ tareas: Tarea[] }>("/api/tareas").then(r => r.tareas),
+    (data) => api.post("/api/tareas/sync", { tareas: data }).then(() => void 0),
+  )
+
+  const refetch = () => { setIsLoading(false) }
 
   const ctx: DomainCtx = {
     historias, casos,

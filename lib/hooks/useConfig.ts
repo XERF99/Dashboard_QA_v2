@@ -10,6 +10,8 @@ import {
 } from "@/lib/constants/index"
 import type { ConfigEtapas, TipoAplicacionDef, AmbienteDef, TipoPruebaDef, ResultadoDef, Sprint } from "@/lib/types/index"
 import { APLICACIONES_PREDETERMINADAS } from "@/components/dashboard/config/aplicaciones-config"
+import { useEffect, useRef } from "react"
+import { api } from "@/lib/services/api/client"
 
 /**
  * Gestiona toda la configuración de la aplicación:
@@ -18,6 +20,15 @@ import { APLICACIONES_PREDETERMINADAS } from "@/components/dashboard/config/apli
  * Al conectar un backend, cambia las implementaciones en lib/services/
  * sin necesidad de tocar este hook ni los componentes.
  */
+type ApiConfig = {
+  etapas: ConfigEtapas
+  resultados: ResultadoDef[]
+  tiposAplicacion: TipoAplicacionDef[]
+  ambientes: AmbienteDef[]
+  tiposPrueba: TipoPruebaDef[]
+  aplicaciones: string[]
+}
+
 export function useConfig() {
   const [configEtapas, setConfigEtapas] = usePersistedState<ConfigEtapas>(
     STORAGE_KEYS.configEtapas, ETAPAS_PREDETERMINADAS
@@ -40,6 +51,33 @@ export function useConfig() {
   const [sprints, setSprints] = usePersistedState<Sprint[]>(
     STORAGE_KEYS.sprints, []
   )
+
+  // ── Carga inicial desde API ─────────────────────────────
+  const initialLoadDone = useRef(false)
+  useEffect(() => {
+    if (initialLoadDone.current) return
+    initialLoadDone.current = true
+    api.get<{ config: ApiConfig }>("/api/config")
+      .then(({ config: c }) => {
+        if (c.etapas          && Object.keys(c.etapas).length)    setConfigEtapas(c.etapas)
+        if (c.resultados      && c.resultados.length)              setConfigResultados(c.resultados as ResultadoDef[])
+        if (c.tiposAplicacion && c.tiposAplicacion.length)         setTiposAplicacion(c.tiposAplicacion as TipoAplicacionDef[])
+        if (c.ambientes       && c.ambientes.length)               setAmbientes(c.ambientes as AmbienteDef[])
+        if (c.tiposPrueba     && c.tiposPrueba.length)             setTiposPrueba(c.tiposPrueba as TipoPruebaDef[])
+        if (c.aplicaciones    && c.aplicaciones.length)            setAplicaciones(c.aplicaciones)
+      })
+      .catch(() => { /* usar localStorage como fallback */ })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Sync a API cuando cambia la config ──────────────────
+  const configLoaded = useRef(false)
+  useEffect(() => {
+    if (!configLoaded.current) { configLoaded.current = true; return }
+    api.put("/api/config", {
+      etapas: configEtapas, resultados: configResultados,
+      tiposAplicacion, ambientes, tiposPrueba, aplicaciones,
+    }).catch(err => console.warn("[Config] Error sincronizando config:", err))
+  }, [configEtapas, configResultados, tiposAplicacion, ambientes, tiposPrueba, aplicaciones]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const addSprint = (data: Omit<Sprint, "id">) => {
     if (sprints.some(s => s.nombre.toLowerCase() === data.nombre.toLowerCase()))

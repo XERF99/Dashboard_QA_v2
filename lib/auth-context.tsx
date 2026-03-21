@@ -159,10 +159,11 @@ interface AuthContextType {
   users: User[]
   roles: RoleDef[]
   isAuthenticated: boolean
+  sessionLoading: boolean
   pendientePassword: boolean        // true = debe cambiar contraseña antes de usar el app
   pendingBlockEvents: { id: string; nombre: string }[]
   clearBlockEvents: () => void
-  login: (email: string, password: string) => { success: boolean; error?: string; debeCambiar?: boolean }
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string; debeCambiar?: boolean }>
   logout: () => void
   cambiarPassword: (actual: string, nueva: string) => { success: boolean; error?: string }
   updateProfile: (nombre: string) => { success: boolean; error?: string }
@@ -192,6 +193,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserSafe | null>(null)
+  const [sessionLoading, setSessionLoading] = useState(true)
   const [users, setUsers] = usePersistedState<User[]>(STORAGE_KEYS.users, usuariosIniciales)
   const [roles, setRoles] = usePersistedState<RoleDef[]>(STORAGE_KEYS.roles, ROLES_PREDETERMINADOS)
   const [pendientePassword, setPendientePassword] = useState(false)
@@ -211,62 +213,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUsers(prev => prev.some(u => u.email === "owner@empresa.com") ? prev : [usuariosIniciales[0], ...prev])
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const login = useCallback((email: string, password: string) => {
-    const found = users.find(u => u.email.toLowerCase() === email.toLowerCase())
-    if (!found) return { success: false, error: "Usuario no encontrado" }
-    if (!found.activo) return { success: false, error: "Tu cuenta está desactivada. Contacta al administrador." }
-    if (found.bloqueado) return { success: false, error: "Tu cuenta está bloqueada por demasiados intentos fallidos. Contacta al administrador para desbloquearla." }
+  // ── Restaurar sesión desde cookie JWT al recargar ─────
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then(res => res.ok ? res.json() : null)
+      .then(data => { if (data?.user) setUser(data.user) })
+      .catch(() => {})
+      .finally(() => setSessionLoading(false))
+  }, [])
 
-    if (found.password !== password) {
-      const intentos = (found.intentosFallidos ?? 0) + 1
-      const bloqueadoNow = intentos >= 5
-      setUsers(prev => prev.map(u =>
-        u.id === found.id ? { ...u, intentosFallidos: intentos, bloqueado: bloqueadoNow } : u
-      ))
-      if (bloqueadoNow) {
-        setPendingBlockEvents(prev => [...prev, { id: found.id, nombre: found.nombre }])
-        return { success: false, error: "Cuenta bloqueada por demasiados intentos fallidos. Contacta al administrador." }
+  const login = useCallback(async (email: string, password: string) => {
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      })
+      const data = await res.json()
+
+      if (!res.ok) {
+        if (data.bloqueadoAhora) {
+          setPendingBlockEvents(prev => [...prev, { id: data.userId, nombre: data.nombre }])
+        }
+        return { success: false, error: data.error ?? "Error al iniciar sesión" }
       }
-      const restantes = 5 - intentos
-      return { success: false, error: `Contraseña incorrecta. ${restantes} intento${restantes !== 1 ? "s" : ""} restante${restantes !== 1 ? "s" : ""}.` }
+
+      setUser(data.user)
+      if (data.debeCambiar) {
+        setPendientePassword(true)
+        return { success: true, debeCambiar: true }
+      }
+      setPendientePassword(false)
+      return { success: true }
+    } catch {
+      return { success: false, error: "Error de conexión con el servidor" }
     }
-
-    const { password: _, ...safe } = found
-    setUser(safe)
-
-    // Login exitoso: resetear contador y registrar entrada de sesión
-    const ahora = new Date()
-    setUsers(prev => prev.map(u =>
-      u.id === found.id
-        ? { ...u, intentosFallidos: 0, bloqueado: false, historialConexiones: [...(u.historialConexiones ?? []).slice(-49), { entrada: ahora }] }
-        : u
-    ))
-
-    if (found.debeCambiarPassword) {
-      setPendientePassword(true)
-      return { success: true, debeCambiar: true }
-    }
-
-    setPendientePassword(false)
-    return { success: true }
-  }, [users])
+  }, [])
 
   const logout = useCallback(() => {
-    // Registrar salida de sesión
-    if (user) {
-      const ahora = new Date()
-      setUsers(prev => prev.map(u => {
-        if (u.id !== user.id) return u
-        const hist = [...(u.historialConexiones ?? [])]
-        if (hist.length > 0 && !hist[hist.length - 1].salida) {
-          hist[hist.length - 1] = { ...hist[hist.length - 1], salida: ahora }
-        }
-        return { ...u, historialConexiones: hist }
-      }))
-    }
+    fetch("/api/auth/logout", { method: "POST" }).catch(() => {})
     setUser(null)
     setPendientePassword(false)
-  }, [user])
+  }, [])
 
   const cambiarPassword = useCallback((actual: string, nueva: string) => {
     if (!user) return { success: false, error: "No hay sesión activa" }
@@ -483,7 +471,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider value={{
-      user, users, roles, isAuthenticated: user !== null,
+      user, users, roles, isAuthenticated: user !== null, sessionLoading,
       pendientePassword,
       pendingBlockEvents, clearBlockEvents,
       login, logout, cambiarPassword, updateProfile,

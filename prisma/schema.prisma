@@ -1,0 +1,199 @@
+// ═══════════════════════════════════════════════════════════
+//  PRISMA SCHEMA — TCS Dashboard QA
+//  PostgreSQL · Prisma v5
+//
+//  Estrategia de anidamiento:
+//  - Campos planos → columnas propias
+//  - Arrays complejos (bloqueos, comentarios, historial,
+//    resultadosPorEtapa) → Json para preservar los tipos
+//    TypeScript actuales sin cambio en el frontend.
+//  - Se pueden normalizar a tablas relacionales en fases
+//    posteriores si se requieren consultas relacionales.
+// ═══════════════════════════════════════════════════════════
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ── Usuarios ─────────────────────────────────────────────────
+model User {
+  id                  String   @id @default(cuid())
+  nombre              String
+  email               String   @unique
+  passwordHash        String
+  rol                 String
+  activo              Boolean  @default(true)
+  debeCambiarPassword Boolean  @default(true)
+  bloqueado           Boolean  @default(false)
+  intentosFallidos    Int      @default(0)
+  historialConexiones Json     @default("[]")
+  fechaCreacion       DateTime @default(now())
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@map("users")
+}
+
+// ── Roles personalizados ─────────────────────────────────────
+model Role {
+  id          String   @id
+  label       String
+  description String   @default("")
+  cls         String   @default("")
+  permisos    Json     @default("[]")
+  esBase      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("roles")
+}
+
+// ── Historias de Usuario ──────────────────────────────────────
+model HistoriaUsuario {
+  id                       String    @id @default(cuid())
+  codigo                   String    @unique
+  titulo                   String
+  descripcion              String    @default("")
+  criteriosAceptacion      String    @default("")
+  responsable              String
+  prioridad                String    @default("media")
+  estado                   String    @default("sin_iniciar")
+  puntos                   Int       @default(0)
+  sprint                   String?
+  aplicacion               String    @default("")
+  tipoAplicacion           String
+  requiriente              String    @default("")
+  areaSolicitante          String    @default("")
+  etapa                    String    @default("sin_iniciar")
+  motivoCancelacion        String?
+  ambiente                 String    @default("")
+  tipoPrueba               String    @default("")
+  creadoPor                String
+  delegadoPor              String    @default("")
+  permitirCasosAdicionales Boolean   @default(false)
+  motivoCasosAdicionales   String?
+  fechaCreacion            DateTime  @default(now())
+  fechaFinEstimada         DateTime?
+  fechaCierre              DateTime?
+  casosIds                 Json      @default("[]")
+  bloqueos                 Json      @default("[]")
+  historial                Json      @default("[]")
+  comentarios              Json      @default("[]")
+  casos                    CasoPrueba[]
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  @@map("historias_usuario")
+}
+
+// ── Casos de Prueba ───────────────────────────────────────────
+model CasoPrueba {
+  id                       String          @id @default(cuid())
+  huId                     String
+  hu                       HistoriaUsuario @relation(fields: [huId], references: [id], onDelete: Cascade)
+  titulo                   String
+  descripcion              String          @default("")
+  entorno                  String          @default("test")
+  tipoPrueba               String          @default("")
+  horasEstimadas           Float           @default(0)
+  complejidad              String          @default("media")
+  estadoAprobacion         String          @default("borrador")
+  aprobadoPor              String?
+  fechaAprobacion          DateTime?
+  motivoRechazo            String?
+  creadoPor                String
+  modificacionHabilitada   Boolean         @default(false)
+  motivoModificacion       String?
+  modificacionSolicitada   Boolean         @default(false)
+  fechaCreacion            DateTime        @default(now())
+  archivosAnalizados       Json            @default("[]")
+  resultadosPorEtapa       Json            @default("[]")
+  tareasIds                Json            @default("[]")
+  bloqueos                 Json            @default("[]")
+  comentarios              Json            @default("[]")
+  tareas                   Tarea[]
+  createdAt                DateTime        @default(now())
+  updatedAt                DateTime        @updatedAt
+
+  @@map("casos_prueba")
+}
+
+// ── Tareas ────────────────────────────────────────────────────
+model Tarea {
+  id             String     @id @default(cuid())
+  casoPruebaId   String
+  caso           CasoPrueba @relation(fields: [casoPruebaId], references: [id], onDelete: Cascade)
+  huId           String
+  titulo         String
+  descripcion    String     @default("")
+  asignado       String
+  estado         String     @default("pendiente")
+  resultado      String     @default("pendiente")
+  tipo           String     @default("ejecucion")
+  prioridad      String     @default("media")
+  horasEstimadas Float      @default(0)
+  horasReales    Float      @default(0)
+  evidencias     String     @default("")
+  creadoPor      String
+  fechaCreacion  DateTime   @default(now())
+  fechaInicio    DateTime?
+  fechaFin       DateTime?
+  bloqueos       Json       @default("[]")
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  @@map("tareas")
+}
+
+// ── Sprints ───────────────────────────────────────────────────
+model Sprint {
+  id          String   @id @default(cuid())
+  nombre      String   @unique
+  fechaInicio DateTime
+  fechaFin    DateTime
+  objetivo    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("sprints")
+}
+
+// ── Notificaciones ────────────────────────────────────────────
+model Notificacion {
+  id           String   @id @default(cuid())
+  tipo         String
+  titulo       String
+  descripcion  String   @default("")
+  fecha        DateTime @default(now())
+  leida        Boolean  @default(false)
+  destinatario String
+  casoId       String?
+  huId         String?
+  huTitulo     String?
+  casoTitulo   String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("notificaciones")
+}
+
+// ── Configuracion global (una fila; multi-tenant: una por grupo) ──
+model Config {
+  id              String   @id @default(cuid())
+  etapas          Json     @default("{}")
+  resultados      Json     @default("[]")
+  tiposAplicacion Json     @default("[]")
+  ambientes       Json     @default("[]")
+  tiposPrueba     Json     @default("[]")
+  aplicaciones    Json     @default("[]")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("config")
+}

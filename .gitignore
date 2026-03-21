@@ -14,11 +14,26 @@ dist/
 .env.development.local
 .env.test.local
 .env.production.local
+.env*.local
 # Sí se puede subir el ejemplo sin valores reales:
 # !.env.example
 
+# ── Secretos y certificados ───────────────────────────────────
+*.pem
+*.key
+*.p12
+*.pfx
+*.cer
+secrets/
+.secrets
+
 # ── Vercel ────────────────────────────────────────────────────
 .vercel/
+.vercel
+
+# ── Prisma ────────────────────────────────────────────────────
+# El cliente generado se reconstruye con `prisma generate`
+prisma/generated/
 
 # ── TypeScript ────────────────────────────────────────────────
 *.tsbuildinfo
@@ -30,11 +45,15 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 *.log
+logs/
 
-# ── Cache y cobertura de tests ────────────────────────────────
+# ── Tests y cobertura ─────────────────────────────────────────
 .cache/
 coverage/
 .nyc_output/
+# Reporte de Vitest UI
+test-results/
+vitest.config.ts.timestamp*
 
 # ── Sistema operativo ─────────────────────────────────────────
 .DS_Store
@@ -62,5 +81,3 @@ desktop.ini
 *.tmp
 *.temp
 *.bak
-.vercel
-.env*.local
