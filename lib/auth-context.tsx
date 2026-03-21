@@ -160,6 +160,8 @@ interface AuthContextType {
   roles: RoleDef[]
   isAuthenticated: boolean
   pendientePassword: boolean        // true = debe cambiar contraseña antes de usar el app
+  pendingBlockEvents: { id: string; nombre: string }[]
+  clearBlockEvents: () => void
   login: (email: string, password: string) => { success: boolean; error?: string; debeCambiar?: boolean }
   logout: () => void
   cambiarPassword: (actual: string, nueva: string) => { success: boolean; error?: string }
@@ -193,6 +195,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [users, setUsers] = usePersistedState<User[]>(STORAGE_KEYS.users, usuariosIniciales)
   const [roles, setRoles] = usePersistedState<RoleDef[]>(STORAGE_KEYS.roles, ROLES_PREDETERMINADOS)
   const [pendientePassword, setPendientePassword] = useState(false)
+  const [pendingBlockEvents, setPendingBlockEvents] = useState<{ id: string; nombre: string }[]>([])
 
   // ── Migración: añadir rol owner y usuario owner si no existen en localStorage ──
   useEffect(() => {
@@ -220,8 +223,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUsers(prev => prev.map(u =>
         u.id === found.id ? { ...u, intentosFallidos: intentos, bloqueado: bloqueadoNow } : u
       ))
-      if (bloqueadoNow)
+      if (bloqueadoNow) {
+        setPendingBlockEvents(prev => [...prev, { id: found.id, nombre: found.nombre }])
         return { success: false, error: "Cuenta bloqueada por demasiados intentos fallidos. Contacta al administrador." }
+      }
       const restantes = 5 - intentos
       return { success: false, error: `Contraseña incorrecta. ${restantes} intento${restantes !== 1 ? "s" : ""} restante${restantes !== 1 ? "s" : ""}.` }
     }
@@ -406,6 +411,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { success: true }
   }, [users])
 
+  const clearBlockEvents = useCallback(() => setPendingBlockEvents([]), [])
+
   const desbloquearUsuario = useCallback((userId: string) => {
     const target = users.find(u => u.id === userId)
     if (!target) return { success: false, error: "Usuario no encontrado" }
@@ -471,6 +478,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider value={{
       user, users, roles, isAuthenticated: user !== null,
       pendientePassword,
+      pendingBlockEvents, clearBlockEvents,
       login, logout, cambiarPassword, updateProfile,
       addUser, updateUser, deleteUser, toggleUserActive, resetPassword, desbloquearUsuario,
       addRole, updateRole, deleteRole,

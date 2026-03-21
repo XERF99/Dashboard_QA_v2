@@ -11,7 +11,7 @@ import {
   crearEvento, etapaDefsParaTipo, ETAPAS_PREDETERMINADAS,
   TIPOS_APLICACION_PREDETERMINADOS, AMBIENTES_PREDETERMINADOS, TIPOS_PRUEBA_PREDETERMINADOS,
   type HistoriaUsuario, type TipoAplicacion, type AmbientePrueba, type PrioridadHU, type TipoPrueba,
-  type ConfigEtapas, type TipoAplicacionDef, type AmbienteDef, type TipoPruebaDef,
+  type ConfigEtapas, type TipoAplicacionDef, type AmbienteDef, type TipoPruebaDef, type Sprint,
 } from "@/lib/types"
 import { PlantillasSelector, type PlantillaHU } from "./hu-templates"
 
@@ -27,12 +27,13 @@ interface HUFormProps {
   tiposAplicacion?: TipoAplicacionDef[]
   ambientes?: AmbienteDef[]
   tiposPrueba?: TipoPruebaDef[]
+  sprints?: Sprint[]
 }
 
 const FL: React.CSSProperties = { fontSize:11, fontWeight:600, color:"var(--foreground)", marginBottom:5, display:"block" }
 const PNL: React.CSSProperties = { padding:"14px 16px", borderRadius:10, border:"1px solid var(--border)", background:"var(--background)" }
 
-export function HUForm({ open, onClose, onSubmit, huEditar, currentUser, configEtapas = ETAPAS_PREDETERMINADAS, qaUsers = [], aplicaciones = [], tiposAplicacion, ambientes, tiposPrueba }: HUFormProps) {
+export function HUForm({ open, onClose, onSubmit, huEditar, currentUser, configEtapas = ETAPAS_PREDETERMINADAS, qaUsers = [], aplicaciones = [], tiposAplicacion, ambientes, tiposPrueba, sprints = [] }: HUFormProps) {
   const tiposDisponibles = tiposAplicacion?.length ? tiposAplicacion : TIPOS_APLICACION_PREDETERMINADOS
   const ambientesDisponibles = ambientes?.length ? ambientes : AMBIENTES_PREDETERMINADOS
   const tiposPruebaDisponibles = tiposPrueba?.length ? tiposPrueba : TIPOS_PRUEBA_PREDETERMINADOS
@@ -238,8 +239,20 @@ export function HUForm({ open, onClose, onSubmit, huEditar, currentUser, configE
                   </div>
                   <div style={{ marginTop:10 }}>
                     <label style={FL}>Sprint / Versión</label>
-                    <Input value={hu.sprint} placeholder="Ej. Sprint 3, v2.1, Q1-2026..."
-                      onChange={e => setHu(p => ({...p, sprint: e.target.value}))} />
+                    {sprints.length > 0 ? (
+                      <Select value={hu.sprint || "__none__"} onValueChange={v => setHu(p => ({ ...p, sprint: v === "__none__" ? "" : v }))}>
+                        <SelectTrigger><SelectValue placeholder="Sin sprint" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">Sin sprint</SelectItem>
+                          {sprints.map(s => (
+                            <SelectItem key={s.id} value={s.nombre}>{s.nombre}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Input value={hu.sprint} placeholder="Ej. Sprint 3, v2.1, Q1-2026..."
+                        onChange={e => setHu(p => ({...p, sprint: e.target.value}))} />
+                    )}
                   </div>
                 </div>
 

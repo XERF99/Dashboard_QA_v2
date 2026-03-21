@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useEffect } from "react"
+import { useReducer, useMemo } from "react"
 import type { HistoriaUsuario, EstadoHU, PrioridadHU, TipoAplicacion } from "@/lib/types"
 
 type SortCampo = "codigo" | "titulo" | "prioridad" | "estado" | "responsable" | "fecha"
@@ -12,39 +12,125 @@ const PAGE_SIZE = 20
 
 export type { SortCampo, SortDir }
 
-export function useHistoriasFilters(historias: HistoriaUsuario[]) {
-  // Estado de filtros
-  const [filtroEstado,      setFiltroEstado]      = useState<EstadoHU | "todos">("todos")
-  const [filtroPrioridad,   setFiltroPrioridad]   = useState<PrioridadHU | "todos">("todos")
-  const [filtroResponsable, setFiltroResponsable] = useState<string>("todos")
-  const [filtroTipo,        setFiltroTipo]        = useState<TipoAplicacion | "todos">("todos")
-  const [filtroSprint,      setFiltroSprint]      = useState<string>("todos")
-  const [filtroAmbiente,    setFiltroAmbiente]    = useState<string>("todos")
-  const [filtroTipoPrueba,  setFiltroTipoPrueba]  = useState<string>("todos")
-  const [filtroFechaDesde,  setFiltroFechaDesde]  = useState<string>("")
-  const [filtroFechaHasta,  setFiltroFechaHasta]  = useState<string>("")
-  const [filtrosVisibles,   setFiltrosVisibles]   = useState(false)
+// ── Estado y acciones ────────────────────────────────────────
 
-  // Estado de ordenamiento
-  const [sortCampo, setSortCampo] = useState<SortCampo>("codigo")
-  const [sortDir,   setSortDir]   = useState<SortDir>("asc")
+type FiltersState = {
+  filtroEstado:      EstadoHU | "todos"
+  filtroPrioridad:   PrioridadHU | "todos"
+  filtroResponsable: string
+  filtroTipo:        TipoAplicacion | "todos"
+  filtroSprint:      string
+  filtroAmbiente:    string
+  filtroTipoPrueba:  string
+  filtroFechaDesde:  string
+  filtroFechaHasta:  string
+  filtrosVisibles:   boolean
+  sortCampo:         SortCampo
+  sortDir:           SortDir
+  pagina:            number
+}
 
-  // Paginación
-  const [pagina, setPagina] = useState(1)
+type FiltersAction =
+  | { type: "SET_ESTADO";        value: EstadoHU | "todos" }
+  | { type: "SET_PRIORIDAD";     value: PrioridadHU | "todos" }
+  | { type: "SET_RESPONSABLE";   value: string }
+  | { type: "SET_TIPO";          value: TipoAplicacion | "todos" }
+  | { type: "SET_SPRINT";        value: string }
+  | { type: "SET_AMBIENTE";      value: string }
+  | { type: "SET_TIPO_PRUEBA";   value: string }
+  | { type: "SET_FECHA_DESDE";   value: string }
+  | { type: "SET_FECHA_HASTA";   value: string }
+  | { type: "SET_VISIBLE";       value: boolean }
+  | { type: "TOGGLE_SORT";       campo: SortCampo }
+  | { type: "SET_PAGINA";        value: number }
+  | { type: "RESET_FILTROS" }
 
-  const toggleSort = (campo: SortCampo) => {
-    if (sortCampo === campo) setSortDir(d => d === "asc" ? "desc" : "asc")
-    else { setSortCampo(campo); setSortDir("asc") }
+const INITIAL: FiltersState = {
+  filtroEstado:      "todos",
+  filtroPrioridad:   "todos",
+  filtroResponsable: "todos",
+  filtroTipo:        "todos",
+  filtroSprint:      "todos",
+  filtroAmbiente:    "todos",
+  filtroTipoPrueba:  "todos",
+  filtroFechaDesde:  "",
+  filtroFechaHasta:  "",
+  filtrosVisibles:   false,
+  sortCampo:         "codigo",
+  sortDir:           "asc",
+  pagina:            1,
+}
+
+function reducer(state: FiltersState, action: FiltersAction): FiltersState {
+  switch (action.type) {
+    case "SET_ESTADO":       return { ...state, filtroEstado:      action.value, pagina: 1 }
+    case "SET_PRIORIDAD":    return { ...state, filtroPrioridad:   action.value, pagina: 1 }
+    case "SET_RESPONSABLE":  return { ...state, filtroResponsable: action.value, pagina: 1 }
+    case "SET_TIPO":         return { ...state, filtroTipo:        action.value, pagina: 1 }
+    case "SET_SPRINT":       return { ...state, filtroSprint:      action.value, pagina: 1 }
+    case "SET_AMBIENTE":     return { ...state, filtroAmbiente:    action.value, pagina: 1 }
+    case "SET_TIPO_PRUEBA":  return { ...state, filtroTipoPrueba:  action.value, pagina: 1 }
+    case "SET_FECHA_DESDE":  return { ...state, filtroFechaDesde:  action.value, pagina: 1 }
+    case "SET_FECHA_HASTA":  return { ...state, filtroFechaHasta:  action.value, pagina: 1 }
+    case "SET_VISIBLE":      return { ...state, filtrosVisibles:   action.value }
+    case "TOGGLE_SORT":
+      if (state.sortCampo === action.campo) {
+        return { ...state, sortDir: state.sortDir === "asc" ? "desc" : "asc", pagina: 1 }
+      }
+      return { ...state, sortCampo: action.campo, sortDir: "asc", pagina: 1 }
+    case "SET_PAGINA":       return { ...state, pagina: action.value }
+    case "RESET_FILTROS":    return {
+      ...state,
+      filtroEstado:      "todos",
+      filtroPrioridad:   "todos",
+      filtroResponsable: "todos",
+      filtroTipo:        "todos",
+      filtroSprint:      "todos",
+      filtroAmbiente:    "todos",
+      filtroTipoPrueba:  "todos",
+      filtroFechaDesde:  "",
+      filtroFechaHasta:  "",
+      pagina:            1,
+      // filtrosVisibles, sortCampo y sortDir se preservan
+    }
+    default: return state
   }
+}
 
-  // Valores únicos para selects
+// ── Hook público ─────────────────────────────────────────────
+
+export function useHistoriasFilters(historias: HistoriaUsuario[]) {
+  const [state, dispatch] = useReducer(reducer, INITIAL)
+  const {
+    filtroEstado, filtroPrioridad, filtroResponsable, filtroTipo,
+    filtroSprint, filtroAmbiente, filtroTipoPrueba, filtroFechaDesde, filtroFechaHasta,
+    filtrosVisibles, sortCampo, sortDir, pagina,
+  } = state
+
+  // ── Setters (API compatible con la versión anterior) ────────
+  const setFiltroEstado      = (v: EstadoHU | "todos")       => dispatch({ type: "SET_ESTADO",      value: v })
+  const setFiltroPrioridad   = (v: PrioridadHU | "todos")    => dispatch({ type: "SET_PRIORIDAD",   value: v })
+  const setFiltroResponsable = (v: string)                   => dispatch({ type: "SET_RESPONSABLE", value: v })
+  const setFiltroTipo        = (v: TipoAplicacion | "todos") => dispatch({ type: "SET_TIPO",        value: v })
+  const setFiltroSprint      = (v: string)                   => dispatch({ type: "SET_SPRINT",      value: v })
+  const setFiltroAmbiente    = (v: string)                   => dispatch({ type: "SET_AMBIENTE",    value: v })
+  const setFiltroTipoPrueba  = (v: string)                   => dispatch({ type: "SET_TIPO_PRUEBA", value: v })
+  const setFiltroFechaDesde  = (v: string)                   => dispatch({ type: "SET_FECHA_DESDE", value: v })
+  const setFiltroFechaHasta  = (v: string)                   => dispatch({ type: "SET_FECHA_HASTA", value: v })
+  const setFiltrosVisibles   = (v: boolean | ((prev: boolean) => boolean)) =>
+    dispatch({ type: "SET_VISIBLE", value: typeof v === "function" ? v(state.filtrosVisibles) : v })
+  const setPagina            = (v: number)                   => dispatch({ type: "SET_PAGINA",      value: v })
+  const toggleSort           = (campo: SortCampo)            => dispatch({ type: "TOGGLE_SORT",     campo })
+  const limpiarFiltros       = ()                            => dispatch({ type: "RESET_FILTROS" })
+
+  // ── Valores únicos para selects ─────────────────────────────
   const responsables      = useMemo(() => [...new Set(historias.map(h => h.responsable))].sort(), [historias])
   const tiposApp          = useMemo(() => [...new Set(historias.map(h => h.tipoAplicacion))], [historias])
   const sprints           = useMemo(() => [...new Set(historias.map(h => h.sprint).filter(Boolean) as string[])].sort(), [historias])
   const ambientesUnicos   = useMemo(() => [...new Set(historias.map(h => h.ambiente))], [historias])
   const tiposPruebaUnicos = useMemo(() => [...new Set(historias.map(h => h.tipoPrueba).filter(Boolean))], [historias])
 
-  // Aplicar filtros
+  // ── Aplicar filtros ─────────────────────────────────────────
   const historiasFiltradas = useMemo(() => historias.filter(hu => {
     if (filtroEstado      !== "todos" && hu.estado          !== filtroEstado)      return false
     if (filtroPrioridad   !== "todos" && hu.prioridad       !== filtroPrioridad)   return false
@@ -67,7 +153,7 @@ export function useHistoriasFilters(historias: HistoriaUsuario[]) {
     return true
   }), [historias, filtroEstado, filtroPrioridad, filtroResponsable, filtroTipo, filtroSprint, filtroAmbiente, filtroTipoPrueba, filtroFechaDesde, filtroFechaHasta])
 
-  // Aplicar ordenamiento
+  // ── Aplicar ordenamiento ────────────────────────────────────
   const historiasOrdenadas = useMemo(() => {
     const arr = [...historiasFiltradas]
     arr.sort((a, b) => {
@@ -89,9 +175,6 @@ export function useHistoriasFilters(historias: HistoriaUsuario[]) {
     return arr
   }, [historiasFiltradas, sortCampo, sortDir])
 
-  // Resetear página al cambiar filtros u ordenamiento
-  useEffect(() => { setPagina(1) }, [filtroEstado, filtroPrioridad, filtroResponsable, filtroTipo, filtroSprint, filtroAmbiente, filtroTipoPrueba, filtroFechaDesde, filtroFechaHasta, sortCampo, sortDir])
-
   const husEnPagina = useMemo(
     () => historiasOrdenadas.slice((pagina - 1) * PAGE_SIZE, pagina * PAGE_SIZE),
     [historiasOrdenadas, pagina]
@@ -99,18 +182,6 @@ export function useHistoriasFilters(historias: HistoriaUsuario[]) {
 
   const filtrosActivos = [filtroEstado, filtroPrioridad, filtroResponsable, filtroTipo, filtroSprint, filtroAmbiente, filtroTipoPrueba].filter(f => f !== "todos").length
     + (filtroFechaDesde ? 1 : 0) + (filtroFechaHasta ? 1 : 0)
-
-  const limpiarFiltros = () => {
-    setFiltroEstado("todos")
-    setFiltroPrioridad("todos")
-    setFiltroResponsable("todos")
-    setFiltroTipo("todos")
-    setFiltroSprint("todos")
-    setFiltroAmbiente("todos")
-    setFiltroTipoPrueba("todos")
-    setFiltroFechaDesde("")
-    setFiltroFechaHasta("")
-  }
 
   return {
     // State values

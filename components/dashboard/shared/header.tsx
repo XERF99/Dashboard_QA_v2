@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Search, Bell, LogOut, Check, CheckCheck, Clock, X, UserCircle } from "lucide-react"
+import { Search, Bell, LogOut, Check, CheckCheck, Clock, X, UserCircle, Lock } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import {
@@ -51,6 +51,7 @@ const NOTIF_CFG: Record<TipoNotificacion, { color: string; bg: string; label: st
   caso_aprobado:           { color:"var(--chart-2)",  bg:"color-mix(in oklch, var(--chart-2) 10%, transparent)",  label:"Caso aprobado", icon:<Check size={13}/> },
   caso_rechazado:          { color:"var(--chart-4)",  bg:"color-mix(in oklch, var(--chart-4) 10%, transparent)",  label:"Caso rechazado", icon:<X size={13}/> },
   modificacion_habilitada: { color:"var(--chart-1)",  bg:"color-mix(in oklch, var(--chart-1) 10%, transparent)",  label:"Modificación habilitada", icon:<Check size={13}/> },
+  cuenta_bloqueada:        { color:"var(--chart-4)",  bg:"color-mix(in oklch, var(--chart-4) 10%, transparent)",  label:"Cuenta bloqueada",         icon:<Lock size={13}/> },
 }
 
 export function Header({ busqueda, onBusquedaChange, notificaciones, onMarcarLeida, onMarcarTodasLeidas }: HeaderProps) {

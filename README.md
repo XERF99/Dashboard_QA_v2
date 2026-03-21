@@ -15,6 +15,7 @@ Sistema integral de gestión de calidad para equipos QA. Permite administrar His
 | Iconos | Lucide React |
 | Gráficos | Recharts 2.15 |
 | Persistencia | localStorage (sin backend) |
+| Tests | Vitest 3 + React Testing Library 16 |
 | Package manager | pnpm |
 | Despliegue | Vercel |
 
@@ -86,7 +87,10 @@ Sistema integral de gestión de calidad para equipos QA. Permite administrar His
 - Asignación de roles con descripción de permisos
 - Asignación de equipos a roles Admin y QA Lead (controla visibilidad de datos)
 - Activación / desactivación de cuentas
-- Reseteo de contraseña a la genérica
+- Reseteo de contraseña a la genérica (con cambio obligatorio en próximo login)
+- **Bloqueo automático** tras 5 intentos fallidos; desbloqueo manual disponible en el menú de acciones
+- **Notificación automática** al Admin/Owner cuando una cuenta queda bloqueada
+- **Visibilidad con scope**: Admin sin equipo solo ve su propia cuenta (seguridad); con equipo ve también a sus miembros; Owner ve todos
 - Protección: solo el Owner puede crear o asignar roles de Admin u Owner
 
 #### Configuración
@@ -96,10 +100,49 @@ Sistema integral de gestión de calidad para equipos QA. Permite administrar His
 - **Ambientes**: entornos de prueba disponibles (Dev, QA, Staging, Prod, etc.)
 - **Tipos de Prueba**: categorías de prueba disponibles (Funcional, Regresión, Smoke, etc.)
 - **Etapas**: configuración de las etapas de ejecución por tipo de aplicación
+- **Sprints**: gestión de sprints con nombre, fechas de inicio/fin y objetivo; las HUs se asignan a un sprint desde un selector (no texto libre)
 
 ---
 
 ## Changelog
+
+### v2.2 — HUDetailContext: eliminación de prop drilling (opt13)
+- **`lib/contexts/hu-detail-context.tsx`** (nuevo): contexto `HUDetailCtxType` con 29 campos — permisos del usuario (`isAdmin`, `isQALead`, `isQA`, `currentUser`), config (`configEtapas`, `tiposAplicacion`, `ambientes`, `tiposPrueba`) y todos los domain handlers de HU / Caso / Tarea. Expone `HUDetailProvider` y el hook `useHUDetail()`.
+- **`app/page.tsx`**: el bloque de 40 líneas con 35+ props pasadas a `HistoriaUsuarioDetail` se reemplaza por `<HUDetailProvider value={...}>` + `<HistoriaUsuarioDetail open onClose hu casos tareas />` (5 props). Los handlers se inyectan una sola vez en el provider.
+- **`historia-usuario-detail.tsx`**: interfaz `Props` reducida de 35 campos a 5 (`open`, `onClose`, `hu`, `casos`, `tareas`). El componente principal y los subcomponentes locales (`HUBloqueos`, `HUCasosPanel`) consumen `useHUDetail()` directamente en lugar de recibir callbacks como props.
+- **`caso-prueba-card.tsx`**: `CasoPruebaCardProps` reducida de 17 campos a 4 (`caso`, `hu`, `tareasCaso`, `onAbrirEditar`). `TareaItemProps` reducida de 9 a 4. Handlers y permisos se obtienen desde `useHUDetail()`. El tipo `HUDetailCtxType` importado queda como fuente única de verdad para toda la jerarquía HU → Caso → Tarea.
+- **`pnpm tsc --noEmit` → 0 errores.**
+
+### v2.2 — Skeletons, ErrorBoundary y useReducer en filtros (opt12)
+- **Skeleton de carga** (`useIsHydrated` en `lib/storage.ts`): durante la hidratación SSR → cliente se muestra un `DashboardSkeleton` de cuatro tarjetas + dos bloques `animate-pulse` en lugar de un flash de datos de fallback vacíos. `useIsHydrated` devuelve `false` en el primer render (server + cliente) y `true` tras el primer `useEffect`, eliminando la discrepancia de hidratación.
+- **ErrorBoundary global** (`components/error-boundary.tsx`): componente de clase con `getDerivedStateFromError` + `componentDidCatch` (loguea `error.message` y `componentStack` a consola). Envuelve todo el árbol en `app/layout.tsx`. Si un componente hijo lanza, muestra una pantalla con icono, mensaje de error y botón "Reintentar" que restaura el estado sin recargar la página.
+- **`useReducer` en `useHistoriasFilters`**: los 10 `useState` independientes (9 filtros + `filtrosVisibles`) se consolidaron en un único `useReducer` con estado atómico (`FiltersState`) y 13 acciones tipadas (`FiltersAction`). Beneficios: `RESET_FILTROS` es atómico (antes era 9 `setState` secuenciales), `TOGGLE_SORT` y los filtros de paginación resetean `pagina: 1` de forma garantizada en el mismo dispatch, y el estado es fácilmente serializable para deep linking. La API pública del hook (`setFiltroEstado`, `toggleSort`, `limpiarFiltros`, etc.) no cambió — ningún consumidor requirió modificación.
+- **Fix oculto**: `guardarEnStorage` no estaba exportada desde `lib/storage.ts` aunque 4 servicios en `lib/services/localStorage/` la importaban, lo que causaba errores TS silenciosos. Corregido con `export`.
+
+### v2.2 — Suite de tests con Vitest (opt11)
+- **Stack de testing**: Vitest 3 + React Testing Library 16 + jsdom. Compatible con React 19 y con el path alias `@/` del proyecto. Scripts disponibles: `pnpm test` (watch), `pnpm test:run` (CI), `pnpm test:ui` (interfaz visual).
+- **`tests/casoHandlers.test.ts`** — 14 tests sobre el flujo de aprobación de casos de prueba: `handleEnviarAprobacion` (borrador/rechazado → pendiente, aprobado intacto, HUs ajenas intactas), `handleAprobarCasos` (metadatos `aprobadoPor`/`fechaAprobacion`), `handleRechazarCasos` (motivo de rechazo), `handleSolicitarModificacionCaso`, `handleHabilitarModificacionCaso` (reset a borrador), `handleAddCaso`, `handleEliminarCaso` e `handleRetestearCaso`. Todos verifican también que `addNotificacion` se dispare con el destinatario correcto (`admin` vs `qa`).
+- **`tests/useHistoriasVisibles.test.ts`** — 12 tests de scoping por rol: Owner ve todo / `filtroNombresCarga` undefined; QA solo ve sus HUs; Admin sin equipo solo las propias; Admin con equipo ve equipo+sí mismo; QA Lead ídem. También tests de búsqueda por título, código y responsable.
+- **`tests/auth-login.test.ts`** — 13 tests de lógica de autenticación y permisos: login con usuario inexistente / inactivo / bloqueado, contador de intentos fallidos con mensaje de intentos restantes, bloqueo en el 5.° intento, generación de `pendingBlockEvents`, reset del contador tras login exitoso, `debeCambiarPassword`, `desbloquearUsuario`, `resetPassword`, y guards de `addUser`/`deleteUser` (admin no puede crear admin, no puede existir segundo owner, email duplicado, no puede eliminarse a sí mismo).
+
+### v2.2 — Refactorización de componentes grandes y consolidación de config (opt10)
+- **`user-management.tsx` dividido**: Dialog de creación/edición extraído a `user-form-modal.tsx` (~160 líneas) con estado de formulario propio y sync vía `useEffect`. Los 3 AlertDialogs de confirmación (eliminar, resetear contraseña, desbloquear) extraídos a `user-confirm-dialogs.tsx` (~80 líneas). El componente principal redujo de 830 a ~480 líneas.
+- **`home-dashboard.tsx` dividido**: `MiniCalendario` extraído a `analytics/mini-calendario.tsx` (~130 líneas) con interfaz explícita `MiniCalendarioProps`. El componente principal redujo de 670 a ~360 líneas.
+- **`historia-usuario-detail.tsx` dividido**: panel de casos de prueba (7 variables de estado + 4 handlers + JSX completo) extraído como sub-componente interno `HUCasosPanel`. El componente principal redujo de 760 a ~620 líneas.
+- **Config wrappers consolidados**: `ambientes-config.tsx`, `tipos-aplicacion-config.tsx` y `tipos-prueba-config.tsx` (3 × 26 líneas) fusionados en un único archivo `config/list-configs.tsx` (~70 líneas). Las 3 funciones exportadas mantienen sus nombres originales; ningún consumidor requirió cambios.
+
+### v2.2 — Sprints como entidad y notificaciones filtradas por rol (opt9)
+- **Sprints como entidad de primera clase**: nuevo tipo `Sprint` con `id`, `nombre`, `fechaInicio`, `fechaFin` y `objetivo`. Se persisten en localStorage (`tcs_sprints`). CRUD disponible en Admin → Configuración → Sprints.
+- **Selector de sprint en HUForm**: cuando existen sprints configurados, el campo "Sprint / Versión" cambia de texto libre a un `Select` con las opciones definidas. Si no hay sprints configurados, sigue funcionando como campo libre (retrocompatibilidad).
+- **SprintPanel enriquecido**: las tarjetas de sprint muestran rango de fechas, días restantes (en rojo si quedan ≤ 3), estado (Activo / Próximo / Finalizado) y velocidad en puntos completados/total. Los tabs resaltan en verde el sprint actualmente activo.
+- **Notificaciones filtradas por rol**: el header solo muestra las notificaciones del destinatario correspondiente al rol del usuario activo — Admin/Owner ven notificaciones de tipo `admin` (ej. cuenta bloqueada, caso enviado a aprobación); QA/Lead ven las de tipo `qa` (caso aprobado/rechazado, modificación habilitada).
+
+### v2.2 — Notificación de cuenta bloqueada, visibilidad correcta y UX móvil (opt8)
+- **Notificación automática al admin/owner cuando un usuario se bloquea**: al superar 5 intentos fallidos de login, el sistema despacha automáticamente una notificación "Cuenta bloqueada" hacia todos los usuarios con rol Admin u Owner. Se muestra en la campana del header con ícono de candado en rojo.
+- **Badge de Bloqueos correcto**: el contador en la pestaña "Bloqueos" ahora deriva de `casosVisibles` y `tareasVisibles` (datos ya filtrados por rol/equipo) en lugar del conjunto global, por lo que un Admin sin equipo verá 0 hasta que tenga HUs o equipo asignado.
+- **Pestaña Inicio muestra ceros cuando corresponde**: `HomeDashboard` recibe `casosVisibles`/`tareasVisibles`; KPIs como "Casos de Prueba" y "Bloqueos" ahora reflejan únicamente los datos visibles para el usuario activo.
+- **Gestión de Usuarios con scope de seguridad**: un Admin sin equipo asignado solo ve su propia cuenta en la tabla y en las estadísticas de la sección Usuarios. Con equipo asignado, ve a sí mismo y a los miembros de su equipo. El Owner sigue viendo todos los usuarios.
+- **Calendario de Entregas: fix de overflow en móvil**: la cabecera del mini calendario usa `flexWrap: "wrap"` y `minWidth: 90` (antes 140) para que en pantallas estrechas el selector de mes salte a una segunda línea en lugar de desbordar el contenedor.
 
 ### v2.2 — Bloqueo de cuenta y scoping completo de datos (opt7)
 - **Bloqueo por intentos fallidos**: tras 5 contraseñas incorrectas consecutivas la cuenta se bloquea automáticamente. El login muestra cuántos intentos restan antes del bloqueo. Al iniciar sesión correctamente el contador se resetea.
@@ -256,6 +299,7 @@ dashboard_v22/
 │   ├── layout.tsx            # Layout raíz con ThemeProvider
 │   └── page.tsx              # Página principal — navegación y lógica de estado
 ├── components/
+│   ├── error-boundary.tsx        # ErrorBoundary global (clase) ← v2.2opt12
 │   ├── auth/
 │   │   └── login-screen.tsx
 │   ├── dashboard/
@@ -285,20 +329,21 @@ dashboard_v22/
 │   │   │   └── index.ts
 │   │   ├── analytics/        # Módulo Analíticas
 │   │   │   ├── home-dashboard.tsx
+│   │   │   ├── mini-calendario.tsx     # Calendario de entregas ← v2.2opt10
 │   │   │   ├── analytics-kpis.tsx
 │   │   │   ├── carga-ocupacional.tsx
 │   │   │   └── index.ts
 │   │   ├── usuarios/         # Módulo Usuarios
 │   │   │   ├── user-management.tsx
+│   │   │   ├── user-form-modal.tsx     # Dialog crear/editar usuario ← v2.2opt10
+│   │   │   ├── user-confirm-dialogs.tsx # AlertDialogs de confirmación ← v2.2opt10
 │   │   │   ├── perfil-dialog.tsx
 │   │   │   └── index.ts
 │   │   └── config/           # Módulo Configuración
 │   │       ├── generic-list-config.tsx  # CRUD genérico de listas ← v2.2opt
+│   │       ├── list-configs.tsx         # Ambientes + TiposApp + TiposPrueba ← v2.2opt10
 │   │       ├── etapas-config.tsx
 │   │       ├── roles-config.tsx
-│   │       ├── tipos-aplicacion-config.tsx
-│   │       ├── ambientes-config.tsx
-│   │       ├── tipos-prueba-config.tsx
 │   │       ├── aplicaciones-config.tsx
 │   │       └── index.ts
 │   └── ui/                   # Componentes base de shadcn/ui
@@ -322,7 +367,13 @@ dashboard_v22/
 │       ├── hu-export.ts            # Exportación de HUs
 │       ├── analytics-export.ts     # Exportación de Analíticas
 │       └── utils.ts
+├── tests/                        # Suite de tests (Vitest + RTL)
+│   ├── setup.ts                  # Mock de localStorage + jest-dom
+│   ├── casoHandlers.test.ts      # Tests del flujo de aprobación
+│   ├── useHistoriasVisibles.test.ts # Tests de scoping por rol
+│   └── auth-login.test.ts        # Tests de login, bloqueo y permisos
 ├── public/
+├── vitest.config.ts
 ├── next.config.mjs
 ├── tsconfig.json
 └── package.json

@@ -1,16 +1,22 @@
 "use client"
 
 import { CalendarDays } from "lucide-react"
-import type { HistoriaUsuario } from "@/lib/types"
+import type { HistoriaUsuario, Sprint } from "@/lib/types"
 
 interface SprintPanelProps {
   historias: HistoriaUsuario[]
-  sprints: string[]
+  sprints: string[]                  // nombres de sprint extraídos de las HUs (filtro)
+  sprintEntidades?: Sprint[]         // entidades completas para fechas y metadata
   filtroSprint: string
   onChangeSprint: (sprint: string) => void
 }
 
-export function SprintPanel({ historias, sprints, filtroSprint, onChangeSprint }: SprintPanelProps) {
+const FMT: Intl.DateTimeFormatOptions = { day: "numeric", month: "short" }
+function fmtShort(d: Date) { return new Date(d).toLocaleDateString("es", FMT) }
+
+export function SprintPanel({ historias, sprints, sprintEntidades = [], filtroSprint, onChangeSprint }: SprintPanelProps) {
+  const hoy = new Date()
+
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
       {/* Tabs de sprint */}
@@ -33,6 +39,8 @@ export function SprintPanel({ historias, sprints, filtroSprint, onChangeSprint }
             const activo = filtroSprint === sp
             const husEnSprint = historias.filter(h => h.sprint === sp)
             const completadas = husEnSprint.filter(h => h.estado === "exitosa").length
+            const entidad = sprintEntidades.find(s => s.nombre === sp)
+            const estaActivo = entidad ? hoy >= entidad.fechaInicio && hoy <= entidad.fechaFin : false
             return (
               <button
                 key={sp}
@@ -40,9 +48,9 @@ export function SprintPanel({ historias, sprints, filtroSprint, onChangeSprint }
                 style={{
                   display:"inline-flex", alignItems:"center", gap:5,
                   padding:"5px 12px", borderRadius:7, fontSize:11, fontWeight:600, cursor:"pointer",
-                  border:`1px solid ${activo ? "var(--primary)" : "var(--border)"}`,
-                  background: activo ? "var(--primary)" : "var(--secondary)",
-                  color: activo ? "var(--primary-foreground)" : "var(--muted-foreground)",
+                  border:`1px solid ${activo ? "var(--primary)" : estaActivo ? "var(--chart-2)" : "var(--border)"}`,
+                  background: activo ? "var(--primary)" : estaActivo ? "color-mix(in oklch, var(--chart-2) 10%, transparent)" : "var(--secondary)",
+                  color: activo ? "var(--primary-foreground)" : estaActivo ? "var(--chart-2)" : "var(--muted-foreground)",
                   whiteSpace:"nowrap",
                 }}
               >
@@ -68,22 +76,56 @@ export function SprintPanel({ historias, sprints, filtroSprint, onChangeSprint }
         const exitosas    = husEnSprint.filter(h => h.estado === "exitosa").length
         const fallidas    = husEnSprint.filter(h => h.estado === "fallida" || h.estado === "cancelada").length
         const pct         = husEnSprint.length > 0 ? Math.round((exitosas / husEnSprint.length) * 100) : 0
-        const puntosTotales    = husEnSprint.reduce((s,h) => s + h.puntos, 0)
-        const puntosEjecutados = husEnSprint.filter(h => h.estado === "exitosa").reduce((s,h) => s + h.puntos, 0)
+        const puntosTotales     = husEnSprint.reduce((s,h) => s + h.puntos, 0)
+        const puntosCompletados = husEnSprint.filter(h => h.estado === "exitosa").reduce((s,h) => s + h.puntos, 0)
+
+        const entidad = sprintEntidades.find(s => s.nombre === filtroSprint)
+        const diasRestantes = entidad ? Math.ceil((entidad.fechaFin.getTime() - hoy.getTime()) / 86400000) : null
+        const estaActivo = entidad ? hoy >= entidad.fechaInicio && hoy <= entidad.fechaFin : false
+        const finalizado = entidad ? hoy > entidad.fechaFin : false
 
         return (
           <div style={{ padding:"14px 16px", borderRadius:10, border:"1px solid var(--border)", background:"var(--card)" }}>
-            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
-              <p style={{ fontSize:12, fontWeight:700, color:"var(--foreground)" }}>{filtroSprint}</p>
-              <span style={{ fontSize:11, color:"var(--muted-foreground)" }}>
-                Progreso: <strong style={{ color:"var(--primary)" }}>{pct}%</strong>
-                {" · "}{puntosTotales} pts ({puntosEjecutados} completados)
-              </span>
+            <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:8, marginBottom:8, flexWrap:"wrap" }}>
+              <div>
+                <p style={{ fontSize:13, fontWeight:700, color:"var(--foreground)", margin:0 }}>{filtroSprint}</p>
+                {entidad && (
+                  <p style={{ fontSize:11, color:"var(--muted-foreground)", margin:"2px 0 0" }}>
+                    {fmtShort(entidad.fechaInicio)} → {fmtShort(entidad.fechaFin)}
+                    {estaActivo && diasRestantes !== null && (
+                      <span style={{ color: diasRestantes <= 3 ? "var(--chart-4)" : "var(--chart-2)", fontWeight:600 }}>
+                        {" · "}{diasRestantes > 0 ? `${diasRestantes} días restantes` : "Finaliza hoy"}
+                      </span>
+                    )}
+                    {finalizado && <span style={{ color:"var(--muted-foreground)" }}> · Finalizado</span>}
+                    {!estaActivo && !finalizado && entidad && (
+                      <span style={{ color:"var(--primary)" }}>
+                        {" · "}Comienza en {Math.ceil((entidad.fechaInicio.getTime() - hoy.getTime()) / 86400000)} días
+                      </span>
+                    )}
+                  </p>
+                )}
+                {entidad?.objetivo && (
+                  <p style={{ fontSize:10, color:"var(--muted-foreground)", margin:"2px 0 0", fontStyle:"italic" }}>
+                    {entidad.objetivo}
+                  </p>
+                )}
+              </div>
+              <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:2 }}>
+                <span style={{ fontSize:11, color:"var(--muted-foreground)" }}>
+                  Progreso: <strong style={{ color:"var(--primary)" }}>{pct}%</strong>
+                </span>
+                <span style={{ fontSize:11, color:"var(--muted-foreground)" }}>
+                  Velocidad: <strong style={{ color:"var(--chart-2)" }}>{puntosCompletados}</strong>/{puntosTotales} pts
+                </span>
+              </div>
             </div>
+
             {/* Barra de progreso */}
             <div style={{ height:5, borderRadius:4, background:"var(--secondary)", overflow:"hidden", marginBottom:12 }}>
               <div style={{ width:`${pct}%`, height:"100%", background:"var(--chart-2)", borderRadius:4 }}/>
             </div>
+
             {/* Distribución de estados */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {[

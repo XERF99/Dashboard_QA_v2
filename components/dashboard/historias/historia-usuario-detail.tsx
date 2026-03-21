@@ -22,51 +22,21 @@ import {
   fmtCorto, fmtHora,
   type HistoriaUsuario, type CasoPrueba, type Tarea, type Bloqueo,
   type EtapaEjecucion, type TipoPrueba, type ComplejidadCaso, type EntornoCaso,
-  type ConfigEtapas, type TipoAplicacionDef, type AmbienteDef,
   type TipoPruebaDef,
 } from "@/lib/types"
 import { CommentThread } from "../shared/comment-thread"
 import { CasoPruebaCard } from "../casos/caso-prueba-card"
+import { useHUDetail } from "@/lib/contexts/hu-detail-context"
 
+// ── Props ──────────────────────────────────────────────────────
+// Los handlers, permisos y config se consumen desde HUDetailContext.
+// Solo se pasan los datos específicos de cada instancia del diálogo.
 interface Props {
   open: boolean
   onClose: () => void
   hu: HistoriaUsuario | null
   casos: CasoPrueba[]
   tareas: Tarea[]
-  currentUser?: string
-  isAdmin: boolean
-  isQALead?: boolean
-  isQA: boolean
-  onIniciarHU: (huId: string) => void
-  onCancelarHU: (huId: string, motivo: string) => void
-  onAddCaso: (caso: CasoPrueba) => void
-  onEditarCaso: (caso: CasoPrueba) => void
-  onEliminarCaso: (casoId: string, huId: string) => void
-  onEnviarCasoAprobacion: (casoId: string, huId: string) => void
-  onEnviarAprobacion: (huId: string) => void
-  onSolicitarModificacionCaso: (casoId: string, huId: string) => void
-  onHabilitarModificacionCaso: (casoId: string, huId: string) => void
-  onAprobarCasos: (huId: string) => void
-  onRechazarCasos: (huId: string, motivo: string) => void
-  onIniciarEjecucion: (huId: string, etapa: EtapaEjecucion) => void
-  onCompletarCasoEtapa: (casoId: string, etapa: EtapaEjecucion, resultado: "exitoso" | "fallido", comentarioFallo?: string) => void
-  onRetestearCaso: (casoId: string, etapa: EtapaEjecucion, comentarioCorreccion: string) => void
-  onAddTarea: (tarea: Tarea) => void
-  onEditarTarea: (tarea: Tarea) => void
-  onEliminarTarea: (tareaId: string, casoId: string) => void
-  onCompletarTarea: (tareaId: string, resultado: "exitoso" | "fallido") => void
-  onBloquearTarea: (tareaId: string, bloqueo: Bloqueo) => void
-  onDesbloquearTarea: (tareaId: string, bloqueoId: string) => void
-  onAddBloqueo: (huId: string, b: Bloqueo) => void
-  onResolverBloqueo: (huId: string, bId: string, nota: string) => void
-  onPermitirCasosAdicionales: (huId: string, motivo: string) => void
-  onAddComentarioHU: (huId: string, texto: string) => void
-  onAddComentarioCaso: (casoId: string, texto: string) => void
-  configEtapas?: ConfigEtapas
-  tiposAplicacion?: TipoAplicacionDef[]
-  ambientes?: AmbienteDef[]
-  tiposPrueba?: TipoPruebaDef[]
 }
 
 // ── Helpers ──
@@ -81,37 +51,19 @@ function fmt(d: Date): string {
 // ══════════════════════════════════════════════════════════════
 // COMPONENTE PRINCIPAL
 // ══════════════════════════════════════════════════════════════
-export function HistoriaUsuarioDetail({
-  open, onClose, hu, casos, tareas, currentUser, isAdmin, isQALead = false, isQA,
-  onIniciarHU, onCancelarHU, onAddCaso, onEditarCaso, onEliminarCaso,
-  onEnviarCasoAprobacion, onEnviarAprobacion,
-  onSolicitarModificacionCaso, onHabilitarModificacionCaso,
-  onAprobarCasos, onRechazarCasos, onIniciarEjecucion, onCompletarCasoEtapa, onRetestearCaso,
-  onAddTarea, onEditarTarea, onEliminarTarea, onCompletarTarea, onBloquearTarea, onDesbloquearTarea,
-  onAddBloqueo, onResolverBloqueo, onPermitirCasosAdicionales,
-  onAddComentarioHU, onAddComentarioCaso,
-  configEtapas = ETAPAS_PREDETERMINADAS,
-  tiposAplicacion,
-  ambientes,
-  tiposPrueba,
-}: Props) {
+export function HistoriaUsuarioDetail({ open, onClose, hu, casos, tareas }: Props) {
+  const {
+    isAdmin, isQALead, isQA, currentUser,
+    configEtapas, tiposAplicacion, ambientes, tiposPrueba,
+    onIniciarHU, onCancelarHU, onEnviarAprobacion,
+    onAprobarCasos, onRechazarCasos, onIniciarEjecucion,
+    onPermitirCasosAdicionales, onAddComentarioHU,
+  } = useHUDetail()
+
   // Form visibility
-  const [showCasoForm, setShowCasoForm] = useState(false)
   const [showCancelarForm, setShowCancelarForm] = useState(false)
   const [showRechazoForm, setShowRechazoForm] = useState(false)
   const [showExcepcionForm, setShowExcepcionForm] = useState(false)
-
-  // Edit states
-  const [editandoCaso, setEditandoCaso] = useState<CasoPrueba | null>(null)
-
-  // Caso form (create / edit)
-  const [casoTitulo, setCasoTitulo] = useState("")
-  const [casoDesc, setCasoDesc] = useState("")
-  const [casoEntorno, setCasoEntorno] = useState<EntornoCaso>("test")
-  const [casoTipo, setCasoTipo] = useState<TipoPrueba>("funcional")
-  const [casoHoras, setCasoHoras] = useState(8)
-  const [casoArchivos, setCasoArchivos] = useState("")
-  const [casoComplejidad, setCasoComplejidad] = useState<ComplejidadCaso>("media")
 
   // Text inputs
   const [motivoCancelacion, setMotivoCancelacion] = useState("")
@@ -146,71 +98,6 @@ export function HistoriaUsuarioDetail({
   const etapaYaIniciada = aprobados.some(c =>
     c.resultadosPorEtapa.some(r => r.etapa === hu.etapa && r.estado !== "pendiente")
   )
-
-  // ── Submit caso (crear) ──
-  const submitCaso = () => {
-    if (!casoTitulo.trim()) return
-    const caso: CasoPrueba = {
-      id: `CP-${Date.now()}`,
-      huId: hu.id,
-      titulo: casoTitulo.trim(),
-      descripcion: casoDesc.trim(),
-      entorno: casoEntorno,
-      tipoPrueba: casoTipo,
-      horasEstimadas: casoHoras,
-      archivosAnalizados: casoArchivos.split(",").map(s => s.trim()).filter(Boolean),
-      complejidad: casoComplejidad,
-      estadoAprobacion: "borrador",
-      resultadosPorEtapa: [],
-      fechaCreacion: new Date(),
-      tareasIds: [],
-      bloqueos: [],
-      creadoPor: currentUser || "Sistema",
-      modificacionHabilitada: false,
-      comentarios: [],
-    }
-    onAddCaso(caso)
-    resetCasoForm()
-    setShowCasoForm(false)
-  }
-
-  // ── Submit caso (editar) ──
-  const submitEditarCaso = () => {
-    if (!editandoCaso || !casoTitulo.trim()) return
-    const actualizado: CasoPrueba = {
-      ...editandoCaso,
-      titulo: casoTitulo.trim(),
-      descripcion: casoDesc.trim(),
-      entorno: casoEntorno,
-      tipoPrueba: casoTipo,
-      horasEstimadas: casoHoras,
-      archivosAnalizados: casoArchivos.split(",").map(s => s.trim()).filter(Boolean),
-      complejidad: casoComplejidad,
-      estadoAprobacion: "borrador",      // vuelve a borrador tras editar
-      modificacionHabilitada: false,
-      modificacionSolicitada: false,
-    }
-    onEditarCaso(actualizado)
-    setEditandoCaso(null)
-    resetCasoForm()
-  }
-
-  const abrirEditarCaso = (caso: CasoPrueba) => {
-    setEditandoCaso(caso)
-    setCasoTitulo(caso.titulo)
-    setCasoDesc(caso.descripcion)
-    setCasoEntorno(caso.entorno)
-    setCasoTipo(caso.tipoPrueba)
-    setCasoHoras(caso.horasEstimadas)
-    setCasoArchivos(caso.archivosAnalizados.join(", "))
-    setCasoComplejidad(caso.complejidad)
-    setShowCasoForm(false)
-  }
-
-  const resetCasoForm = () => {
-    setCasoTitulo(""); setCasoDesc(""); setCasoEntorno("test"); setCasoTipo("funcional")
-    setCasoHoras(8); setCasoArchivos(""); setCasoComplejidad("media")
-  }
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -408,118 +295,20 @@ export function HistoriaUsuarioDetail({
               )}
 
               {/* ── CASOS DE PRUEBA ── */}
-              <div>
-                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
-                  <p style={{ ...SLBL, marginBottom:0 }}>
-                    <FileText size={11}/>Casos de Prueba ({casosHU.length})
-                  </p>
-                  {(isQA || isAdmin || isQALead) && puedeAgregarCasos && (
-                    <Button size="sm" variant="outline" onClick={() => { setShowCasoForm(true); setEditandoCaso(null); resetCasoForm() }}>
-                      <Plus size={12} className="mr-1"/> Nuevo Caso
-                    </Button>
-                  )}
-                  {pasoPrimeraEtapa && !hu.permitirCasosAdicionales && !isAdmin && !isQALead && !huCerrada && (
-                    <span style={{ fontSize:10, color:"var(--chart-3)", display:"flex", alignItems:"center", gap:4 }}>
-                      <Lock size={10}/> No se pueden agregar más casos
-                    </span>
-                  )}
-                </div>
-
-                {/* Formulario nuevo caso */}
-                {showCasoForm && !editandoCaso && (
-                  <div style={{ ...PNL, marginBottom:12, borderColor:"var(--primary)" }}>
-                    <p style={{ fontSize:12, fontWeight:700, color:"var(--foreground)", marginBottom:10 }}>Nuevo Caso de Prueba</p>
-                    <CasoFormFields
-                      titulo={casoTitulo} onTitulo={setCasoTitulo}
-                      desc={casoDesc} onDesc={setCasoDesc}
-                      entorno={casoEntorno} onEntorno={setCasoEntorno}
-                      tipo={casoTipo} onTipo={setCasoTipo}
-                      horas={casoHoras} onHoras={setCasoHoras}
-                      archivos={casoArchivos} onArchivos={setCasoArchivos}
-                      complejidad={casoComplejidad} onComplejidad={setCasoComplejidad}
-                      tiposPrueba={tiposPrueba}
-                    />
-                    <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
-                      <Button variant="outline" size="sm" onClick={() => { setShowCasoForm(false); resetCasoForm() }}>Cancelar</Button>
-                      <Button size="sm" disabled={!casoTitulo.trim()} onClick={submitCaso}>Crear caso</Button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Formulario editar caso */}
-                {editandoCaso && (
-                  <div style={{ ...PNL, marginBottom:12, borderColor:"var(--chart-1)" }}>
-                    <p style={{ fontSize:12, fontWeight:700, color:"var(--chart-1)", marginBottom:10 }}>
-                      <Pencil size={12} style={{ display:"inline", marginRight:5 }}/>Editando caso: {editandoCaso.id}
-                    </p>
-                    <CasoFormFields
-                      titulo={casoTitulo} onTitulo={setCasoTitulo}
-                      desc={casoDesc} onDesc={setCasoDesc}
-                      entorno={casoEntorno} onEntorno={setCasoEntorno}
-                      tipo={casoTipo} onTipo={setCasoTipo}
-                      horas={casoHoras} onHoras={setCasoHoras}
-                      archivos={casoArchivos} onArchivos={setCasoArchivos}
-                      complejidad={casoComplejidad} onComplejidad={setCasoComplejidad}
-                      tiposPrueba={tiposPrueba}
-                    />
-                    <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
-                      <Button variant="outline" size="sm" onClick={() => { setEditandoCaso(null); resetCasoForm() }}>Cancelar</Button>
-                      <Button size="sm" disabled={!casoTitulo.trim()} onClick={submitEditarCaso}>Guardar cambios</Button>
-                    </div>
-                  </div>
-                )}
-
-                {casosHU.length === 0 && !showCasoForm && !editandoCaso && (
-                  <div style={{ textAlign:"center", padding:24, color:"var(--muted-foreground)", border:"1px dashed var(--border)", borderRadius:10 }}>
-                    <p style={{ fontSize:13 }}>Sin casos de prueba.{puedeAgregarCasos ? " Crea uno con el botón Nuevo Caso." : ""}</p>
-                  </div>
-                )}
-
-                <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                  {casosHU.map(caso => (
-                    <CasoPruebaCard
-                      key={caso.id}
-                      caso={caso}
-                      hu={hu}
-                      tareasCaso={tareas.filter(t => caso.tareasIds.includes(t.id))}
-                      isAdmin={isAdmin}
-                      isQALead={isQALead}
-                      isQA={isQA}
-                      huCerrada={huCerrada}
-                      configEtapas={configEtapas}
-                      tiposPrueba={tiposPrueba}
-                      currentUser={currentUser}
-                      onEliminarCaso={onEliminarCaso}
-                      onEnviarCasoAprobacion={onEnviarCasoAprobacion}
-                      onSolicitarModificacionCaso={onSolicitarModificacionCaso}
-                      onHabilitarModificacionCaso={onHabilitarModificacionCaso}
-                      onAbrirEditar={abrirEditarCaso}
-                      onCompletarCasoEtapa={onCompletarCasoEtapa}
-                      onRetestearCaso={onRetestearCaso}
-                      onAddTarea={onAddTarea}
-                      onEditarTarea={onEditarTarea}
-                      onEliminarTarea={onEliminarTarea}
-                      onCompletarTarea={onCompletarTarea}
-                      onBloquearTarea={onBloquearTarea}
-                      onDesbloquearTarea={onDesbloquearTarea}
-                      onAddComentarioCaso={onAddComentarioCaso}
-                    />
-                  ))}
-                </div>
-              </div>
+              <HUCasosPanel
+                casosHU={casosHU}
+                hu={hu}
+                tareas={tareas}
+                puedeAgregarCasos={puedeAgregarCasos}
+                pasoPrimeraEtapa={pasoPrimeraEtapa}
+              />
 
               {/* ── BLOQUEOS HU ── */}
               <HUBloqueos
                 hu={hu}
                 blActivos={blActivos}
                 blResueltos={blResueltos}
-                isQA={isQA}
-                isAdmin={isAdmin}
-                isQALead={isQALead}
                 huCerrada={huCerrada}
-                currentUser={currentUser}
-                onAddBloqueo={onAddBloqueo}
-                onResolverBloqueo={onResolverBloqueo}
               />
 
               {/* ── COMENTARIOS HU ── */}
@@ -554,16 +343,11 @@ interface HUBloqueosProps {
   hu: HistoriaUsuario
   blActivos: Bloqueo[]
   blResueltos: Bloqueo[]
-  isQA: boolean
-  isAdmin: boolean
-  isQALead: boolean
   huCerrada: boolean
-  currentUser?: string
-  onAddBloqueo: (huId: string, b: Bloqueo) => void
-  onResolverBloqueo: (huId: string, bId: string, nota: string) => void
 }
 
-function HUBloqueos({ hu, blActivos, blResueltos, isQA, isAdmin, isQALead, huCerrada, currentUser, onAddBloqueo, onResolverBloqueo }: HUBloqueosProps) {
+function HUBloqueos({ hu, blActivos, blResueltos, huCerrada }: HUBloqueosProps) {
+  const { isQA, isAdmin, isQALead, currentUser, onAddBloqueo, onResolverBloqueo } = useHUDetail()
   const [showBloqueoForm, setShowBloqueoForm] = useState(false)
   const [nuevoBloqueo, setNuevoBloqueo] = useState("")
   const [showResolverForm, setShowResolverForm] = useState<string | null>(null)
@@ -688,7 +472,160 @@ function HUHistorialPanel({ historial }: HUHistorialPanelProps) {
   )
 }
 
-// ── Sub-formularios reutilizables ──────────────────────────────
+// ── Casos de Prueba panel ─────────────────────────────────────
+interface HUCasosPanelProps {
+  casosHU: CasoPrueba[]
+  hu: HistoriaUsuario
+  tareas: Tarea[]
+  puedeAgregarCasos: boolean
+  pasoPrimeraEtapa: boolean
+}
+
+function HUCasosPanel({ casosHU, hu, tareas, puedeAgregarCasos, pasoPrimeraEtapa }: HUCasosPanelProps) {
+  const {
+    isQA, isAdmin, isQALead, currentUser,
+    tiposPrueba, onAddCaso, onEditarCaso,
+  } = useHUDetail()
+
+  const huCerrada = hu.estado === "exitosa" || hu.estado === "cancelada" || hu.estado === "fallida"
+
+  const [showCasoForm, setShowCasoForm] = useState(false)
+  const [editandoCaso, setEditandoCaso] = useState<CasoPrueba | null>(null)
+  const [casoTitulo, setCasoTitulo]         = useState("")
+  const [casoDesc, setCasoDesc]             = useState("")
+  const [casoEntorno, setCasoEntorno]       = useState<EntornoCaso>("test")
+  const [casoTipo, setCasoTipo]             = useState<TipoPrueba>("funcional")
+  const [casoHoras, setCasoHoras]           = useState(8)
+  const [casoArchivos, setCasoArchivos]     = useState("")
+  const [casoComplejidad, setCasoComplejidad] = useState<ComplejidadCaso>("media")
+
+  const resetCasoForm = () => {
+    setCasoTitulo(""); setCasoDesc(""); setCasoEntorno("test"); setCasoTipo("funcional")
+    setCasoHoras(8); setCasoArchivos(""); setCasoComplejidad("media")
+  }
+
+  const submitCaso = () => {
+    if (!casoTitulo.trim()) return
+    const caso: CasoPrueba = {
+      id: `CP-${Date.now()}`, huId: hu.id,
+      titulo: casoTitulo.trim(), descripcion: casoDesc.trim(),
+      entorno: casoEntorno, tipoPrueba: casoTipo, horasEstimadas: casoHoras,
+      archivosAnalizados: casoArchivos.split(",").map((s: string) => s.trim()).filter(Boolean),
+      complejidad: casoComplejidad, estadoAprobacion: "borrador",
+      resultadosPorEtapa: [], fechaCreacion: new Date(), tareasIds: [], bloqueos: [],
+      creadoPor: currentUser || "Sistema", modificacionHabilitada: false, comentarios: [],
+    }
+    onAddCaso(caso)
+    resetCasoForm()
+    setShowCasoForm(false)
+  }
+
+  const submitEditarCaso = () => {
+    if (!editandoCaso || !casoTitulo.trim()) return
+    onEditarCaso({
+      ...editandoCaso,
+      titulo: casoTitulo.trim(), descripcion: casoDesc.trim(),
+      entorno: casoEntorno, tipoPrueba: casoTipo, horasEstimadas: casoHoras,
+      archivosAnalizados: casoArchivos.split(",").map((s: string) => s.trim()).filter(Boolean),
+      complejidad: casoComplejidad, estadoAprobacion: "borrador",
+      modificacionHabilitada: false, modificacionSolicitada: false,
+    })
+    setEditandoCaso(null)
+    resetCasoForm()
+  }
+
+  const abrirEditarCaso = (caso: CasoPrueba) => {
+    setEditandoCaso(caso)
+    setCasoTitulo(caso.titulo); setCasoDesc(caso.descripcion)
+    setCasoEntorno(caso.entorno); setCasoTipo(caso.tipoPrueba)
+    setCasoHoras(caso.horasEstimadas)
+    setCasoArchivos(caso.archivosAnalizados.join(", "))
+    setCasoComplejidad(caso.complejidad)
+    setShowCasoForm(false)
+  }
+
+  return (
+    <div>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
+        <p style={{ ...SLBL, marginBottom:0 }}>
+          <FileText size={11}/>Casos de Prueba ({casosHU.length})
+        </p>
+        {(isQA || isAdmin || isQALead) && puedeAgregarCasos && (
+          <Button size="sm" variant="outline" onClick={() => { setShowCasoForm(true); setEditandoCaso(null); resetCasoForm() }}>
+            <Plus size={12} className="mr-1"/> Nuevo Caso
+          </Button>
+        )}
+        {pasoPrimeraEtapa && !hu.permitirCasosAdicionales && !isAdmin && !isQALead && !huCerrada && (
+          <span style={{ fontSize:10, color:"var(--chart-3)", display:"flex", alignItems:"center", gap:4 }}>
+            <Lock size={10}/> No se pueden agregar más casos
+          </span>
+        )}
+      </div>
+
+      {/* Formulario nuevo caso */}
+      {showCasoForm && !editandoCaso && (
+        <div style={{ ...PNL, marginBottom:12, borderColor:"var(--primary)" }}>
+          <p style={{ fontSize:12, fontWeight:700, color:"var(--foreground)", marginBottom:10 }}>Nuevo Caso de Prueba</p>
+          <CasoFormFields
+            titulo={casoTitulo} onTitulo={setCasoTitulo}
+            desc={casoDesc} onDesc={setCasoDesc}
+            entorno={casoEntorno} onEntorno={setCasoEntorno}
+            tipo={casoTipo} onTipo={setCasoTipo}
+            horas={casoHoras} onHoras={setCasoHoras}
+            archivos={casoArchivos} onArchivos={setCasoArchivos}
+            complejidad={casoComplejidad} onComplejidad={setCasoComplejidad}
+            tiposPrueba={tiposPrueba}
+          />
+          <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
+            <Button variant="outline" size="sm" onClick={() => { setShowCasoForm(false); resetCasoForm() }}>Cancelar</Button>
+            <Button size="sm" disabled={!casoTitulo.trim()} onClick={submitCaso}>Crear caso</Button>
+          </div>
+        </div>
+      )}
+
+      {/* Formulario editar caso */}
+      {editandoCaso && (
+        <div style={{ ...PNL, marginBottom:12, borderColor:"var(--chart-1)" }}>
+          <p style={{ fontSize:12, fontWeight:700, color:"var(--chart-1)", marginBottom:10 }}>
+            <Pencil size={12} style={{ display:"inline", marginRight:5 }}/>Editando caso: {editandoCaso.id}
+          </p>
+          <CasoFormFields
+            titulo={casoTitulo} onTitulo={setCasoTitulo}
+            desc={casoDesc} onDesc={setCasoDesc}
+            entorno={casoEntorno} onEntorno={setCasoEntorno}
+            tipo={casoTipo} onTipo={setCasoTipo}
+            horas={casoHoras} onHoras={setCasoHoras}
+            archivos={casoArchivos} onArchivos={setCasoArchivos}
+            complejidad={casoComplejidad} onComplejidad={setCasoComplejidad}
+            tiposPrueba={tiposPrueba}
+          />
+          <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
+            <Button variant="outline" size="sm" onClick={() => { setEditandoCaso(null); resetCasoForm() }}>Cancelar</Button>
+            <Button size="sm" disabled={!casoTitulo.trim()} onClick={submitEditarCaso}>Guardar cambios</Button>
+          </div>
+        </div>
+      )}
+
+      {casosHU.length === 0 && !showCasoForm && !editandoCaso && (
+        <div style={{ textAlign:"center", padding:24, color:"var(--muted-foreground)", border:"1px dashed var(--border)", borderRadius:10 }}>
+          <p style={{ fontSize:13 }}>Sin casos de prueba.{puedeAgregarCasos ? " Crea uno con el botón Nuevo Caso." : ""}</p>
+        </div>
+      )}
+
+      <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+        {casosHU.map(caso => (
+          <CasoPruebaCard
+            key={caso.id}
+            caso={caso}
+            hu={hu}
+            tareasCaso={tareas.filter(t => caso.tareasIds.includes(t.id))}
+            onAbrirEditar={abrirEditarCaso}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
 
 interface CasoFormFieldsProps {
   titulo: string; onTitulo: (v: string) => void
@@ -757,4 +694,3 @@ function CasoFormFields({ titulo, onTitulo, desc, onDesc, entorno, onEntorno, ti
     </div>
   )
 }
-

@@ -1,5 +1,13 @@
 import { useState, useEffect } from "react"
 
+// Devuelve true tras el primer render en el cliente (useEffect ya corrió).
+// Usar para evitar flash de datos de fallback durante hidratación SSR.
+export function useIsHydrated(): boolean {
+  const [hydrated, setHydrated] = useState(false)
+  useEffect(() => { setHydrated(true) }, [])
+  return hydrated
+}
+
 // ── Revive ISO date strings → Date objects ────────────────
 function revivirFechas(_key: string, value: unknown): unknown {
   if (
@@ -22,7 +30,7 @@ export function cargarDeStorage<T>(key: string, fallback: T): T {
   }
 }
 
-function guardarEnStorage<T>(key: string, value: T): void {
+export function guardarEnStorage<T>(key: string, value: T): void {
   try {
     localStorage.setItem(key, JSON.stringify(value))
   } catch { /* quota exceeded */ }
@@ -51,6 +59,7 @@ export const STORAGE_KEYS = {
   ambientes:       "tcs_ambientes",
   tiposPrueba:     "tcs_tipos_prueba",
   notificaciones:  "tcs_notificaciones",
+  sprints:         "tcs_sprints",
   users:           "tcs_users",
   roles:           "tcs_roles",
 } as const

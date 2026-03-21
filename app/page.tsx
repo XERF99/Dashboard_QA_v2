@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect } from "react"
 import { useToast } from "@/lib/hooks/useToast"
 import { useHUModals } from "@/lib/hooks/useHUModals"
 import { useHistoriasVisibles } from "@/lib/hooks/useHistoriasVisibles"
@@ -8,25 +9,41 @@ import { HistoriasTable, HistoriaUsuarioDetail, HUForm, CSVImportModal, HUStatsC
 import { CasosTable } from "@/components/dashboard/casos"
 import { HomeDashboard, CargaOcupacional, AnalyticsKPIs } from "@/components/dashboard/analytics"
 import { UserManagement } from "@/components/dashboard/usuarios"
-import { RolesConfig, EtapasConfig, AplicacionesConfig, TiposAplicacionConfig, AmbientesConfig, TiposPruebaConfig } from "@/components/dashboard/config"
+import { RolesConfig, EtapasConfig, AplicacionesConfig, TiposAplicacionConfig, AmbientesConfig, TiposPruebaConfig, SprintsConfig } from "@/components/dashboard/config"
 import { LoginScreen } from "@/components/auth/login-screen"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   BookOpen, Users, UserCog,
   BarChart2, Settings, ShieldAlert, History, Layers, Monitor, Globe,
-  Settings2, FlaskConical, ClipboardList, Home,
+  Settings2, FlaskConical, ClipboardList, Home, CalendarRange,
 } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import type { HistoriaUsuario } from "@/lib/types"
 import { useConfig } from "@/lib/hooks/useConfig"
 import { useNotificaciones } from "@/lib/hooks/useNotificaciones"
 import { useDomainData } from "@/lib/hooks/useDomainData"
+import { useIsHydrated } from "@/lib/storage"
+import { Skeleton } from "@/components/ui/skeleton"
+import { HUDetailProvider } from "@/lib/contexts/hu-detail-context"
 
 // ═══════════════════════════════════════════════════════════
 //  PÁGINA PRINCIPAL
 // ═══════════════════════════════════════════════════════════
+function DashboardSkeleton() {
+  return (
+    <div className="space-y-6 py-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        {[0, 1, 2, 3].map(i => <Skeleton key={i} className="h-24 rounded-xl" />)}
+      </div>
+      <Skeleton className="h-64 rounded-xl" />
+      <Skeleton className="h-48 rounded-xl" />
+    </div>
+  )
+}
+
 export default function DashboardPage() {
-  const { isAuthenticated, canManageUsers, verSoloPropios, isAdmin, isQALead, isQA, canCreateHU, isOwner, user, users, roles } = useAuth()
+  const isHydrated = useIsHydrated()
+  const { isAuthenticated, canManageUsers, verSoloPropios, isAdmin, isQALead, isQA, canCreateHU, isOwner, user, users, roles, pendingBlockEvents, clearBlockEvents } = useAuth()
   const qaUsers = users.filter(u => u.activo && (roles.find(r => r.id === u.rol)?.permisos.includes("canEdit") ?? false)).map(u => u.nombre)
 
   // ── Toasts ────────────────────────────────────────────────
@@ -73,12 +90,38 @@ export default function DashboardPage() {
     ambientes: config.ambientes,
   })
 
+  // ── Datos con scope de visibilidad ───────────────────────
+  const casosVisibles  = domain.casos.filter(c  => historiasVisibles.some(h => h.id === c.huId))
+  const tareasVisibles = domain.tareas.filter(t => historiasVisibles.some(h => h.id === t.huId))
+
+  // ── Notificación cuando una cuenta queda bloqueada ───────
+  useEffect(() => {
+    if (pendingBlockEvents.length === 0) return
+    pendingBlockEvents.forEach(({ nombre }) => {
+      notif.addNotificacion(
+        "cuenta_bloqueada",
+        "Cuenta bloqueada",
+        `La cuenta de ${nombre} fue bloqueada por demasiados intentos fallidos.`,
+        "admin"
+      )
+    })
+    clearBlockEvents()
+  }, [pendingBlockEvents]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!isHydrated) return (
+    <div className="min-h-screen bg-background">
+      <main className="container mx-auto px-3 sm:px-6">
+        <DashboardSkeleton />
+      </main>
+    </div>
+  )
+
   if (!isAuthenticated) return <LoginScreen />
 
   const totalBloqueoActivos =
-    domain.historias.reduce((n, h) => n + h.bloqueos.filter(b => !b.resuelto).length, 0) +
-    domain.casos.reduce((n, c)    => n + c.bloqueos.filter(b => !b.resuelto).length, 0) +
-    domain.tareas.reduce((n, t)   => n + t.bloqueos.filter(b => !b.resuelto).length, 0)
+    historiasVisibles.reduce((n, h) => n + h.bloqueos.filter(b => !b.resuelto).length, 0) +
+    casosVisibles.reduce((n, c)    => n + c.bloqueos.filter(b => !b.resuelto).length, 0) +
+    tareasVisibles.reduce((n, t)   => n + t.bloqueos.filter(b => !b.resuelto).length, 0)
 
   const tabCount = 6 + (canManageUsers ? 1 : 0)
 
@@ -130,8 +173,8 @@ export default function DashboardPage() {
           <TabsContent value="inicio" className="mt-6">
             <HomeDashboard
               historias={historiasVisibles}
-              casos={domain.casos}
-              tareas={domain.tareas}
+              casos={casosVisibles}
+              tareas={tareasVisibles}
               onVerHU={abrirHU}
               onIrATab={setTabActiva}
             />
@@ -156,14 +199,15 @@ export default function DashboardPage() {
               onBulkCambiarResponsable={domain.handleBulkCambiarResponsable}
               onBulkEliminar={handleBulkEliminar}
               onImportCSV={canCreateHU ? () => setImportModalOpen(true) : undefined}
+              sprintEntidades={config.sprints}
             />
           </TabsContent>
 
           <TabsContent value="analytics" className="mt-6">
             <AnalyticsKPIs
               historias={historiasVisibles}
-              casos={domain.casos}
-              tareas={domain.tareas}
+              casos={casosVisibles}
+              tareas={tareasVisibles}
               isQA={verSoloPropios}
               currentUserName={user?.nombre}
               filtroNombres={filtroNombresCarga}
@@ -187,8 +231,8 @@ export default function DashboardPage() {
           <TabsContent value="bloqueos" className="mt-6">
             <BloqueosPanel
               historias={historiasVisibles}
-              casos={domain.casos}
-              tareas={domain.tareas}
+              casos={casosVisibles}
+              tareas={tareasVisibles}
               onResolverBloqueoHU={domain.handleResolverBloqueo}
               onResolverBloqueoCaso={domain.handleResolverBloqueoCaso}
               onResolverBloqueoTarea={domain.handleResolverBloqueoTarea}
@@ -232,6 +276,7 @@ export default function DashboardPage() {
                           { id: "ambientes",    label: "Ambientes",           icon: <Globe size={13} /> },
                           { id: "tipos_prueba", label: "Tipos de Prueba",     icon: <FlaskConical size={13} /> },
                           { id: "etapas",       label: "Etapas",              icon: <Settings2 size={13} /> },
+                          { id: "sprints",      label: "Sprints",             icon: <CalendarRange size={13} /> },
                         ]}
                         activeId={configSeccion}
                         onSelect={id => setConfigSeccion(id as typeof configSeccion)}
@@ -257,6 +302,7 @@ export default function DashboardPage() {
                       {configSeccion === "ambientes"    && <AmbientesConfig ambientes={config.ambientes} onChange={config.setAmbientes} />}
                       {configSeccion === "tipos_prueba" && <TiposPruebaConfig tipos={config.tiposPrueba} onChange={config.setTiposPrueba} />}
                       {configSeccion === "etapas"       && <EtapasConfig config={config.configEtapas} onChange={config.setConfigEtapas} tipos={config.tiposAplicacion} />}
+                      {configSeccion === "sprints"      && <SprintsConfig sprints={config.sprints} onAdd={config.addSprint} onUpdate={config.updateSprint} onDelete={config.deleteSprint} />}
                     </>
                   )}
                 </div>
@@ -279,6 +325,7 @@ export default function DashboardPage() {
           tiposAplicacion={config.tiposAplicacion}
           ambientes={config.ambientes}
           tiposPrueba={config.tiposPrueba}
+          sprints={config.sprints}
         />
       )}
 
@@ -292,46 +339,49 @@ export default function DashboardPage() {
         codigosExistentes={domain.historias.map(h => h.codigo)}
       />
 
-      <HistoriaUsuarioDetail
-        open={huDetailOpen}
-        onClose={cerrarHU}
-        hu={huSeleccionada}
-        casos={domain.casos}
-        tareas={domain.tareas}
-        currentUser={user?.nombre}
-        isAdmin={isAdmin}
-        isQALead={isQALead}
-        isQA={isQA}
-        configEtapas={config.configEtapas}
-        tiposAplicacion={config.tiposAplicacion}
-        ambientes={config.ambientes}
-        tiposPrueba={config.tiposPrueba}
-        onIniciarHU={domain.handleIniciarHU}
-        onCancelarHU={domain.handleCancelarHU}
-        onAddCaso={domain.handleAddCaso}
-        onEditarCaso={domain.handleEditarCaso}
-        onEliminarCaso={domain.handleEliminarCaso}
-        onEnviarCasoAprobacion={domain.handleEnviarCasoAprobacion}
-        onEnviarAprobacion={domain.handleEnviarAprobacion}
-        onSolicitarModificacionCaso={domain.handleSolicitarModificacionCaso}
-        onHabilitarModificacionCaso={domain.handleHabilitarModificacionCaso}
-        onAprobarCasos={domain.handleAprobarCasos}
-        onRechazarCasos={domain.handleRechazarCasos}
-        onIniciarEjecucion={domain.handleIniciarEjecucion}
-        onCompletarCasoEtapa={domain.handleCompletarCasoEtapa}
-        onRetestearCaso={domain.handleRetestearCaso}
-        onAddTarea={domain.handleAddTarea}
-        onEditarTarea={domain.handleEditarTarea}
-        onEliminarTarea={domain.handleEliminarTarea}
-        onCompletarTarea={domain.handleCompletarTarea}
-        onBloquearTarea={domain.handleBloquearTarea}
-        onDesbloquearTarea={domain.handleDesbloquearTarea}
-        onAddBloqueo={domain.handleAddBloqueo}
-        onResolverBloqueo={domain.handleResolverBloqueo}
-        onPermitirCasosAdicionales={domain.handlePermitirCasosAdicionales}
-        onAddComentarioHU={domain.handleAddComentarioHU}
-        onAddComentarioCaso={domain.handleAddComentarioCaso}
-      />
+      <HUDetailProvider value={{
+        isAdmin,
+        isQALead: isQALead ?? false,
+        isQA,
+        currentUser: user?.nombre,
+        configEtapas: config.configEtapas,
+        tiposAplicacion: config.tiposAplicacion,
+        ambientes: config.ambientes,
+        tiposPrueba: config.tiposPrueba,
+        onIniciarHU: domain.handleIniciarHU,
+        onCancelarHU: domain.handleCancelarHU,
+        onEnviarAprobacion: domain.handleEnviarAprobacion,
+        onAprobarCasos: domain.handleAprobarCasos,
+        onRechazarCasos: domain.handleRechazarCasos,
+        onIniciarEjecucion: domain.handleIniciarEjecucion,
+        onPermitirCasosAdicionales: domain.handlePermitirCasosAdicionales,
+        onAddBloqueo: domain.handleAddBloqueo,
+        onResolverBloqueo: domain.handleResolverBloqueo,
+        onAddComentarioHU: domain.handleAddComentarioHU,
+        onAddCaso: domain.handleAddCaso,
+        onEditarCaso: domain.handleEditarCaso,
+        onEliminarCaso: domain.handleEliminarCaso,
+        onEnviarCasoAprobacion: domain.handleEnviarCasoAprobacion,
+        onSolicitarModificacionCaso: domain.handleSolicitarModificacionCaso,
+        onHabilitarModificacionCaso: domain.handleHabilitarModificacionCaso,
+        onCompletarCasoEtapa: domain.handleCompletarCasoEtapa,
+        onRetestearCaso: domain.handleRetestearCaso,
+        onAddComentarioCaso: domain.handleAddComentarioCaso,
+        onAddTarea: domain.handleAddTarea,
+        onEditarTarea: domain.handleEditarTarea,
+        onEliminarTarea: domain.handleEliminarTarea,
+        onCompletarTarea: domain.handleCompletarTarea,
+        onBloquearTarea: domain.handleBloquearTarea,
+        onDesbloquearTarea: domain.handleDesbloquearTarea,
+      }}>
+        <HistoriaUsuarioDetail
+          open={huDetailOpen}
+          onClose={cerrarHU}
+          hu={huSeleccionada}
+          casos={domain.casos}
+          tareas={domain.tareas}
+        />
+      </HUDetailProvider>
 
       <ConfirmDeleteModal
         open={deleteModal.open}

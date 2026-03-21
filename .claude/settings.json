@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm test:run --reporter=verbose)",
+      "Bash(pnpm add:*)",
+      "Bash(find /d/Documentos/TCS_Dashboard/dashboard_v22 -type f \\\\\\(-name error.tsx -o -name *[Ee]rror*[Bb]oundary* -o -name *[Ee]rror* \\\\\\) ! -path */node_modules/* ! -path */.claude/*)",
+      "Bash(pnpm tsc:*)",
+      "Bash(wc -l lib/hooks/domain/*.ts lib/hooks/*.ts)"
+    ]
+  }
+}

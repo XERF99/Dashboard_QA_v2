@@ -114,6 +114,15 @@ export interface EventoHistorial {
   detalles?: Record<string, string>
 }
 
+// ── Sprint ────────────────────────────────────────────────────
+export interface Sprint {
+  id: string
+  nombre: string
+  fechaInicio: Date
+  fechaFin: Date
+  objetivo?: string
+}
+
 // ── Notificaciones ────────────────────────────────────────────
 export type TipoNotificacion =
   | "aprobacion_enviada"
@@ -121,6 +130,7 @@ export type TipoNotificacion =
   | "caso_aprobado"
   | "caso_rechazado"
   | "modificacion_habilitada"
+  | "cuenta_bloqueada"
 
 export type RolDestinatario = "admin" | "qa"
 

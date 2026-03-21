@@ -1,75 +1,26 @@
 "use client"
 
 import { useState } from "react"
-import { useAuth, PASSWORD_GENERICA, type User } from "@/lib/auth-context"
+import { useAuth, type User } from "@/lib/auth-context"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
-import { FieldGroup, Field, FieldLabel } from "@/components/ui/field"
-import {
-  Users,
-  MoreHorizontal,
-  Edit,
-  Trash2,
-  Shield,
-  Eye,
-  FlaskConical,
-  UserPlus,
-  KeyRound,
-  Info,
-  Crown,
-  CheckCircle2,
-  XCircle,
-  BarChart2,
-  UserCheck,
-  Star,
-  History,
-  Lock,
-  Unlock,
+  Users, MoreHorizontal, Edit, Trash2, Shield, Eye, FlaskConical,
+  UserPlus, KeyRound, Info, Crown, CheckCircle2, XCircle,
+  UserCheck, Star, History, Lock, Unlock,
 } from "lucide-react"
+import { UserFormModal } from "./user-form-modal"
+import { UserConfirmDialogs } from "./user-confirm-dialogs"
 
-// ── Helpers de formato para conexiones ───────────────────
+// ── Helpers de formato para conexiones ────────────────────────
 function formatFechaConexion(d: Date): string {
   const hoy  = new Date()
   const ayer = new Date(hoy); ayer.setDate(hoy.getDate() - 1)
@@ -88,115 +39,28 @@ function formatDuracion(ms: number): string {
 }
 
 export function UserManagement() {
-  const { users, roles, user: currentUser, isOwner, addUser, updateUser, deleteUser, resetPassword, desbloquearUsuario } = useAuth()
-  const [formOpen, setFormOpen] = useState(false)
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const [resetDialogOpen, setResetDialogOpen] = useState(false)
-  const [userToEdit, setUserToEdit] = useState<User | null>(null)
-  const [userToDelete, setUserToDelete] = useState<User | null>(null)
-  const [userToReset, setUserToReset] = useState<User | null>(null)
-  const [unlockDialogOpen, setUnlockDialogOpen] = useState(false)
-  const [userToUnlock, setUserToUnlock] = useState<User | null>(null)
+  const { users, roles, user: currentUser, isOwner, isAdmin, deleteUser, resetPassword, desbloquearUsuario } = useAuth()
 
-  // Form state
-  const [nombre, setNombre] = useState("")
-  const [email, setEmail] = useState("")
-  const [rol, setRol] = useState("viewer")
-  const [equipoIds, setEquipoIds] = useState<string[]>([])
+  // Modal state
+  const [formOpen, setFormOpen]     = useState(false)
+  const [userToEdit, setUserToEdit] = useState<User | null>(null)
+
+  // Confirm-dialog state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [userToDelete, setUserToDelete]         = useState<User | null>(null)
+  const [resetDialogOpen, setResetDialogOpen]   = useState(false)
+  const [userToReset, setUserToReset]           = useState<User | null>(null)
+  const [unlockDialogOpen, setUnlockDialogOpen] = useState(false)
+  const [userToUnlock, setUserToUnlock]         = useState<User | null>(null)
 
   const getRoleDef = (rolId: string) => roles.find(r => r.id === rolId)
 
-  // Determina si un rol tiene permisos equivalentes a QA Lead (no admin, no owner)
-  const esRolLider = (rolId: string) => {
-    const def = getRoleDef(rolId)
-    if (!def) return false
-    return def.permisos.includes("canCreateHU") &&
-           def.permisos.includes("canApproveCases") &&
-           !def.permisos.includes("canManageUsers")
-  }
-
-  // Determina si un rol necesita equipo asignado: admin o lead, pero no owner
   const esRolConEquipo = (rolId: string) => {
     const def = getRoleDef(rolId)
     if (!def) return false
     if (def.permisos.includes("isSuperAdmin")) return false
     return def.permisos.includes("canManageUsers") ||
            (def.permisos.includes("canCreateHU") && def.permisos.includes("canApproveCases"))
-  }
-
-  const resetForm = () => {
-    setNombre("")
-    setEmail("")
-    setRol("viewer")
-    setEquipoIds([])
-    setUserToEdit(null)
-  }
-
-  const handleOpenCreate = () => {
-    resetForm()
-    setFormOpen(true)
-  }
-
-  const handleOpenEdit = (user: User) => {
-    setUserToEdit(user)
-    setNombre(user.nombre)
-    setEmail(user.email)
-    setRol(user.rol)
-    setEquipoIds(user.equipoIds ?? [])
-    setFormOpen(true)
-  }
-
-  const toggleEquipoMember = (id: string) =>
-    setEquipoIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
-
-  const handleSubmit = (e: React.SyntheticEvent) => {
-    e.preventDefault()
-    if (userToEdit) {
-      updateUser({ ...userToEdit, nombre, email, rol, equipoIds: esRolConEquipo(rol) ? equipoIds : [] })
-    } else {
-      addUser({ nombre, email, rol })
-    }
-    setFormOpen(false)
-    resetForm()
-  }
-
-  const handleDelete = () => {
-    if (userToDelete) {
-      deleteUser(userToDelete.id)
-      setDeleteDialogOpen(false)
-      setUserToDelete(null)
-    }
-  }
-
-  const confirmDelete = (user: User) => {
-    setUserToDelete(user)
-    setDeleteDialogOpen(true)
-  }
-
-  const confirmResetPassword = (user: User) => {
-    setUserToReset(user)
-    setResetDialogOpen(true)
-  }
-
-  const handleResetPassword = () => {
-    if (userToReset) {
-      resetPassword(userToReset.id)
-      setResetDialogOpen(false)
-      setUserToReset(null)
-    }
-  }
-
-  const confirmUnlock = (user: User) => {
-    setUserToUnlock(user)
-    setUnlockDialogOpen(true)
-  }
-
-  const handleUnlock = () => {
-    if (userToUnlock) {
-      desbloquearUsuario(userToUnlock.id)
-      setUnlockDialogOpen(false)
-      setUserToUnlock(null)
-    }
   }
 
   const getRoleIcon = (rolId: string) => {
@@ -215,14 +79,6 @@ export function UserManagement() {
     return cls.split(" ").filter(c => c.startsWith("bg-") || c.startsWith("text-")).join(" ")
   }
 
-  const activeCount   = users.filter(u => u.activo).length
-  const inactiveCount = users.length - activeCount
-
-  // Si ya existe un Owner diferente al usuario que se está editando, no se puede crear otro
-  const ownerYaExiste = users.some(u =>
-    roles.find(r => r.id === u.rol)?.permisos.includes("isSuperAdmin") && u.id !== userToEdit?.id
-  )
-
   const getRoleAccentColor = (rolId: string) => {
     switch (rolId) {
       case "owner":   return "#eab308"
@@ -234,13 +90,33 @@ export function UserManagement() {
     }
   }
 
-  // Determina si el usuario actual puede eliminar a un target
   const canDeleteTarget = (target: User) => {
     if (target.id === currentUser?.id) return false
-    const targetRolDef = getRoleDef(target.rol)
-    const targetIsOwner = targetRolDef?.permisos.includes("isSuperAdmin") ?? false
+    const targetIsOwner = getRoleDef(target.rol)?.permisos.includes("isSuperAdmin") ?? false
     if (targetIsOwner && !isOwner) return false
     return true
+  }
+
+  // Scoping: Admin sin equipo solo ve su propia cuenta
+  const usersVisibles: typeof users = isOwner
+    ? users
+    : isAdmin && currentUser
+      ? (currentUser.equipoIds && currentUser.equipoIds.length > 0)
+        ? users.filter(u => u.id === currentUser.id || currentUser.equipoIds!.includes(u.id))
+        : users.filter(u => u.id === currentUser.id)
+      : users
+
+  const activeCount   = usersVisibles.filter(u => u.activo).length
+  const inactiveCount = usersVisibles.length - activeCount
+
+  const handleDelete = () => {
+    if (userToDelete) { deleteUser(userToDelete.id); setDeleteDialogOpen(false); setUserToDelete(null) }
+  }
+  const handleResetPassword = () => {
+    if (userToReset) { resetPassword(userToReset.id); setResetDialogOpen(false); setUserToReset(null) }
+  }
+  const handleUnlock = () => {
+    if (userToUnlock) { desbloquearUsuario(userToUnlock.id); setUnlockDialogOpen(false); setUserToUnlock(null) }
   }
 
   return (
@@ -262,7 +138,7 @@ export function UserManagement() {
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-                  <span style={{ fontSize: 24, fontWeight: 700, lineHeight: 1, color: "var(--foreground)" }}>{users.length}</span>
+                  <span style={{ fontSize: 24, fontWeight: 700, lineHeight: 1, color: "var(--foreground)" }}>{usersVisibles.length}</span>
                   <span style={{ fontSize: 10, fontWeight: 600, color: "var(--muted-foreground)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Total</span>
                 </div>
                 <div className="hidden sm:flex" style={{ gap: 6, marginTop: 3, alignItems: "center" }}>
@@ -282,12 +158,12 @@ export function UserManagement() {
                 fontSize: 10, fontWeight: 700, color: "var(--chart-2)", flexShrink: 0,
                 background: "color-mix(in oklch, var(--chart-2) 10%, transparent)",
                 padding: "1px 6px", borderRadius: 999,
-              }}>{users.length > 0 ? Math.round((activeCount / users.length) * 100) : 0}%</span>
+              }}>{usersVisibles.length > 0 ? Math.round((activeCount / usersVisibles.length) * 100) : 0}%</span>
             </div>
             <div style={{ marginTop: 8, height: 2, background: "var(--border)", borderRadius: 999 }}>
               <div style={{
                 height: "100%", borderRadius: 999, transition: "width 0.4s",
-                width: `${users.length > 0 ? (activeCount / users.length) * 100 : 0}%`,
+                width: `${usersVisibles.length > 0 ? (activeCount / usersVisibles.length) * 100 : 0}%`,
                 background: "var(--chart-2)",
               }} />
             </div>
@@ -296,8 +172,8 @@ export function UserManagement() {
 
         {/* Por rol */}
         {roles.map(r => {
-          const count  = users.filter(u => u.rol === r.id).length
-          const pct    = users.length > 0 ? (count / users.length) * 100 : 0
+          const count  = usersVisibles.filter(u => u.rol === r.id).length
+          const pct    = usersVisibles.length > 0 ? (count / usersVisibles.length) * 100 : 0
           const accent = getRoleAccentColor(r.id)
           return (
             <Card key={r.id} className="bg-card border-border overflow-hidden">
@@ -322,10 +198,7 @@ export function UserManagement() {
                   }}>{Math.round(pct)}%</span>
                 </div>
                 <div style={{ marginTop: 8, height: 2, background: "var(--border)", borderRadius: 999 }}>
-                  <div style={{
-                    height: "100%", borderRadius: 999, transition: "width 0.4s",
-                    width: `${pct}%`, background: accent,
-                  }} />
+                  <div style={{ height: "100%", borderRadius: 999, transition: "width 0.4s", width: `${pct}%`, background: accent }} />
                 </div>
               </CardHeader>
             </Card>
@@ -358,7 +231,7 @@ export function UserManagement() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {users.map(u => {
+                {usersVisibles.map(u => {
                   const hist = u.historialConexiones ?? []
                   const last = hist[hist.length - 1]
                   const ultimoAcceso = last?.entrada ? formatFechaConexion(last.entrada) : "—"
@@ -388,12 +261,8 @@ export function UserManagement() {
                           {rolDef?.label ?? u.rol}
                         </Badge>
                       </TableCell>
-                      <TableCell style={{ fontSize: 12, color: "var(--muted-foreground)" }}>
-                        {ultimoAcceso}
-                      </TableCell>
-                      <TableCell className="hidden sm:table-cell" style={{ fontSize: 12, color: "var(--muted-foreground)" }}>
-                        {duracion}
-                      </TableCell>
+                      <TableCell style={{ fontSize: 12, color: "var(--muted-foreground)" }}>{ultimoAcceso}</TableCell>
+                      <TableCell className="hidden sm:table-cell" style={{ fontSize: 12, color: "var(--muted-foreground)" }}>{duracion}</TableCell>
                       <TableCell className="text-right pr-4 hidden sm:table-cell" style={{ fontSize: 12, color: "var(--muted-foreground)" }}>
                         {hist.length > 0 ? hist.length : "—"}
                       </TableCell>
@@ -407,13 +276,13 @@ export function UserManagement() {
       )}
 
       {/* Info contraseña genérica */}
-      <div style={{ display:"flex", gap:10, alignItems:"center", padding:"10px 14px",
-        borderRadius:8, background:"color-mix(in oklch, var(--primary) 8%, transparent)",
-        border:"1px solid color-mix(in oklch, var(--primary) 22%, transparent)" }}>
-        <Info size={14} style={{ color:"var(--primary)", flexShrink:0 }} />
-        <p style={{ fontSize:12, color:"var(--muted-foreground)" }}>
+      <div style={{ display: "flex", gap: 10, alignItems: "center", padding: "10px 14px",
+        borderRadius: 8, background: "color-mix(in oklch, var(--primary) 8%, transparent)",
+        border: "1px solid color-mix(in oklch, var(--primary) 22%, transparent)" }}>
+        <Info size={14} style={{ color: "var(--primary)", flexShrink: 0 }} />
+        <p style={{ fontSize: 12, color: "var(--muted-foreground)" }}>
           Los nuevos usuarios se crean con la contraseña genérica{" "}
-          <strong style={{ color:"var(--foreground)" }}>{PASSWORD_GENERICA}</strong>.
+          <strong style={{ color: "var(--foreground)" }}>tcs2024</strong>.
           Deben cambiarla en su primer inicio de sesión.
         </p>
       </div>
@@ -423,9 +292,9 @@ export function UserManagement() {
         <div className="flex items-center gap-2 min-w-0">
           <Users className="h-5 w-5 text-muted-foreground shrink-0" />
           <h2 className="text-lg font-semibold text-foreground">Gestión de Usuarios</h2>
-          <span className="text-sm text-muted-foreground shrink-0">({users.length})</span>
+          <span className="text-sm text-muted-foreground shrink-0">({usersVisibles.length})</span>
         </div>
-        <Button onClick={handleOpenCreate} className="bg-primary hover:bg-primary/90 shrink-0">
+        <Button onClick={() => { setUserToEdit(null); setFormOpen(true) }} className="bg-primary hover:bg-primary/90 shrink-0">
           <UserPlus className="h-4 w-4 mr-2" />
           Nuevo Usuario
         </Button>
@@ -446,11 +315,10 @@ export function UserManagement() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {users.map(u => {
+              {usersVisibles.map(u => {
                 const rolDef = getRoleDef(u.rol)
                 return (
                   <TableRow key={u.id} className="border-border hover:bg-secondary/50">
-                    {/* Nombre + avatar */}
                     <TableCell className="pl-4">
                       <div className="flex items-center gap-3">
                         <div className={`h-9 w-9 rounded-full flex items-center justify-center shrink-0 font-semibold text-sm ${getAvatarCls(u.rol)}`}>
@@ -468,31 +336,27 @@ export function UserManagement() {
                       </div>
                     </TableCell>
 
-                    {/* Email (columna separada, oculta en mobile) */}
-                    <TableCell className="text-sm text-muted-foreground hidden md:table-cell">
-                      {u.email}
-                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground hidden md:table-cell">{u.email}</TableCell>
 
-                    {/* Rol + descripción + equipo */}
                     <TableCell>
                       <div className="flex flex-col gap-0.5">
-                        <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                           <Badge variant="outline" className={`${rolDef?.cls ?? "bg-muted text-muted-foreground border-border"} flex items-center gap-1 w-fit text-[11px] px-2 py-0.5`}>
                             {getRoleIcon(u.rol)}
                             {rolDef?.label ?? u.rol}
                           </Badge>
                           {esRolConEquipo(u.rol) && (
                             <span style={{
-                              display:"inline-flex", alignItems:"center", gap:3,
-                              fontSize:10, fontWeight:600,
+                              display: "inline-flex", alignItems: "center", gap: 3,
+                              fontSize: 10, fontWeight: 600,
                               color: (u.equipoIds?.length ?? 0) > 0 ? "var(--primary)" : "var(--muted-foreground)",
                               background: (u.equipoIds?.length ?? 0) > 0
                                 ? "color-mix(in oklch,var(--primary) 10%,transparent)"
                                 : "var(--secondary)",
-                              padding:"1px 6px", borderRadius:6,
-                              border:`1px solid ${(u.equipoIds?.length ?? 0) > 0 ? "color-mix(in oklch,var(--primary) 25%,transparent)" : "var(--border)"}`,
+                              padding: "1px 6px", borderRadius: 6,
+                              border: `1px solid ${(u.equipoIds?.length ?? 0) > 0 ? "color-mix(in oklch,var(--primary) 25%,transparent)" : "var(--border)"}`,
                             }}>
-                              <UserCheck size={9}/>
+                              <UserCheck size={9} />
                               {(u.equipoIds?.length ?? 0) > 0
                                 ? `${u.equipoIds!.length} miembro${u.equipoIds!.length !== 1 ? "s" : ""}`
                                 : "Sin equipo"}
@@ -505,7 +369,6 @@ export function UserManagement() {
                       </div>
                     </TableCell>
 
-                    {/* Estado activo/inactivo/bloqueado */}
                     <TableCell className="hidden sm:table-cell">
                       <div className="flex flex-col gap-1">
                         {u.activo ? (
@@ -528,7 +391,6 @@ export function UserManagement() {
                       </div>
                     </TableCell>
 
-                    {/* Contraseña */}
                     <TableCell className="hidden sm:table-cell">
                       {u.debeCambiarPassword ? (
                         <Badge variant="outline" className="bg-chart-3/15 text-chart-3 border-chart-3/30 text-[10px] px-2">
@@ -541,7 +403,6 @@ export function UserManagement() {
                       )}
                     </TableCell>
 
-                    {/* Acciones */}
                     <TableCell className="pr-3">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -550,31 +411,27 @@ export function UserManagement() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-44">
-                          <DropdownMenuItem onClick={() => handleOpenEdit(u)}>
-                            <Edit className="mr-2 h-4 w-4" />
-                            Editar
+                          <DropdownMenuItem onClick={() => { setUserToEdit(u); setFormOpen(true) }}>
+                            <Edit className="mr-2 h-4 w-4" /> Editar
                           </DropdownMenuItem>
                           {u.id !== currentUser?.id && (
-                            <DropdownMenuItem onClick={() => confirmResetPassword(u)}>
-                              <KeyRound className="mr-2 h-4 w-4" />
-                              Resetear contraseña
+                            <DropdownMenuItem onClick={() => { setUserToReset(u); setResetDialogOpen(true) }}>
+                              <KeyRound className="mr-2 h-4 w-4" /> Resetear contraseña
                             </DropdownMenuItem>
                           )}
                           {u.bloqueado && u.id !== currentUser?.id && (
-                            <DropdownMenuItem onClick={() => confirmUnlock(u)}>
-                              <Unlock className="mr-2 h-4 w-4" />
-                              Desbloquear cuenta
+                            <DropdownMenuItem onClick={() => { setUserToUnlock(u); setUnlockDialogOpen(true) }}>
+                              <Unlock className="mr-2 h-4 w-4" /> Desbloquear cuenta
                             </DropdownMenuItem>
                           )}
                           {canDeleteTarget(u) && (
                             <>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
-                                onClick={() => confirmDelete(u)}
+                                onClick={() => { setUserToDelete(u); setDeleteDialogOpen(true) }}
                                 className="text-destructive focus:text-destructive"
                               >
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Eliminar
+                                <Trash2 className="mr-2 h-4 w-4" /> Eliminar
                               </DropdownMenuItem>
                             </>
                           )}
@@ -589,233 +446,26 @@ export function UserManagement() {
         </CardContent>
       </Card>
 
-      {/* Modal crear/editar */}
-      <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent className="bg-card border-border sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-foreground">
-              {userToEdit ? "Editar Usuario" : "Nuevo Usuario"}
-            </DialogTitle>
-            <DialogDescription>
-              {userToEdit
-                ? "Modifica los datos del usuario"
-                : `Se creará con la contraseña genérica: ${PASSWORD_GENERICA}`
-              }
-            </DialogDescription>
-          </DialogHeader>
-
-          <form onSubmit={handleSubmit}>
-            <FieldGroup className="py-4">
-              <Field>
-                <FieldLabel>Nombre completo</FieldLabel>
-                <Input
-                  value={nombre}
-                  onChange={(e) => setNombre(e.target.value)}
-                  placeholder="Juan Pérez"
-                  className="bg-secondary border-border"
-                  required
-                />
-              </Field>
-
-              <Field>
-                <FieldLabel>Email</FieldLabel>
-                <Input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="juan@empresa.com"
-                  className="bg-secondary border-border"
-                  required
-                />
-              </Field>
-
-              <Field>
-                <FieldLabel>Rol</FieldLabel>
-                <Select value={rol} onValueChange={setRol}>
-                  <SelectTrigger className="bg-secondary border-border">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {roles
-                      .filter(r => {
-                        if (!isOwner && (r.permisos.includes("canManageUsers") || r.permisos.includes("isSuperAdmin"))) return false
-                        if (r.permisos.includes("isSuperAdmin") && ownerYaExiste) return false
-                        return true
-                      })
-                      .map(r => (
-                        <SelectItem key={r.id} value={r.id}>
-                          <div className="flex items-center gap-2">
-                            {getRoleIcon(r.id)}
-                            {r.label}
-                          </div>
-                        </SelectItem>
-                      ))
-                    }
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {getRoleDef(rol)?.description ?? ""}
-                </p>
-                {/* Nota de visibilidad en Carga Ocupacional */}
-                {(() => {
-                  const def = getRoleDef(rol)
-                  if (!def) return null
-                  const isOwnerRole  = def.permisos.includes("isSuperAdmin")
-                  const isAdminRole  = def.permisos.includes("canManageUsers") && !isOwnerRole
-                  const isLeadRole   = esRolLider(rol)
-                  const isQARole     = def.permisos.includes("verSoloPropios")
-                  const msg = isOwnerRole
-                    ? "Ve la carga de todos los usuarios"
-                    : isAdminRole
-                    ? "Ve su propia carga y la de su equipo asignado (solo la propia si no tiene equipo)"
-                    : isLeadRole
-                    ? "Ve su propia carga y la de su equipo asignado"
-                    : isQARole
-                    ? "Ve únicamente su propia carga"
-                    : "Ve la carga de todos los usuarios (solo lectura)"
-                  return (
-                    <div style={{
-                      display: "flex", alignItems: "center", gap: 6, marginTop: 6,
-                      padding: "5px 8px", borderRadius: 6,
-                      background: "color-mix(in oklch, var(--primary) 6%, transparent)",
-                      border: "1px solid color-mix(in oklch, var(--primary) 16%, transparent)",
-                    }}>
-                      <BarChart2 size={11} style={{ color: "var(--primary)", flexShrink: 0 }} />
-                      <span style={{ fontSize: 11, color: "var(--muted-foreground)" }}>
-                        <strong style={{ color: "var(--foreground)" }}>Carga ocupacional:</strong> {msg}
-                      </span>
-                    </div>
-                  )
-                })()}
-              </Field>
-
-              {/* Selector de equipo — para roles admin y lead al editar */}
-              {userToEdit && esRolConEquipo(rol) && (
-                <Field>
-                  <FieldLabel>
-                    <span style={{ display:"flex", alignItems:"center", gap:6 }}>
-                      <UserCheck size={13} style={{ color:"var(--primary)" }}/>
-                      Miembros del equipo
-                      {equipoIds.length > 0 && (
-                        <span style={{
-                          fontSize:10, fontWeight:700, background:"color-mix(in oklch,var(--primary) 14%,transparent)",
-                          color:"var(--primary)", borderRadius:8, padding:"1px 6px",
-                        }}>
-                          {equipoIds.length}
-                        </span>
-                      )}
-                    </span>
-                  </FieldLabel>
-                  <div style={{
-                    display:"flex", flexDirection:"column", gap:2,
-                    maxHeight:180, overflowY:"auto", padding:"6px 8px",
-                    borderRadius:8, border:"1px solid var(--border)", background:"var(--secondary)",
-                  }}>
-                    {users.filter(u => u.activo && u.id !== userToEdit.id).length === 0 ? (
-                      <p style={{ fontSize:12, color:"var(--muted-foreground)", textAlign:"center", padding:8 }}>
-                        No hay otros usuarios activos
-                      </p>
-                    ) : users.filter(u => u.activo && u.id !== userToEdit.id).map(u => (
-                      <label key={u.id} style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer", padding:"5px 6px", borderRadius:6 }} className="hover:bg-card">
-                        <input
-                          type="checkbox"
-                          checked={equipoIds.includes(u.id)}
-                          onChange={() => toggleEquipoMember(u.id)}
-                          style={{ width:14, height:14, accentColor:"var(--primary)", cursor:"pointer", flexShrink:0 }}
-                        />
-                        <span style={{ fontSize:12, color:"var(--foreground)", flex:1 }}>{u.nombre}</span>
-                        <span style={{ fontSize:10, color:"var(--muted-foreground)" }}>
-                          {getRoleDef(u.rol)?.label ?? u.rol}
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                  <p style={{ fontSize:11, color:"var(--muted-foreground)", marginTop:4 }}>
-                    Este usuario solo verá HUs y métricas de los usuarios seleccionados.
-                  </p>
-                </Field>
-              )}
-            </FieldGroup>
-
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>
-                Cancelar
-              </Button>
-              <Button type="submit" className="bg-primary hover:bg-primary/90">
-                {userToEdit ? "Guardar Cambios" : "Crear Usuario"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Diálogo confirmación eliminar */}
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent className="bg-card border-border sm:max-w-sm">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-foreground">Eliminar Usuario</AlertDialogTitle>
-            <AlertDialogDescription>
-              ¿Estás seguro que deseas eliminar a <strong>{userToDelete?.nombre}</strong>?
-              Esta acción no se puede deshacer.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              className="bg-destructive hover:bg-destructive/90"
-            >
-              Eliminar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Diálogo confirmación reset contraseña */}
-      <AlertDialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
-        <AlertDialogContent className="bg-card border-border sm:max-w-sm">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-foreground">Resetear Contraseña</AlertDialogTitle>
-            <AlertDialogDescription>
-              La contraseña de <strong>{userToReset?.nombre}</strong> será cambiada a la
-              genérica (<strong>{PASSWORD_GENERICA}</strong>). Deberá cambiarla en su próximo inicio de sesión.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleResetPassword}
-              className="bg-primary hover:bg-primary/90"
-            >
-              <KeyRound className="h-4 w-4 mr-2" />
-              Resetear
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Diálogo confirmación desbloqueo */}
-      <AlertDialog open={unlockDialogOpen} onOpenChange={setUnlockDialogOpen}>
-        <AlertDialogContent className="bg-card border-border sm:max-w-sm">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-foreground">Desbloquear Cuenta</AlertDialogTitle>
-            <AlertDialogDescription>
-              La cuenta de <strong>{userToUnlock?.nombre}</strong> está bloqueada por demasiados intentos
-              fallidos. Al desbloquearla podrá volver a iniciar sesión normalmente.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleUnlock}
-              className="bg-chart-2 hover:bg-chart-2/90 text-white"
-            >
-              <Unlock className="h-4 w-4 mr-2" />
-              Desbloquear
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Modales */}
+      <UserFormModal
+        open={formOpen}
+        userToEdit={userToEdit}
+        onClose={() => setFormOpen(false)}
+      />
+      <UserConfirmDialogs
+        deleteDialogOpen={deleteDialogOpen}
+        userToDelete={userToDelete}
+        onConfirmDelete={handleDelete}
+        onCancelDelete={() => { setDeleteDialogOpen(false); setUserToDelete(null) }}
+        resetDialogOpen={resetDialogOpen}
+        userToReset={userToReset}
+        onConfirmReset={handleResetPassword}
+        onCancelReset={() => { setResetDialogOpen(false); setUserToReset(null) }}
+        unlockDialogOpen={unlockDialogOpen}
+        userToUnlock={userToUnlock}
+        onConfirmUnlock={handleUnlock}
+        onCancelUnlock={() => { setUnlockDialogOpen(false); setUserToUnlock(null) }}
+      />
     </div>
   )
 }

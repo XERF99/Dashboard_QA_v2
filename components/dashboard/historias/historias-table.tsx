@@ -10,7 +10,7 @@ import {
   ESTADO_HU_CFG, PRIORIDAD_CFG,
   getEtapaHUCfg, ETAPAS_PREDETERMINADAS, getTipoAplicacionLabel, getAmbienteLabel, getTipoPruebaLabel,
   type HistoriaUsuario, type CasoPrueba, type EstadoHU, type PrioridadHU, type TipoAplicacion,
-  type ConfigEtapas, type TipoAplicacionDef, type AmbienteDef, type TipoPruebaDef,
+  type ConfigEtapas, type TipoAplicacionDef, type AmbienteDef, type TipoPruebaDef, type Sprint,
 } from "@/lib/types"
 import {
   exportarHUsCSV, exportarResultadosCSV,
@@ -38,6 +38,7 @@ interface Props {
   onBulkCambiarEstado?: (ids: string[], estado: EstadoHU) => void
   onBulkCambiarResponsable?: (ids: string[], responsable: string) => void
   onImportCSV?: () => void
+  sprintEntidades?: Sprint[]
 }
 
 // ── Urgencia: días hasta fechaFinEstimada ─────────────────
@@ -105,7 +106,7 @@ function BulkActionSelect({ label, options, onSelect }: {
   )
 }
 
-export function HistoriasTable({ historias, casos, onVerDetalle, onEditar, onEliminar, onNueva, canEdit=true, configEtapas = ETAPAS_PREDETERMINADAS, tiposAplicacion, ambientes, tiposPrueba, qaUsers, onBulkEliminar, onBulkCambiarEstado, onBulkCambiarResponsable, onImportCSV }: Props) {
+export function HistoriasTable({ historias, casos, onVerDetalle, onEditar, onEliminar, onNueva, canEdit=true, configEtapas = ETAPAS_PREDETERMINADAS, tiposAplicacion, ambientes, tiposPrueba, qaUsers, onBulkEliminar, onBulkCambiarEstado, onBulkCambiarResponsable, onImportCSV, sprintEntidades = [] }: Props) {
   // ── Vista activa ──
   const [vistaKanban, setVistaKanban] = useState(false)
 
@@ -326,6 +327,7 @@ export function HistoriasTable({ historias, casos, onVerDetalle, onEditar, onEli
         <SprintPanel
           historias={historias}
           sprints={sprints}
+          sprintEntidades={sprintEntidades}
           filtroSprint={filtroSprint}
           onChangeSprint={setFiltroSprint}
         />

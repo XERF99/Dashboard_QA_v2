@@ -7,7 +7,7 @@ import {
   AMBIENTES_PREDETERMINADOS,
   TIPOS_PRUEBA_PREDETERMINADOS,
 } from "@/lib/constants/index"
-import type { ConfigEtapas, TipoAplicacionDef, AmbienteDef, TipoPruebaDef } from "@/lib/types/index"
+import type { ConfigEtapas, TipoAplicacionDef, AmbienteDef, TipoPruebaDef, Sprint } from "@/lib/types/index"
 import { APLICACIONES_PREDETERMINADAS } from "@/components/dashboard/config/aplicaciones-config"
 
 /**
@@ -33,6 +33,24 @@ export function useConfig() {
   const [tiposPrueba, setTiposPrueba] = usePersistedState<TipoPruebaDef[]>(
     STORAGE_KEYS.tiposPrueba, TIPOS_PRUEBA_PREDETERMINADOS
   )
+  const [sprints, setSprints] = usePersistedState<Sprint[]>(
+    STORAGE_KEYS.sprints, []
+  )
+
+  const addSprint = (data: Omit<Sprint, "id">) => {
+    if (sprints.some(s => s.nombre.toLowerCase() === data.nombre.toLowerCase()))
+      return { success: false, error: "Ya existe un sprint con ese nombre" }
+    setSprints(p => [...p, { id: `sprint-${Date.now()}`, ...data }])
+    return { success: true }
+  }
+  const updateSprint = (s: Sprint) => {
+    setSprints(p => p.map(x => x.id === s.id ? s : x))
+    return { success: true }
+  }
+  const deleteSprint = (id: string) => {
+    setSprints(p => p.filter(s => s.id !== id))
+    return { success: true }
+  }
 
   /** Actualiza tiposAplicacion y sincroniza configEtapas (añade/elimina entradas). */
   const handleTiposChange = (newTipos: TipoAplicacionDef[]) => {
@@ -56,5 +74,6 @@ export function useConfig() {
     tiposAplicacion, setTiposAplicacion, handleTiposChange,
     ambientes, setAmbientes,
     tiposPrueba, setTiposPrueba,
+    sprints, addSprint, updateSprint, deleteSprint,
   }
 }

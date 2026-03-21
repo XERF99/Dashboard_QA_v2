@@ -17,7 +17,7 @@ export function useHUModals({ historias, onEliminarConfirmado, onBulkEliminarCon
   const [huEditar, setHuEditar] = useState<HistoriaUsuario | null>(null)
   const [deleteModal, setDeleteModal] = useState<{ open: boolean; titulo: string; subtitulo?: string; fn: () => void }>({ open: false, titulo: "", fn: () => {} })
   const [importModalOpen, setImportModalOpen] = useState(false)
-  const [configSeccion, setConfigSeccion] = useState<"roles" | "tipos" | "aplicaciones" | "ambientes" | "tipos_prueba" | "etapas">("roles")
+  const [configSeccion, setConfigSeccion] = useState<"roles" | "tipos" | "aplicaciones" | "ambientes" | "tipos_prueba" | "etapas" | "sprints">("roles")
   const [adminSeccion, setAdminSeccion] = useState<"auditoria" | "usuarios" | "configuracion">("auditoria")
 
   const huSeleccionada = huSeleccionadaId ? (historias.find(h => h.id === huSeleccionadaId) ?? null) : null

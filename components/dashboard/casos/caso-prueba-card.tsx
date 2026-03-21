@@ -19,10 +19,10 @@ import {
   fmtCorto,
   TIPO_TAREA_LABEL as TTLABEL,
   type HistoriaUsuario, type CasoPrueba, type Tarea, type Bloqueo,
-  type EtapaEjecucion, type TipoTarea, type PrioridadTarea, type ConfigEtapas,
-  type TipoPruebaDef,
+  type EtapaEjecucion, type TipoTarea, type PrioridadTarea,
 } from "@/lib/types"
 import { CommentThread } from "../shared/comment-thread"
+import { useHUDetail } from "@/lib/contexts/hu-detail-context"
 
 // ── Helpers ──
 const PNL: React.CSSProperties = { padding:"13px 15px", borderRadius:10, border:"1px solid var(--border)", background:"var(--background)" }
@@ -73,62 +73,28 @@ function TareaFormFields({ titulo, onTitulo, desc, onDesc, tipo, onTipo, priorid
   )
 }
 
+// ── Props: solo datos de instancia; handlers/permisos/config vienen de HUDetailContext ──
 export interface CasoPruebaCardProps {
   caso: CasoPrueba
   hu: HistoriaUsuario
   tareasCaso: Tarea[]
-  isAdmin: boolean
-  isQALead: boolean
-  isQA: boolean
-  huCerrada: boolean
-  configEtapas: ConfigEtapas
-  tiposPrueba?: TipoPruebaDef[]
-  currentUser?: string
-  onEliminarCaso: (casoId: string, huId: string) => void
-  onEnviarCasoAprobacion: (casoId: string, huId: string) => void
-  onSolicitarModificacionCaso: (casoId: string, huId: string) => void
-  onHabilitarModificacionCaso: (casoId: string, huId: string) => void
   onAbrirEditar: (caso: CasoPrueba) => void
-  onCompletarCasoEtapa: (casoId: string, etapa: EtapaEjecucion, resultado: "exitoso" | "fallido", comentarioFallo?: string) => void
-  onRetestearCaso: (casoId: string, etapa: EtapaEjecucion, comentarioCorreccion: string) => void
-  onAddTarea: (tarea: Tarea) => void
-  onEditarTarea: (tarea: Tarea) => void
-  onEliminarTarea: (tareaId: string, casoId: string) => void
-  onCompletarTarea: (tareaId: string, resultado: "exitoso" | "fallido") => void
-  onBloquearTarea: (tareaId: string, bloqueo: Bloqueo) => void
-  onDesbloquearTarea: (tareaId: string, bloqueoId: string) => void
-  onAddComentarioCaso: (casoId: string, texto: string) => void
 }
 
-export function CasoPruebaCard({
-  caso,
-  hu,
-  tareasCaso,
-  isAdmin,
-  isQALead,
-  isQA,
-  huCerrada,
-  configEtapas,
-  tiposPrueba,
-  currentUser,
-  onEliminarCaso,
-  onEnviarCasoAprobacion,
-  onSolicitarModificacionCaso,
-  onHabilitarModificacionCaso,
-  onAbrirEditar,
-  onCompletarCasoEtapa,
-  onRetestearCaso,
-  onAddTarea,
-  onEditarTarea,
-  onEliminarTarea,
-  onCompletarTarea,
-  onBloquearTarea,
-  onDesbloquearTarea,
-  onAddComentarioCaso,
-}: CasoPruebaCardProps) {
+export function CasoPruebaCard({ caso, hu, tareasCaso, onAbrirEditar }: CasoPruebaCardProps) {
+  const {
+    isAdmin, isQALead, isQA, currentUser,
+    configEtapas, tiposPrueba,
+    onEliminarCaso, onEnviarCasoAprobacion,
+    onSolicitarModificacionCaso, onHabilitarModificacionCaso,
+    onCompletarCasoEtapa, onRetestearCaso,
+    onAddTarea, onEditarTarea, onAddComentarioCaso,
+  } = useHUDetail()
+
+  const huCerrada = hu.estado === "exitosa" || hu.estado === "cancelada" || hu.estado === "fallida"
+
   const [isExpanded, setIsExpanded] = useState(false)
 
-  // Tarea form state
   const {
     editandoTarea, setEditandoTarea,
     showTareaForm, setShowTareaForm,
@@ -149,12 +115,10 @@ export function CasoPruebaCard({
     onEditarTarea,
   })
 
-  // Fallo / retest state
   const [showFalloForm, setShowFalloForm] = useState(false)
   const [comentarioFallo, setComentarioFallo] = useState("")
   const [showRetestForm, setShowRetestForm] = useState(false)
   const [comentarioCorreccion, setComentarioCorreccion] = useState("")
-
 
   const aprobCfg = ESTADO_APROBACION_CFG[caso.estadoAprobacion]
   const compCfg = COMPLEJIDAD_CFG[caso.complejidad]
@@ -164,11 +128,9 @@ export function CasoPruebaCard({
   const etapaActual = hu.etapa as EtapaEjecucion
   const resultadoEtapaActual = caso.resultadosPorEtapa.find(r => r.etapa === etapaActual)
 
-  // Caso completamente terminado (todas etapas exitosas)
   const casoCompletado = caso.resultadosPorEtapa.length > 0 &&
     caso.resultadosPorEtapa.every(r => r.resultado === "exitoso")
 
-  // Puede editar/eliminar este caso (QA o Admin, siempre que no esté aprobado/pendiente)
   const puedeEditar = !huCerrada && (isQA || isAdmin || isQALead) && (
     caso.estadoAprobacion === "borrador" ||
     caso.estadoAprobacion === "rechazado" ||
@@ -177,22 +139,16 @@ export function CasoPruebaCard({
   const puedeEliminar = !huCerrada && (isQA || isAdmin || isQALead) && (
     caso.estadoAprobacion === "borrador" || caso.estadoAprobacion === "rechazado"
   )
-
-  // Puede QA solicitar modificación de caso aprobado?
   const puedeSolicitarMod = !huCerrada && isQA &&
     caso.estadoAprobacion === "aprobado" &&
     !caso.modificacionSolicitada &&
     !caso.modificacionHabilitada
-
-  // Admin ve solicitud de modificación pendiente?
   const adminVeSolicitud = (isAdmin || isQALead) && caso.modificacionSolicitada && !caso.modificacionHabilitada
-
-  // Puede añadir tareas (QA o admin, HU no cerrada, caso no completado)
   const puedeAddTarea = !huCerrada && !casoCompletado && (isQA || isAdmin || isQALead)
 
   return (
     <div style={{ border:`1px solid ${caso.modificacionSolicitada ? "var(--chart-3)" : "var(--border)"}`, borderRadius:10, background:"var(--card)", overflow:"hidden" }}>
-      {/* Cabecera del caso */}
+      {/* Cabecera */}
       <div style={{ display:"flex", alignItems:"center", gap:10, padding:"12px 14px", cursor:"pointer" }}
         onClick={() => setIsExpanded(v => !v)} className="hover:bg-secondary/30">
         <div style={{ flex:1, minWidth:0 }}>
@@ -241,7 +197,6 @@ export function CasoPruebaCard({
               </Badge>
             )
           })}
-          {/* Botones editar/eliminar (sin expandir) */}
           {puedeEditar && (
             <button type="button" title="Editar caso"
               onClick={e => { e.stopPropagation(); onAbrirEditar(caso) }}
@@ -260,7 +215,7 @@ export function CasoPruebaCard({
         </div>
       </div>
 
-      {/* Detalle expandido del caso */}
+      {/* Detalle expandido */}
       {isExpanded && (
         <div style={{ padding:"0 14px 14px", borderTop:"1px solid var(--border)" }}>
           {caso.descripcion && (
@@ -276,23 +231,20 @@ export function CasoPruebaCard({
             </div>
           )}
 
-          {/* Acciones del caso (por caso individual) */}
+          {/* Acciones del caso */}
           <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:8, marginTop:6 }}>
-            {/* QA: enviar este caso a aprobación */}
             {!huCerrada && isQA && (caso.estadoAprobacion === "borrador" || caso.estadoAprobacion === "rechazado") && (
               <Button size="sm" variant="outline" style={{ height:26, fontSize:10, padding:"0 10px" }}
                 onClick={() => onEnviarCasoAprobacion(caso.id, hu.id)}>
                 <Send size={10} className="mr-1"/> Enviar a aprobación
               </Button>
             )}
-            {/* QA: solicitar modificación de caso aprobado */}
             {puedeSolicitarMod && (
               <Button size="sm" variant="outline" style={{ height:26, fontSize:10, padding:"0 10px", borderColor:"var(--chart-3)", color:"var(--chart-3)" }}
                 onClick={() => onSolicitarModificacionCaso(caso.id, hu.id)}>
                 <Bell size={10} className="mr-1"/> Solicitar modificación
               </Button>
             )}
-            {/* Admin: habilitar modificación solicitada */}
             {adminVeSolicitud && (
               <Button size="sm" variant="outline" style={{ height:26, fontSize:10, padding:"0 10px" }}
                 onClick={() => onHabilitarModificacionCaso(caso.id, hu.id)}>
@@ -309,7 +261,7 @@ export function CasoPruebaCard({
             </div>
           )}
 
-          {/* Acciones de ejecución para el caso en etapa actual */}
+          {/* Acciones de ejecución */}
           {caso.estadoAprobacion === "aprobado" && resultadoEtapaActual?.estado === "en_ejecucion" && (isQA || isAdmin || isQALead) && (
             <div style={{ marginBottom:10, marginTop:6 }}>
               {!showFalloForm ? (
@@ -347,7 +299,7 @@ export function CasoPruebaCard({
             </div>
           )}
 
-          {/* Solicitar retesteo cuando el caso falló */}
+          {/* Retesteo */}
           {caso.estadoAprobacion === "aprobado" && resultadoEtapaActual?.resultado === "fallido" && (isQA || isAdmin || isQALead) && (
             <div style={{ marginBottom:10, marginTop:6 }}>
               {!showRetestForm ? (
@@ -414,7 +366,7 @@ export function CasoPruebaCard({
             </div>
           )}
 
-          {/* Formulario editar tarea (dentro del card) */}
+          {/* Formulario editar tarea */}
           {editandoTarea && (
             <div style={{ ...PNL, marginBottom:12, borderColor:"var(--chart-1)" }}>
               <p style={{ fontSize:12, fontWeight:700, color:"var(--chart-1)", marginBottom:10 }}>
@@ -450,7 +402,6 @@ export function CasoPruebaCard({
               )}
             </div>
 
-            {/* Formulario nueva tarea */}
             {showTareaForm && (
               <div style={{ padding:"10px 12px", borderRadius:8, border:"1px solid var(--primary)", background:"var(--background)", marginBottom:8 }}>
                 <TareaFormFields
@@ -479,15 +430,7 @@ export function CasoPruebaCard({
                 tarea={tarea}
                 casoId={caso.id}
                 huCerrada={huCerrada}
-                isQA={isQA}
-                isAdmin={isAdmin}
-                isQALead={isQALead}
-                currentUser={currentUser}
                 onAbrirEditar={abrirEditarTarea}
-                onEliminarTarea={onEliminarTarea}
-                onCompletarTarea={onCompletarTarea}
-                onBloquearTarea={onBloquearTarea}
-                onDesbloquearTarea={onDesbloquearTarea}
               />
             ))}
           </div>
@@ -516,18 +459,11 @@ interface TareaItemProps {
   tarea: Tarea
   casoId: string
   huCerrada: boolean
-  isQA: boolean
-  isAdmin: boolean
-  isQALead: boolean
-  currentUser?: string
   onAbrirEditar: (tarea: Tarea) => void
-  onEliminarTarea: (tareaId: string, casoId: string) => void
-  onCompletarTarea: (tareaId: string, resultado: "exitoso" | "fallido") => void
-  onBloquearTarea: (tareaId: string, bloqueo: Bloqueo) => void
-  onDesbloquearTarea: (tareaId: string, bloqueoId: string) => void
 }
 
-function TareaItem({ tarea, casoId, huCerrada, isQA, isAdmin, isQALead, currentUser, onAbrirEditar, onEliminarTarea, onCompletarTarea, onBloquearTarea, onDesbloquearTarea }: TareaItemProps) {
+function TareaItem({ tarea, casoId, huCerrada, onAbrirEditar }: TareaItemProps) {
+  const { isQA, isAdmin, isQALead, currentUser, onEliminarTarea, onCompletarTarea, onBloquearTarea, onDesbloquearTarea } = useHUDetail()
   const [showBloqueoForm, setShowBloqueoForm] = useState(false)
   const [bloqueoTexto, setBloqueoTexto] = useState("")
 
@@ -608,7 +544,7 @@ function TareaItem({ tarea, casoId, huCerrada, isQA, isAdmin, isQALead, currentU
                 onBloquearTarea(tarea.id, {
                   id: `bl-${Date.now()}`, descripcion: bloqueoTexto.trim(),
                   reportadoPor: currentUser || "Sistema", fecha: new Date(), resuelto: false,
-                })
+                } as Bloqueo)
                 setShowBloqueoForm(false); setBloqueoTexto("")
               }}>Bloquear</Button>
           </div>
