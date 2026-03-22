@@ -388,49 +388,38 @@ Los tests de API usan **Prisma y servicios mockeados** con `vi.mock` y generan J
 - **Validación Zod en rutas `/sync`**: los tres endpoints ahora validan el payload con un schema Zod antes de tocar la BD. Payload inválido retorna HTTP 400 con detalles del error. No requirió instalar dependencias (Zod ya estaba en el proyecto).
 - **`pnpm tsc --noEmit` → 0 errores.**
 
-### v2.3 — Notificaciones conectadas al backend (notif-backend)
-- **`lib/backend/services/notificacion.service.ts`** — nuevo service con `getNotificacionesByDestinatario`, `createNotificacion`, `marcarLeida`, `marcarTodasLeidas` y `rolToDestinatario` (mapea `owner/admin` → `"admin"`, resto → `"qa"`).
-- **`GET /api/notificaciones`** — devuelve las notificaciones del usuario autenticado filtradas por su rol (destinatario). Protegido con `requireAuth`.
-- **`POST /api/notificaciones`** — crea una nueva notificación en la BD. Llamado automáticamente por `addNotificacion` en el frontend.
-- **`PATCH /api/notificaciones/[id]`** — marca una notificación como leída.
-- **`PATCH /api/notificaciones/marcar-todas`** — marca todas las no leídas del usuario como leídas.
-- **`lib/hooks/useNotificaciones.ts`** reescrito: carga desde localStorage al instante → reemplaza con datos de la API en mount → `addNotificacion` hace POST con actualización optimista (id temporal reemplazado por id real de BD) → `handleMarcarLeida`/`handleMarcarTodasLeidas` hacen PATCH en segundo plano. Fallback silencioso a localStorage si la API no responde.
-- **`lib/services/api/client.ts`** — añadido método `patch` al helper `api`.
-- Las notificaciones ya son persistentes entre usuarios y sesiones.
-- **`pnpm tsc --noEmit` → 0 errores.**
+### v2.3 — Backend PostgreSQL, seguridad y notificaciones
 
-### v2.3 — Hardening de seguridad (security)
-- **Rate limiting** (`lib/backend/middleware/rate-limit.ts`): módulo en memoria que limita a 10 intentos de login por IP cada 15 minutos. Responde HTTP 429 con header `Retry-After` si se supera el límite.
-- **JWT_SECRET obligatorio en producción**: `auth.middleware.ts` lanza un error explícito al arrancar si `JWT_SECRET` no está definido en `NODE_ENV=production`. Elimina el riesgo de deployar con el secret hardcodeado del repositorio.
-- **Whitelist de roles**: `createUserSchema` y `updateUserSchema` en `auth.validator.ts` limitan el campo `rol` a los valores válidos del sistema (`owner`, `admin`, `qa_lead`, `qa`, `viewer`) mediante `Joi.valid()`.
-- **Prevención de enumeración de usuarios**: el login ya no distingue entre "email no existe" y "contraseña incorrecta"; ambos devuelven "Credenciales inválidas".
-- **Headers de seguridad HTTP** (`next.config.mjs`): `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Strict-Transport-Security` (HSTS 2 años), `Content-Security-Policy`, `Referrer-Policy` y `Permissions-Policy` aplicados a todas las rutas.
-- **Contraseña mínima 8 caracteres**: `cambiarPasswordSchema` actualizado de `min(6)` a `min(8)`.
-- **`pnpm tsc --noEmit` → 0 errores.**
+#### Backend inicial (Prisma + MVC + Joi)
 
-### v2.3 — Conexión completa a PostgreSQL (backend-connect)
-- **Login/logout via API** (`auth-context.tsx`): `login()` ahora es `async` y llama a `POST /api/auth/login`. JWT en cookie `httpOnly`. La sesión persiste entre recargas y es válida 8h.
-- **`useApiMirroredState`** (`lib/hooks/useApiMirroredState.ts`): hook que carga desde la API en mount y sincroniza a la DB en cada cambio de estado. Fallback a `localStorage` si la API no responde.
-- **Datos sincronizados**: `useDomainData` usa `useApiMirroredState` para `historias`, `casos` y `tareas`. Cualquier cambio (crear, editar, eliminar HU/caso/tarea) se persiste en PostgreSQL automáticamente.
-- **Config sincronizada**: `useConfig` carga la config desde `GET /api/config` en mount y la sincroniza con `PUT /api/config` en cada cambio (etapas, resultados, tipos, ambientes, etc.).
-- **Endpoints bulk sync**: `POST /api/historias/sync`, `POST /api/casos/sync`, `POST /api/tareas/sync` — reciben el array completo, hacen upsert de los registros existentes y eliminan los que ya no están.
-- **`prisma/seed.ts`** — script de seed con 7 usuarios iniciales, 5 roles base y config vacía. Ejecutar con `pnpm db:seed`.
-- **`lib/services/api/client.ts`** — helper `apiFetch` con revisor de fechas ISO → `Date`, manejo de errores HTTP y helpers `api.get/post/put/delete`.
-- **Tests actualizados**: `tests/auth-login.test.ts` reescrito con mock de `fetch` y `async/await` para adaptarse al nuevo login API.
-- **`pnpm tsc --noEmit` → 0 errores.**
-
-### v2.3 — Backend PostgreSQL + Prisma + MVC + Joi (backend-init)
-- **Prisma v5** instalado (`@prisma/client`, `prisma`) — compatible con Node.js 20.11+.
-- **`bcryptjs` + `jose` + `joi`** instalados para auth y validación.
-- **`prisma/schema.prisma`** completo con 8 modelos: `User`, `Role`, `HistoriaUsuario`, `CasoPrueba`, `Tarea`, `Sprint`, `Notificacion`, `Config`. Campos complejos como `Json`.
-- **`lib/backend/prisma.ts`** — singleton `PrismaClient` con guard para hot-reload en desarrollo.
-- **`lib/backend/middleware/auth.middleware.ts`** — `signToken`, `verifyToken`, `requireAuth`, `requireAdmin` usando `jose` (JWT HS256, 8h de expiración). Token en cookie `httpOnly` o header `Authorization: Bearer`.
+- **Prisma v5** con 8 modelos: `User`, `Role`, `HistoriaUsuario`, `CasoPrueba`, `Tarea`, `Sprint`, `Notificacion`, `Config`. Campos complejos como `Json`.
+- **`lib/backend/middleware/auth.middleware.ts`** — `signToken`, `verifyToken`, `requireAuth`, `requireAdmin` con `jose` (JWT HS256, 8h). Token en cookie `httpOnly` o header `Authorization: Bearer`.
 - **Validators Joi**: `auth.validator.ts`, `historia.validator.ts`, `caso.validator.ts`, `tarea.validator.ts`, `config.validator.ts`.
-- **Services**: `auth.service.ts` (login con bcrypt, bloqueo por intentos, historial de sesiones, cambio de password), `historia.service.ts`, `caso.service.ts`, `tarea.service.ts`, `config.service.ts` (upsert singleton).
-- **API Routes** (13 archivos): CRUD completo para `auth`, `users`, `historias`, `casos`, `tareas`, `config`. Params como `Promise<{id}>` — compatible con Next.js 16.
-- **`.env`** actualizado con `DATABASE_URL` y `JWT_SECRET` de ejemplo.
-- **README** actualizado: stack, sección de backend, instrucciones de setup.
-- **El frontend no cambia** — sigue usando `localStorage` hasta que se ejecute `prisma migrate` y se haga el swap en `lib/services/index.ts`.
+- **Services**: `auth.service.ts` (login con bcrypt, bloqueo por intentos, historial de sesiones), `historia.service.ts`, `caso.service.ts`, `tarea.service.ts`, `config.service.ts`.
+- **13 API Routes**: CRUD completo para `auth`, `users`, `historias`, `casos`, `tareas`, `config`. Params como `Promise<{id}>` — compatible con Next.js 16.
+- **`prisma/seed.ts`** — 7 usuarios iniciales, 5 roles base y config vacía. Ejecutar con `pnpm db:seed`.
+
+#### Conexión frontend → backend
+
+- `login()` en `auth-context.tsx` ahora es `async` — llama a `POST /api/auth/login`. JWT en cookie `httpOnly`, sesión válida 8h.
+- **`useApiMirroredState`** — carga desde API en mount, sincroniza a BD en cada cambio, fallback a `localStorage`.
+- **Endpoints bulk sync**: `POST /api/*/sync` — upsert completo del array.
+- **`lib/services/api/client.ts`** — helper `apiFetch` con revisor de fechas ISO → `Date` y helpers `api.get/post/put/delete/patch`.
+
+#### Hardening de seguridad
+
+- **Rate limiting**: 10 intentos de login por IP cada 15 minutos → HTTP 429 + `Retry-After`.
+- **`JWT_SECRET` obligatorio en producción** — error explícito al arrancar si no está definido.
+- **Whitelist de roles** con `Joi.valid()` en validadores de usuario.
+- **Prevención de enumeración**: login devuelve "Credenciales inválidas" tanto para email inexistente como para contraseña incorrecta.
+- **Headers HTTP** en `next.config.mjs`: `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, HSTS 2 años, CSP, `Referrer-Policy`, `Permissions-Policy`.
+- Contraseña mínima 8 caracteres.
+
+#### Notificaciones persistentes
+
+- **`lib/backend/services/notificacion.service.ts`** — `getNotificacionesByDestinatario`, `createNotificacion`, `marcarLeida`, `marcarTodasLeidas`, `rolToDestinatario`.
+- `GET/POST /api/notificaciones`, `PATCH /api/notificaciones/[id]`, `PATCH /api/notificaciones/marcar-todas`.
+- `useNotificaciones` reescrito: carga localStorage → reemplaza con API en mount → actualización optimista → fallback silencioso.
 - **`pnpm tsc --noEmit` → 0 errores.**
 
 ### v2.2 — Límite de retesteos y aviso de etapa mid-flight (opt18)
@@ -828,30 +817,3 @@ dashboard_v22/
 
 Actualmente el proyecto no requiere variables de entorno. Si en el futuro se conecta a una API externa, crear un archivo `.env.local` con las claves necesarias (no incluir en el repositorio).
 
----
-
-## Changelog
-
-### v2.2 — Migración Tailwind + Responsive + Dark Mode (opt5)
-
-**Responsive (mobile / tablet)**
-- `app/page.tsx`: badge de bloqueos y footer migrados a clases Tailwind; `min-h-[calc(100vh-124px)]` reemplaza inline style
-- `globals.css`: media query `@media (max-width: 640px)` ajusta modales a ancho total con `border-radius: 14px`; dialogs shadcn limitados a `92vh` en móvil
-
-**Dark mode más robusto**
-- `globals.css`: `color-scheme: dark` aplicado a `input`, `select` y `textarea` en `.dark` para que los controles nativos (ej. `<input type="date">`) respeten el tema oscuro
-- `globals.css`: transición suave `background-color / color 0.2s ease` al cambiar de tema
-- `header.tsx`: badge de notificaciones y botón de búsqueda eliminan `color:"#fff"` y `background:"var(--...)"` hardcodeados; todo pasa por clases semánticas Tailwind (`bg-chart-4`, `text-white`, `border-background`, etc.)
-
-**Limpieza de inline styles**
-- `header.tsx`: panel de notificaciones completo (~60 líneas de `style={{...}}`) → Tailwind; diálogo de logout (~40 líneas) → Tailwind
-- `hu-stats-cards.tsx`: archivo reescrito completamente en Tailwind (eliminados 3 objetos `React.CSSProperties`); colores de valores condicionales usando `text-chart-2 / text-chart-4 / text-muted-foreground`
-
-### v2.2 — Optimizaciones de código (opt4)
-- `historia-usuario-detail.tsx`: `HUBloqueos` + `HUHistorialPanel` extraídos como sub-componentes (~80 líneas, 4 variables de estado movidas)
-- `historias-table.tsx`: `HUFiltersPanel` extraído (~130 líneas, 21 props con contrato tipado)
-- `caso-prueba-card.tsx`: `TareaItem` extraído (~80 líneas, 2 variables de estado movidas)
-
-### v2.2 — Optimizaciones de código (opt3)
-- `nav-tab-group.tsx`: prop `badge?: number` añadida para mostrar contador visual en tabs
-- `casos-table.tsx`: `COMPLEJIDAD_CFG` eliminado del archivo, importado desde `@/lib/types`
