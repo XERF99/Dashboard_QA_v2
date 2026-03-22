@@ -15,6 +15,10 @@
 import { useState, useEffect, useRef } from "react"
 import { cargarDeStorage, guardarEnStorage } from "@/lib/storage"
 
+// Tiempo de espera antes de enviar el sync a la API (ms).
+// Evita lanzar una petición por cada carácter al editar campos de texto.
+const SYNC_DEBOUNCE_MS = 600
+
 export function useApiMirroredState<T>(
   storageKey: string,
   fallback: T,
@@ -25,6 +29,7 @@ export function useApiMirroredState<T>(
   const [state, setState]   = useState<T>(() => cargarDeStorage(storageKey, fallback))
   const [loaded, setLoaded] = useState(false)
   const isFirstSync         = useRef(true)
+  const debounceTimer       = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Paso 1: Carga inicial desde la API
   useEffect(() => {
@@ -40,17 +45,30 @@ export function useApiMirroredState<T>(
       })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Paso 2: Sincronizar a localStorage + API en cada cambio (después de la carga inicial)
+  // Paso 2: Sincronizar a localStorage + API en cada cambio (después de la carga inicial).
+  // localStorage se actualiza de inmediato; el sync a la API usa debounce para evitar
+  // disparar un POST por cada carácter al editar texto.
   useEffect(() => {
     if (!loaded) return
     if (isFirstSync.current) {
       isFirstSync.current = false
       return
     }
+
+    // Persistir en localStorage sin esperar
     guardarEnStorage(storageKey, state)
-    syncer(state).catch(err => {
-      console.warn(`[ApiMirror] Error sincronizando ${storageKey}:`, err)
-    })
+
+    // Cancelar el timer anterior y arrancar uno nuevo
+    if (debounceTimer.current) clearTimeout(debounceTimer.current)
+    debounceTimer.current = setTimeout(() => {
+      syncer(state).catch(err => {
+        console.warn(`[ApiMirror] Error sincronizando ${storageKey}:`, err)
+      })
+    }, SYNC_DEBOUNCE_MS)
+
+    return () => {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current)
+    }
   }, [state]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return [state, setState, loaded]

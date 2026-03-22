@@ -1,12 +1,12 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo } from "react"
 import { STORAGE_KEYS } from "@/lib/storage"
 import { historiasEjemplo, casosPruebaEjemplo, tareasEjemplo } from "@/lib/types"
 import { useApiMirroredState } from "@/lib/hooks/useApiMirroredState"
 import { api } from "@/lib/services/api/client"
 import type { HistoriaUsuario, CasoPrueba, Tarea, ConfigEtapas, ResultadoDef, TipoNotificacion, RolDestinatario, Notificacion } from "@/lib/types"
-import type { UserSafe } from "@/lib/auth-context"
+import type { UserSafe } from "@/lib/contexts/auth-context"
 import { createHUHandlers }          from "./domain/huHandlers"
 import { createCasoHandlers }        from "./domain/casoHandlers"
 import { createTareaHandlers }       from "./domain/tareaHandlers"
@@ -37,28 +37,33 @@ interface DomainDataOptions {
  * dentro de los módulos domain/*.
  */
 export function useDomainData({ user, configEtapas, configResultados, addToast, addNotificacion }: DomainDataOptions) {
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError]         = useState<string | null>(null)
+  const error: string | null = null
 
-  const [historias, setHistorias] = useApiMirroredState<HistoriaUsuario[]>(
+  const [historias, setHistorias, historiasLoaded] = useApiMirroredState<HistoriaUsuario[]>(
     STORAGE_KEYS.historias, historiasEjemplo,
     () => api.get<{ historias: HistoriaUsuario[] }>("/api/historias").then(r => r.historias),
     (data) => api.post("/api/historias/sync", { historias: data }).then(() => void 0),
   )
 
-  const [casos, setCasos] = useApiMirroredState<CasoPrueba[]>(
+  const [casos, setCasos, casosLoaded] = useApiMirroredState<CasoPrueba[]>(
     STORAGE_KEYS.casos, casosPruebaEjemplo,
     () => api.get<{ casos: CasoPrueba[] }>("/api/casos").then(r => r.casos),
     (data) => api.post("/api/casos/sync", { casos: data }).then(() => void 0),
   )
 
-  const [tareas, setTareas] = useApiMirroredState<Tarea[]>(
+  const [tareas, setTareas, tareasLoaded] = useApiMirroredState<Tarea[]>(
     STORAGE_KEYS.tareas, tareasEjemplo,
     () => api.get<{ tareas: Tarea[] }>("/api/tareas").then(r => r.tareas),
     (data) => api.post("/api/tareas/sync", { tareas: data }).then(() => void 0),
   )
 
-  const refetch = () => { setIsLoading(false) }
+  // true mientras alguno de los tres recursos no haya completado su carga inicial desde la API
+  const isLoading = useMemo(
+    () => !historiasLoaded || !casosLoaded || !tareasLoaded,
+    [historiasLoaded, casosLoaded, tareasLoaded]
+  )
+
+  const refetch = () => { /* no-op: la recarga la gestiona useApiMirroredState */ }
 
   const ctx: DomainCtx = {
     historias, casos,
@@ -70,7 +75,7 @@ export function useDomainData({ user, configEtapas, configResultados, addToast, 
 
   return {
     // Async shape — listos para backend
-    isLoading, setIsLoading, error, setError, refetch,
+    isLoading, error, refetch,
     // Estado
     historias, setHistorias,
     casos,     setCasos,

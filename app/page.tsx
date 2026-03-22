@@ -17,12 +17,12 @@ import {
   BarChart2, Settings, ShieldAlert, History, Layers, Monitor, Globe,
   Settings2, FlaskConical, ClipboardList, Home, CalendarRange,
 } from "lucide-react"
-import { useAuth } from "@/lib/auth-context"
+import { useAuth } from "@/lib/contexts/auth-context"
 import type { HistoriaUsuario } from "@/lib/types"
 import { useConfig } from "@/lib/hooks/useConfig"
 import { useNotificaciones } from "@/lib/hooks/useNotificaciones"
 import { useDomainData } from "@/lib/hooks/useDomainData"
-import { useIsHydrated } from "@/lib/storage"
+import { useIsHydrated } from "@/lib/hooks/useIsHydrated"
 import { Skeleton } from "@/components/ui/skeleton"
 import { HUDetailProvider } from "@/lib/contexts/hu-detail-context"
 

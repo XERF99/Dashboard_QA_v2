@@ -5,7 +5,14 @@
       "Bash(pnpm add:*)",
       "Bash(find /d/Documentos/TCS_Dashboard/dashboard_v22 -type f \\\\\\(-name error.tsx -o -name *[Ee]rror*[Bb]oundary* -o -name *[Ee]rror* \\\\\\) ! -path */node_modules/* ! -path */.claude/*)",
       "Bash(pnpm tsc:*)",
-      "Bash(wc -l lib/hooks/domain/*.ts lib/hooks/*.ts)"
+      "Bash(wc -l lib/hooks/domain/*.ts lib/hooks/*.ts)",
+      "Bash(node -e \"require\\(''bcryptjs''\\); require\\(''jose''\\); require\\(''joi''\\); console.log\\(''OK''\\)\")",
+      "Bash(npx prisma:*)",
+      "Bash(pnpm test:*)",
+      "Bash(pnpm test:run)",
+      "Bash(pnpm audit:*)",
+      "Bash(pnpm update:*)",
+      "Bash(node -e \"const p = require\\(''./node_modules/next/package.json''\\); console.log\\(p.version\\)\")"
     ]
   }
 }

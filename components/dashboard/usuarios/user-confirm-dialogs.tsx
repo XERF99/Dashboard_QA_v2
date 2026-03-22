@@ -1,6 +1,6 @@
 "use client"
 
-import { type User, PASSWORD_GENERICA } from "@/lib/auth-context"
+import { type User, PASSWORD_GENERICA } from "@/lib/contexts/auth-context"
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,

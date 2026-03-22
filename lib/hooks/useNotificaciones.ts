@@ -59,10 +59,12 @@ export function useNotificaciones() {
     })
       .then(r => {
         // Reemplazar el id temporal con el id real de la BD
-        setNotificaciones(p => p.map(n => n.id === tempId ? r.notificacion : n))
-        guardarEnStorage(STORAGE_KEYS.notificaciones,
-          notificaciones.map(n => n.id === tempId ? r.notificacion : n)
-        )
+        // Usar setter funcional para leer el estado actualizado (evita stale closure)
+        setNotificaciones(p => {
+          const updated = p.map(n => n.id === tempId ? r.notificacion : n)
+          guardarEnStorage(STORAGE_KEYS.notificaciones, updated)
+          return updated
+        })
       })
       .catch(() => { /* queda el optimista en localStorage */ })
   }

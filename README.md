@@ -1,4 +1,4 @@
-# QAControl — Dashboard de Gestión de Pruebas · v2.3
+# QAControl — Dashboard de Gestión de Pruebas · v2.8
 
 Sistema integral de gestión de calidad para equipos QA. Permite administrar Historias de Usuario, casos de prueba, flujos de aprobación, bloqueos y carga ocupacional del equipo, con control de acceso basado en roles.
 
@@ -8,7 +8,7 @@ Sistema integral de gestión de calidad para equipos QA. Permite administrar His
 
 | Capa | Tecnología |
 |---|---|
-| Framework | Next.js 16.1 (App Router) |
+| Framework | Next.js 16.2 (App Router) |
 | UI | React 19 + TypeScript 5.7 |
 | Estilos | Tailwind CSS v4 + OKLCH color system |
 | Componentes | shadcn/ui + Radix UI |
@@ -104,33 +104,79 @@ Sistema integral de gestión de calidad para equipos QA. Permite administrar His
 
 ---
 
-## Backend (PostgreSQL + Prisma + MVC + Joi)
+## Estructura del proyecto
+
+```
+dashboard_v22/
+├── app/                              ← Next.js App Router (rutas y API)
+│   ├── api/                          ← API Routes (auth, users, historias, casos, tareas, config, notificaciones)
+│   ├── globals.css
+│   ├── layout.tsx
+│   └── page.tsx
+│
+├── components/
+│   ├── layout/                       ← Componentes de layout global
+│   │   ├── error-boundary.tsx
+│   │   ├── theme-provider.tsx
+│   │   └── theme-switcher.tsx
+│   ├── auth/
+│   │   └── login-screen.tsx
+│   ├── dashboard/
+│   │   ├── analytics/                ← Home, KPIs, carga ocupacional
+│   │   ├── casos/                    ← Tabla y cards de casos de prueba
+│   │   ├── config/                   ← Roles, etapas, resultados, sprints, etc.
+│   │   ├── historias/                ← Tabla HU, detalle, formulario, CSV import
+│   │   ├── shared/                   ← Header, nav tabs, panels, toast container
+│   │   └── usuarios/                 ← Gestión de usuarios y perfil
+│   └── ui/                           ← shadcn/ui primitives (Button, Dialog, etc.)
+│
+├── lib/
+│   ├── backend/                      ← Código server-side exclusivo
+│   │   ├── middleware/               ← auth.middleware.ts, rate-limit.ts
+│   │   ├── services/                 ← auth, historia, caso, tarea, config, notificacion, sprint, metricas
+│   │   ├── validators/               ← Joi: auth, historia, caso, tarea, config
+│   │   └── prisma.ts
+│   ├── contexts/                     ← Todos los React Contexts
+│   │   ├── auth-context.tsx          ← AuthProvider, useAuth, User, permisos
+│   │   ├── theme-context.tsx         ← ThemeProvider, useTheme
+│   │   └── hu-detail-context.tsx     ← HUDetailProvider
+│   ├── hooks/                        ← Todos los hooks (dominio + UI)
+│   │   ├── domain/                   ← Handlers: huHandlers, casoHandlers, tareaHandlers
+│   │   ├── useApiMirroredState.ts
+│   │   ├── useConfig.ts
+│   │   ├── useDomainData.ts
+│   │   ├── useHistoriasFilters.ts
+│   │   ├── useHistoriasVisibles.ts
+│   │   ├── useHUModals.ts
+│   │   ├── useIsHydrated.ts
+│   │   ├── useListConfig.ts
+│   │   ├── useNotificaciones.ts
+│   │   ├── useTareaForm.ts
+│   │   ├── useToast.ts
+│   │   ├── use-mobile.ts
+│   │   └── use-toast.ts
+│   ├── services/
+│   │   ├── api/                      ← client.ts + servicios API
+│   │   └── localStorage/             ← Servicios localStorage (fallback)
+│   ├── types/                        ← Tipos TypeScript del dominio
+│   ├── utils/                        ← date-utils, domain, user-utils
+│   ├── constants/                    ← badge-paleta, index
+│   ├── export/                       ← Exportación a CSV/Excel
+│   └── storage.ts                    ← localStorage helpers + STORAGE_KEYS
+│
+├── prisma/                           ← Schema Prisma + seed
+├── public/
+└── tests/                            ← 146 tests Vitest
+```
+
+## Backend (PostgreSQL + Prisma + MVC + Joi/Zod)
 
 El backend corre como **API Routes de Next.js** dentro del mismo proyecto, siguiendo una arquitectura MVC.
 El sistema está **completamente conectado a PostgreSQL** — login, datos y configuración se sincronizan con la DB en tiempo real.
 
-### Estructura
+### Rutas API
 
 ```
-lib/backend/
-  prisma.ts                        ← singleton PrismaClient
-  middleware/
-    auth.middleware.ts             ← JWT (jose): signToken, verifyToken, requireAuth, requireAdmin
-    rate-limit.ts                  ← Rate limiter en memoria por IP (10 req / 15 min)
-  services/
-    auth.service.ts                ← login, logout, cambiarPassword, createUser, resetPassword
-    historia.service.ts            ← CRUD HistoriaUsuario
-    caso.service.ts                ← CRUD CasoPrueba
-    tarea.service.ts               ← CRUD Tarea
-    config.service.ts              ← upsert singleton Config
-    notificacion.service.ts        ← CRUD Notificacion + rolToDestinatario + marcarTodasLeidas
-  validators/
-    auth.validator.ts              ← Joi: login, cambiarPassword, createUser, updateUser
-    historia.validator.ts          ← Joi: createHistoria, updateHistoria
-    caso.validator.ts              ← Joi: createCaso, updateCaso
-    tarea.validator.ts             ← Joi: createTarea, updateTarea
-    config.validator.ts            ← Joi: updateConfig
-
 app/api/
   auth/login/route.ts              ← POST  /api/auth/login
   auth/logout/route.ts             ← POST  /api/auth/logout
@@ -148,6 +194,11 @@ app/api/
   notificaciones/route.ts          ← GET   /api/notificaciones  · POST /api/notificaciones
   notificaciones/[id]/route.ts     ← PATCH /api/notificaciones/[id]  (marcar leída)
   notificaciones/marcar-todas/route.ts ← PATCH /api/notificaciones/marcar-todas
+  metricas/route.ts                ← GET   /api/metricas
+  sprints/route.ts                 ← GET   /api/sprints  · POST  /api/sprints
+  sprints/[id]/route.ts            ← GET · PUT · DELETE  /api/sprints/[id]
+  export/route.ts                  ← GET   /api/export?tipo=historias|casos[&sprint=...][&estado=...]
+  historias/[id]/historial/route.ts ← GET  /api/historias/[id]/historial[?page=1&limit=20]
 ```
 
 ### Schema Prisma
@@ -200,7 +251,7 @@ El sistema implementa múltiples capas de defensa en los endpoints de la API.
 | Bloqueo por intentos | Cuenta bloqueada automáticamente tras 5 intentos fallidos |
 | Rate limiting | Máximo 10 intentos de login por IP cada 15 minutos → HTTP 429 |
 | Control de acceso | Guards `requireAuth` y `requireAdmin` en todos los endpoints |
-| Validación de entrada | Joi en todos los POST/PUT — rechaza campos desconocidos y tipos inválidos |
+| Validación de entrada | Joi en POST/PUT de auth/CRUD; Zod en rutas `/sync` — rechazan payloads inválidos con HTTP 400 |
 | Whitelist de roles | El campo `rol` solo acepta: `owner`, `admin`, `qa_lead`, `qa`, `viewer` |
 | Prevención de enumeración | El login devuelve "Credenciales inválidas" tanto para email inexistente como para contraseña incorrecta |
 | Seguridad HTTP | Headers configurados en `next.config.mjs`: `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Strict-Transport-Security`, `Content-Security-Policy`, `Referrer-Policy`, `Permissions-Policy` |
@@ -234,7 +285,7 @@ next.config.mjs         ← Headers de seguridad HTTP
 
 ## Tests
 
-El proyecto cuenta con **99 tests automatizados** en 9 archivos usando Vitest 3 + React Testing Library 16. Los tests de API routes corren en entorno `node`; los de UI/hooks en `jsdom`.
+El proyecto cuenta con **146 tests automatizados** en 14 archivos usando Vitest 3 + React Testing Library 16. Los tests de API routes corren en entorno `node`; los de UI/hooks en `jsdom`.
 
 ### Comandos
 
@@ -249,20 +300,93 @@ pnpm test:ui     # Interfaz visual de Vitest
 | Archivo | Entorno | Tests | Qué cubre |
 |---|---|---|---|
 | `tests/auth-login.test.ts` | jsdom | 12 | Login, bloqueo por intentos, guards de addUser/deleteUser |
-| `tests/casoHandlers.test.ts` | jsdom | 14 | Flujo de aprobación, retesteo, notificaciones por rol |
-| `tests/useHistoriasVisibles.test.ts` | jsdom | 12 | Scoping por rol: Owner, Admin, QA Lead, QA |
-| `tests/api-auth-endpoints.test.ts` | node | 7 | GET /me · POST /logout · PUT /password |
+| `tests/casoHandlers.test.ts` | jsdom | 15 | Flujo de aprobación, retesteo, notificaciones por rol |
+| `tests/useHistoriasVisibles.test.ts` | jsdom | 14 | Scoping por rol: Owner, Admin, QA Lead, QA |
+| `tests/api-auth-endpoints.test.ts` | node | 9 | GET /me · POST /logout · PUT /password |
 | `tests/api-historias.test.ts` | node | 10 | CRUD + sync de historias de usuario |
 | `tests/api-casos.test.ts` | node | 11 | CRUD + filtros + sync de casos de prueba |
 | `tests/api-tareas.test.ts` | node | 12 | CRUD + filtros + sync de tareas |
 | `tests/api-users.test.ts` | node | 10 | CRUD usuarios + reset-password + desbloquear |
-| `tests/api-config.test.ts` | node | 7 | GET/PUT config con guards de rol |
+| `tests/api-config.test.ts` | node | 6 | GET/PUT config con guards de rol |
+| `tests/api-metricas.test.ts` | node | 5 | Agregaciones del dashboard QA |
+| `tests/api-sprints.test.ts` | node | 13 | CRUD sprints + sprint activo + validaciones |
+| `tests/api-notificaciones.test.ts` | node | 11 | GET/POST/PATCH notificaciones, scoping por rol |
+| `tests/api-export.test.ts` | node | 10 | Export CSV historias/casos + filtros + cabecera |
+| `tests/api-historial.test.ts` | node | 8 | GET historial paginado: 401, 404, orden desc, paginación, límites |
 
 Los tests de API usan **Prisma y servicios mockeados** con `vi.mock` y generan JWTs reales con `signToken` — no requieren base de datos activa.
 
 ---
 
 ## Changelog
+
+### v2.8 — Log de auditoría paginado para Historias de Usuario
+
+#### Nueva API
+
+- **`GET /api/historias/[id]/historial`** — expone el campo `historial` (JSON embebido en `HistoriaUsuario`) como endpoint paginado. Parámetros opcionales: `page` (default `1`) y `limit` (default `20`, máx `100`). Los eventos se ordenan por `fecha` descendente (más reciente primero). Devuelve `{ historial, total, page, limit, pages }`. Protegido con `requireAuth`. No requiere cambio de schema ni dependencias nuevas.
+
+#### Tests
+
+- **8 tests nuevos** en `tests/api-historial.test.ts`: 401 sin token, 404 historia inexistente, estructura completa de respuesta, orden descendente por fecha, paginación `page=2&limit=2`, límite máximo clampado a 100, historial vacío (total 0, pages 1), página fuera de rango (array vacío).
+- **`pnpm tsc --noEmit` → 0 errores.**
+- **146/146 tests en verde.**
+
+---
+
+### v2.7 — APIs de Métricas, Sprints y Export CSV
+
+#### Nuevas APIs
+
+- **`GET /api/metricas`** — endpoint de agregaciones para el dashboard QA. Devuelve en una sola llamada: historias por estado, historias por sprint, casos por `estadoAprobacion`, tareas por estado, tareas pendientes/bloqueadas agrupadas por asignado, velocidad por sprint (puntos de historias "exitosas") y tasa de defectos (% de tareas con resultado fallido). Protegido con `requireAuth`.
+- **`GET /api/sprints`** — lista todos los sprints ordenados por `fechaInicio` desc. Acepta `?activo=true` para devolver solo el sprint cuyo rango `[fechaInicio, fechaFin]` incluye la fecha actual.
+- **`POST /api/sprints`** — crea un nuevo sprint. Valida que `nombre`, `fechaInicio` y `fechaFin` estén presentes y que `fechaInicio < fechaFin`.
+- **`GET/PUT/DELETE /api/sprints/[id]`** — CRUD individual de sprints.
+- **`GET /api/export`** — exporta historias o casos a CSV. Parámetros: `tipo=historias|casos` (requerido), `sprint` (filtro opcional, solo historias), `estado` (filtro opcional). Devuelve `Content-Type: text/csv` con `Content-Disposition: attachment`. No requiere dependencias externas — generación CSV nativa.
+
+#### Nuevos servicios backend
+
+- **`lib/backend/services/metricas.service.ts`** — `getMetricas()` usando `prisma.groupBy` y `prisma.count` en paralelo con `Promise.all`.
+- **`lib/backend/services/sprint.service.ts`** — `getAllSprints`, `getSprintById`, `getSprintActivo`, `createSprint`, `updateSprint`, `deleteSprint`.
+
+#### Tests
+
+- **39 tests nuevos** en 4 archivos: `api-metricas.test.ts` (5), `api-sprints.test.ts` (13), `api-notificaciones.test.ts` (11), `api-export.test.ts` (10).
+- **`pnpm tsc --noEmit` → 0 errores.**
+- **138/138 tests en verde.**
+
+---
+
+### v2.6 — Reorganización de carpetas
+
+- **`components/layout/`** — nueva carpeta para componentes de layout global. Movidos desde `components/`: `error-boundary.tsx`, `theme-provider.tsx`, `theme-switcher.tsx`.
+- **`lib/hooks/`** — todos los hooks en un único lugar. Movidos desde la raíz `hooks/`: `use-mobile.ts`, `use-toast.ts`. Extraído `useIsHydrated` de `lib/storage.ts` a `lib/hooks/useIsHydrated.ts`.
+- **`lib/contexts/`** — todos los contextos React en un único lugar. Movidos desde `lib/`: `auth-context.tsx`, `theme-context.tsx` (junto al existente `hu-detail-context.tsx`).
+- **Carpetas eliminadas**: `hooks/` (raíz, redundante) y `styles/` (redundante con `app/globals.css`).
+- **Imports actualizados** en 17 archivos para reflejar las nuevas rutas.
+- **`pnpm tsc --noEmit` → 0 errores.**
+- **99/99 tests en verde.**
+
+### v2.5 — Actualización de seguridad: Next.js 16.2.1
+
+- **`next` actualizado de `16.1.6` → `16.2.1`** — parcha 5 vulnerabilidades reportadas por `pnpm audit`:
+  - HTTP request smuggling en `rewrites` (moderate — GHSA-ggv3-7p47-pfv8)
+  - Crecimiento ilimitado del cache de `next/image` — DoS de disco (moderate — GHSA-3x4c-7xq6-9pq8)
+  - Buffering ilimitado en `postponed resume` — DoS (moderate — GHSA-h27x-g6w4-24gq)
+  - `null origin` bypasea CSRF checks en Server Actions (moderate — GHSA-mq59-m269-xvcx)
+  - `null origin` bypasea CSRF del WebSocket HMR en dev (low — GHSA-jcc7-9wpm-mj36)
+- **`pnpm audit` → 0 vulnerabilidades conocidas.**
+- **`pnpm tsc --noEmit` → 0 errores.**
+- **99/99 tests en verde.**
+
+### v2.4 — Optimizaciones de rendimiento y corrección de bugs (optimizaciones)
+
+- **Debounce en `useApiMirroredState`** (`lib/hooks/useApiMirroredState.ts`): el sync a la API ahora espera 600 ms desde el último cambio de estado antes de enviar la petición. localStorage se actualiza de inmediato (sin delay). Esto reduce ~90 % las llamadas a `/sync` durante edición de texto.
+- **Fix stale closure en `useNotificaciones`** (`lib/hooks/useNotificaciones.ts`): `addNotificacion` usaba el valor capturado de `notificaciones` en el closure del `.then()`, provocando que `guardarEnStorage` escribiera el array desactualizado tras reemplazar el id temporal. Corregido usando el setter funcional de `setNotificaciones` para leer el estado más reciente.
+- **`isLoading` real en `useDomainData`** (`lib/hooks/useDomainData.ts`): el hook ahora lee el tercer valor (`loaded`) de los tres `useApiMirroredState` y expone `isLoading = !historiasLoaded || !casosLoaded || !tareasLoaded`. Antes siempre era `false`. Eliminados `setIsLoading` y `setError` del retorno (no eran usados externamente).
+- **Rutas `/sync` en batch** (`app/api/*/sync/route.ts`): los tres endpoints de sincronización reemplazaron el loop secuencial de `upsert` por una estrategia de 4 queries fijas: `deleteMany` + `findMany` (IDs existentes) + `createMany` (nuevos) + `Promise.all(updates)` (paralelo). De `O(n)` queries secuenciales a consultas paralelas independientes del tamaño del array.
+- **Validación Zod en rutas `/sync`**: los tres endpoints ahora validan el payload con un schema Zod antes de tocar la BD. Payload inválido retorna HTTP 400 con detalles del error. No requirió instalar dependencias (Zod ya estaba en el proyecto).
+- **`pnpm tsc --noEmit` → 0 errores.**
 
 ### v2.3 — Notificaciones conectadas al backend (notif-backend)
 - **`lib/backend/services/notificacion.service.ts`** — nuevo service con `getNotificacionesByDestinatario`, `createNotificacion`, `marcarLeida`, `marcarTodasLeidas` y `rolToDestinatario` (mapea `owner/admin` → `"admin"`, resto → `"qa"`).

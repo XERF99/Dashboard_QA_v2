@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { useAuth, type User } from "@/lib/auth-context"
+import { useAuth, type User } from "@/lib/contexts/auth-context"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"

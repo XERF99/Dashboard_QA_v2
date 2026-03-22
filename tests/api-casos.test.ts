@@ -20,14 +20,18 @@ vi.mock("@/lib/backend/services/caso.service", () => ({
 vi.mock("@/lib/backend/prisma", () => ({
   prisma: {
     casoPrueba: {
-      deleteMany: vi.fn(),
-      upsert:     vi.fn(),
+      deleteMany:  vi.fn(),
+      findMany:    vi.fn(),
+      createMany:  vi.fn(),
+      update:      vi.fn(),
     },
     $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) =>
       fn({
         casoPrueba: {
-          deleteMany: vi.fn(),
-          upsert:     vi.fn(),
+          deleteMany:  vi.fn(),
+          findMany:    vi.fn().mockResolvedValue([]),
+          createMany:  vi.fn(),
+          update:      vi.fn(),
         },
       })
     ),

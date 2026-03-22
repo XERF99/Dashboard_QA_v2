@@ -7,7 +7,7 @@
 import bcrypt from "bcryptjs"
 import { prisma } from "@/lib/backend/prisma"
 import { signToken } from "@/lib/backend/middleware/auth.middleware"
-import { PASSWORD_GENERICA } from "@/lib/auth-context"
+import { PASSWORD_GENERICA } from "@/lib/contexts/auth-context"
 
 const MAX_INTENTOS = 5
 const SALT_ROUNDS  = 10

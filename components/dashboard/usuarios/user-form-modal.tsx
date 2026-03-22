@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useAuth, PASSWORD_GENERICA, type User } from "@/lib/auth-context"
+import { useAuth, PASSWORD_GENERICA, type User } from "@/lib/contexts/auth-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {

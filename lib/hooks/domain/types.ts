@@ -1,5 +1,5 @@
 import type { HistoriaUsuario, CasoPrueba, Tarea, ConfigEtapas, ResultadoDef, TipoNotificacion, RolDestinatario, Notificacion } from "@/lib/types"
-import type { UserSafe } from "@/lib/auth-context"
+import type { UserSafe } from "@/lib/contexts/auth-context"
 
 export type ToastPayload = { type: "success" | "warning" | "error" | "info"; title: string; desc?: string }
 

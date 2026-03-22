@@ -1,6 +1,6 @@
 "use client"
 
-import { useTheme, type Theme } from "@/lib/theme-context"
+import { useTheme, type Theme } from "@/lib/contexts/theme-context"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,

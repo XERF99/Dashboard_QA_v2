@@ -12,7 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { User, Mail, KeyRound, Check, Info } from "lucide-react"
-import { useAuth } from "@/lib/auth-context"
+import { useAuth } from "@/lib/contexts/auth-context"
 import { getInitials, getRoleIcon } from "@/lib/utils/user-utils"
 
 interface PerfilDialogProps {

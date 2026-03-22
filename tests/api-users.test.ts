@@ -128,7 +128,7 @@ describe("PUT /api/users/[id]", () => {
   })
 
   it("reset-password → 200 con contraseña genérica", async () => {
-    vi.mocked(resetPasswordService).mockResolvedValueOnce({ success: true, nuevaPassword: "Qatesting1" })
+    vi.mocked(resetPasswordService).mockResolvedValueOnce({ success: true })
 
     const res  = await PUT(
       makeReq("PUT", "/api/users/usr-099?action=reset-password", {}, adminToken),

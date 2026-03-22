@@ -8,7 +8,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { renderHook, act } from "@testing-library/react"
 import React from "react"
-import { AuthProvider, useAuth, usuariosIniciales, PASSWORD_GENERICA } from "@/lib/auth-context"
+import { AuthProvider, useAuth, usuariosIniciales, PASSWORD_GENERICA } from "@/lib/contexts/auth-context"
 
 // ── Mock de fetch ─────────────────────────────────────────
 type LoginResult = { success: boolean; error?: string; bloqueadoAhora?: boolean; userId?: string; nombre?: string; debeCambiar?: boolean; user?: object }

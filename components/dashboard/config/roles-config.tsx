@@ -10,7 +10,7 @@ import {
   PERMISOS_INFO,
   type RoleDef,
   type PermisoId,
-} from "@/lib/auth-context"
+} from "@/lib/contexts/auth-context"
 
 import { BADGE_PALETA } from "@/lib/constants/badge-paleta"
 
