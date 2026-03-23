@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react"
 import { usePersistedState, STORAGE_KEYS } from "@/lib/storage"
+import { api } from "@/lib/services/api/client"
 
 // ── Permisos disponibles ──────────────────────────────────
 export type PermisoId =
@@ -215,9 +216,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // ── Restaurar sesión desde cookie JWT al recargar ─────
   useEffect(() => {
-    fetch("/api/auth/me")
-      .then(res => res.ok ? res.json() : null)
-      .then(data => { if (data?.user) setUser(data.user) })
+    api.get<{ user: UserSafe }>("/api/auth/me")
+      .then(data => setUser(data.user))
       .catch(() => {})
       .finally(() => setSessionLoading(false))
   }, [])

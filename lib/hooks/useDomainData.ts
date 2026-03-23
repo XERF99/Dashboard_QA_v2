@@ -37,25 +37,25 @@ interface DomainDataOptions {
  * dentro de los módulos domain/*.
  */
 export function useDomainData({ user, configEtapas, configResultados, addToast, addNotificacion }: DomainDataOptions) {
-  const error: string | null = null
-
-  const [historias, setHistorias, historiasLoaded] = useApiMirroredState<HistoriaUsuario[]>(
+  const [historias, setHistorias, historiasLoaded, historiasError] = useApiMirroredState<HistoriaUsuario[]>(
     STORAGE_KEYS.historias, historiasEjemplo,
     () => api.get<{ historias: HistoriaUsuario[] }>("/api/historias").then(r => r.historias),
     (data) => api.post("/api/historias/sync", { historias: data }).then(() => void 0),
   )
 
-  const [casos, setCasos, casosLoaded] = useApiMirroredState<CasoPrueba[]>(
+  const [casos, setCasos, casosLoaded, casosError] = useApiMirroredState<CasoPrueba[]>(
     STORAGE_KEYS.casos, casosPruebaEjemplo,
     () => api.get<{ casos: CasoPrueba[] }>("/api/casos").then(r => r.casos),
     (data) => api.post("/api/casos/sync", { casos: data }).then(() => void 0),
   )
 
-  const [tareas, setTareas, tareasLoaded] = useApiMirroredState<Tarea[]>(
+  const [tareas, setTareas, tareasLoaded, tareasError] = useApiMirroredState<Tarea[]>(
     STORAGE_KEYS.tareas, tareasEjemplo,
     () => api.get<{ tareas: Tarea[] }>("/api/tareas").then(r => r.tareas),
     (data) => api.post("/api/tareas/sync", { tareas: data }).then(() => void 0),
   )
+
+  const error = historiasError ?? casosError ?? tareasError ?? null
 
   // true mientras alguno de los tres recursos no haya completado su carga inicial desde la API
   const isLoading = useMemo(
@@ -66,7 +66,7 @@ export function useDomainData({ user, configEtapas, configResultados, addToast, 
   const refetch = () => { /* no-op: la recarga la gestiona useApiMirroredState */ }
 
   const ctx: DomainCtx = {
-    historias, casos,
+    historias, casos, tareas,
     setHistorias: setHistorias as DomainCtx["setHistorias"],
     setCasos:     setCasos     as DomainCtx["setCasos"],
     setTareas:    setTareas    as DomainCtx["setTareas"],

@@ -3,7 +3,7 @@ import type { Bloqueo } from "@/lib/types"
 import type { DomainCtx } from "./types"
 
 /** Handlers de gestión de Bloqueos: HU, casos y tareas. */
-export function createBloqueoHandlers({ setHistorias, setCasos, setTareas, user, addToast }: DomainCtx) {
+export function createBloqueoHandlers({ tareas, setHistorias, setCasos, setTareas, user, addToast }: DomainCtx) {
   const handleAddBloqueo = (huId: string, b: Bloqueo) => {
     setHistorias(p => p.map(h => h.id !== huId ? h : {
       ...h, bloqueos: [...h.bloqueos, b],
@@ -38,21 +38,19 @@ export function createBloqueoHandlers({ setHistorias, setCasos, setTareas, user,
   }
 
   const handleResolverBloqueoTarea = (tareaId: string, bId: string, nota: string) => {
-    let huId = ""
+    const tarea = tareas.find(t => t.id === tareaId)
+    if (!tarea) return
+    const huId = tarea.huId
     setTareas(prev => prev.map(t => {
       if (t.id !== tareaId) return t
-      huId = t.huId
       const bloqueos = t.bloqueos.map(b => b.id === bId
         ? { ...b, resuelto: true, fechaResolucion: new Date(), resueltoPor: user?.nombre, notaResolucion: nota }
         : b
       )
       return { ...t, bloqueos, estado: bloqueos.some(b => !b.resuelto) ? "bloqueada" as const : "en_progreso" as const }
     }))
-    setTimeout(() => {
-      if (!huId) return
-      const ev = crearEvento("bloqueo_resuelto", `Bloqueo de tarea resuelto: ${nota.slice(0, 80)}`, user?.nombre || "Sistema")
-      setHistorias(prev => prev.map(h => h.id === huId ? { ...h, historial: [...h.historial, ev] } : h))
-    }, 50)
+    const ev = crearEvento("bloqueo_resuelto", `Bloqueo de tarea resuelto: ${nota.slice(0, 80)}`, user?.nombre || "Sistema")
+    setHistorias(prev => prev.map(h => h.id === huId ? { ...h, historial: [...h.historial, ev] } : h))
     addToast({ type: "success", title: "Bloqueo resuelto", desc: nota.slice(0, 60) })
   }
 

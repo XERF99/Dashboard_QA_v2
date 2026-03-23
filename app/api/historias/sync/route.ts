@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { requireAuth } from "@/lib/backend/middleware/auth.middleware"
 import { prisma } from "@/lib/backend/prisma"
+import { invalidateMetricasCache } from "@/lib/backend/metricas-cache"
 import type { HistoriaUsuario } from "@/lib/types"
 
 const SyncBodySchema = z.object({
@@ -26,19 +27,18 @@ export async function POST(request: NextRequest) {
   await prisma.$transaction(async (tx) => {
     const ids = historias.map(h => h.id)
 
-    // 1. Eliminar registros que ya no están en el array
-    await tx.historiaUsuario.deleteMany({ where: { id: { notIn: ids } } })
-
     if (ids.length === 0) return
 
-    // 2. Obtener IDs que ya existen en la BD (1 query)
+    // 1. Obtener IDs que ya existen en la BD (1 query)
+    // Nota: los deletes se gestionan de forma explícita desde los handlers
+    // para evitar borrar registros de otros usuarios en entornos multi-usuario.
     const existing = await tx.historiaUsuario.findMany({
       where: { id: { in: ids } },
       select: { id: true },
     })
     const existingSet = new Set(existing.map(h => h.id))
 
-    // 3. Separar en creates y updates
+    // 2. Separar en creates y updates
     const toCreate = historias
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       .filter(h => !existingSet.has(h.id))
@@ -46,13 +46,13 @@ export async function POST(request: NextRequest) {
 
     const toUpdate = historias.filter(h => existingSet.has(h.id))
 
-    // 4. Insert en batch para los nuevos (1 query)
+    // 3. Insert en batch para los nuevos (1 query)
     if (toCreate.length > 0) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await tx.historiaUsuario.createMany({ data: toCreate as any[] })
     }
 
-    // 5. Updates en paralelo (N queries paralelas, no secuenciales)
+    // 4. Updates en paralelo (N queries paralelas, no secuenciales)
     await Promise.all(toUpdate.map(h => {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { casos, ...data } = h as HistoriaUsuario & { casos?: unknown }
@@ -61,5 +61,6 @@ export async function POST(request: NextRequest) {
     }))
   })
 
+  invalidateMetricasCache()
   return NextResponse.json({ success: true, count: historias.length })
 }

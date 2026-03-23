@@ -1,9 +1,10 @@
 import { crearEvento } from "@/lib/types"
 import type { CasoPrueba, EstadoAprobacion, EtapaEjecucion } from "@/lib/types"
 import type { DomainCtx } from "./types"
+import { api } from "@/lib/services/api/client"
 
 /** Handlers de gestión de Casos de Prueba: CRUD, aprobación y ejecución. */
-export function createCasoHandlers({ historias, casos, setHistorias, setCasos, setTareas, user, addToast, addNotificacion }: DomainCtx) {
+export function createCasoHandlers({ historias, casos, tareas, setHistorias, setCasos, setTareas, user, addToast, addNotificacion }: DomainCtx) {
   const handleAddCaso = (caso: CasoPrueba) => {
     setCasos(prev => [...prev, caso])
     setHistorias(p => p.map(h => h.id !== caso.huId ? h : {
@@ -27,6 +28,7 @@ export function createCasoHandlers({ historias, casos, setHistorias, setCasos, s
     setHistorias(prev => prev.map(h => h.id !== huId ? h : {
       ...h, casosIds: h.casosIds.filter(id => id !== casoId), historial: [...h.historial, ev],
     }))
+    api.delete(`/api/casos/${casoId}`).catch(() => console.warn("[Casos] Error al eliminar caso en API"))
     addToast({ type: "warning", title: "Caso eliminado" })
   }
 
@@ -129,12 +131,19 @@ export function createCasoHandlers({ historias, casos, setHistorias, setCasos, s
   }
 
   const handleCompletarCasoEtapa = (casoId: string, etapa: EtapaEjecucion, resultado: string, comentarioFallo?: string) => {
-    let huIdAfectada = ""
-    let tituloAfectado = ""
+    const tareasConBloqueo = tareas.filter(t => t.casoPruebaId === casoId && t.bloqueos.some(b => !b.resuelto))
+    if (tareasConBloqueo.length > 0) {
+      addToast({ type: "error", title: "Caso bloqueado", desc: `Hay ${tareasConBloqueo.length} tarea${tareasConBloqueo.length !== 1 ? "s" : ""} con bloqueos activos. Resuélvelos antes de completar el caso.` })
+      return
+    }
+
+    const casoAfectado = casos.find(c => c.id === casoId)
+    if (!casoAfectado) return
+    const huIdAfectada = casoAfectado.huId
+    const tituloAfectado = casoAfectado.titulo
+
     setCasos(prev => prev.map(c => {
       if (c.id !== casoId) return c
-      huIdAfectada = c.huId
-      tituloAfectado = c.titulo
       return {
         ...c, resultadosPorEtapa: c.resultadosPorEtapa.map(r => {
           if (r.etapa !== etapa) return r
@@ -150,19 +159,19 @@ export function createCasoHandlers({ historias, casos, setHistorias, setCasos, s
       }
     }))
 
-    if (huIdAfectada) {
-      const ev = crearEvento("caso_completado", `Caso "${tituloAfectado}" completado: ${resultado} — etapa ${etapa}`, user?.nombre || "Sistema")
-      setHistorias(prev => prev.map(h => h.id === huIdAfectada ? { ...h, historial: [...h.historial, ev] } : h))
-    }
+    const ev = crearEvento("caso_completado", `Caso "${tituloAfectado}" completado: ${resultado} — etapa ${etapa}`, user?.nombre || "Sistema")
+    setHistorias(prev => prev.map(h => h.id === huIdAfectada ? { ...h, historial: [...h.historial, ev] } : h))
 
     addToast({ type: resultado === "exitoso" ? "success" : resultado === "fallido" ? "error" : "info", title: `Caso: ${resultado}`, desc: `Etapa ${etapa}` })
   }
 
   const handleRetestearCaso = (casoId: string, etapa: EtapaEjecucion, comentarioCorreccion: string) => {
-    let huIdAfectada = ""
+    const casoAfectado = casos.find(c => c.id === casoId)
+    if (!casoAfectado) return
+    const huIdAfectada = casoAfectado.huId
+
     setCasos(prev => prev.map(c => {
       if (c.id !== casoId) return c
-      huIdAfectada = c.huId
       return {
         ...c, resultadosPorEtapa: c.resultadosPorEtapa.map(r => {
           if (r.etapa !== etapa || r.resultado === "pendiente") return r

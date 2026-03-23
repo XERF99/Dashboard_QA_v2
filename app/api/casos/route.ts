@@ -3,7 +3,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@/lib/backend/middleware/auth.middleware"
 import { createCasoSchema } from "@/lib/backend/validators/caso.validator"
-import { getAllCasos, createCaso } from "@/lib/backend/services/caso.service"
+import { getAllCasos, createCaso, getCasosByHU } from "@/lib/backend/services/caso.service"
+import { invalidateMetricasCache } from "@/lib/backend/metricas-cache"
 
 export async function GET(request: NextRequest) {
   const payload = await requireAuth(request)
@@ -13,7 +14,6 @@ export async function GET(request: NextRequest) {
   const huId = searchParams.get("huId")
 
   if (huId) {
-    const { getCasosByHU } = await import("@/lib/backend/services/caso.service")
     const casos = await getCasosByHU(huId)
     return NextResponse.json({ casos })
   }
@@ -33,5 +33,6 @@ export async function POST(request: NextRequest) {
   }
 
   const caso = await createCaso(value)
+  invalidateMetricasCache()
   return NextResponse.json({ caso }, { status: 201 })
 }

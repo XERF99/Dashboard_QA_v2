@@ -12,6 +12,11 @@ import { PRIORIDAD_CFG, fmtCorto } from "@/lib/types"
 import type { HistoriaUsuario, CasoPrueba, Tarea } from "@/lib/types"
 import { Paginador } from "@/components/ui/paginator"
 
+// ── Escape HTML para evitar XSS en exportaciones PDF ──────
+function esc(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;")
+}
+
 // ── Tipos internos ───────────────────────────────────────────
 type NivelBloqueo  = "hu" | "caso" | "tarea"
 type FiltroEstado  = "activos" | "resueltos" | "todos"
@@ -322,13 +327,13 @@ export function BloqueosPanel({
     const fecha = new Date().toLocaleDateString("es-ES", { day: "2-digit", month: "long", year: "numeric" })
     const filas = filtrados.map(item => `
       <tr>
-        <td><span class="badge nivel-${item.nivel}">${NIVEL_CFG[item.nivel].label}</span></td>
-        <td><strong>${item.huCodigo}</strong><br/><span class="sub">${item.huTitulo}</span></td>
-        <td>${item.descripcion}</td>
-        <td>${item.reportadoPor}<br/><span class="sub">${fmtCorto(item.fecha)}</span></td>
-        <td>${item.casoTitulo ?? ""}${item.tareaTitulo ? `<br/><span class="sub">${item.tareaTitulo}</span>` : ""}</td>
+        <td><span class="badge nivel-${item.nivel}">${esc(NIVEL_CFG[item.nivel].label)}</span></td>
+        <td><strong>${esc(item.huCodigo)}</strong><br/><span class="sub">${esc(item.huTitulo)}</span></td>
+        <td>${esc(item.descripcion)}</td>
+        <td>${esc(item.reportadoPor)}<br/><span class="sub">${fmtCorto(item.fecha)}</span></td>
+        <td>${esc(item.casoTitulo ?? "")}${item.tareaTitulo ? `<br/><span class="sub">${esc(item.tareaTitulo)}</span>` : ""}</td>
         <td><span class="estado ${item.resuelto ? "resuelto" : "activo"}">${item.resuelto ? "Resuelto" : "Activo"}</span>
-          ${item.notaResolucion ? `<br/><span class="sub">${item.notaResolucion}</span>` : ""}</td>
+          ${item.notaResolucion ? `<br/><span class="sub">${esc(item.notaResolucion)}</span>` : ""}</td>
       </tr>`).join("")
     const html = `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"/>
       <title>Bloqueos ${fecha}</title>

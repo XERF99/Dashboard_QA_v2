@@ -1,4 +1,4 @@
-# QAControl — Dashboard de Gestión de Pruebas · v2.8
+# QAControl — Dashboard de Gestión de Pruebas · v2.17
 
 Sistema integral de gestión de calidad para equipos QA. Permite administrar Historias de Usuario, casos de prueba, flujos de aprobación, bloqueos y carga ocupacional del equipo, con control de acceso basado en roles.
 
@@ -156,8 +156,7 @@ dashboard_v22/
 │   │   ├── use-mobile.ts
 │   │   └── use-toast.ts
 │   ├── services/
-│   │   ├── api/                      ← client.ts + servicios API
-│   │   └── localStorage/             ← Servicios localStorage (fallback)
+│   │   └── api/                      ← client.ts (apiFetch helper)
 │   ├── types/                        ← Tipos TypeScript del dominio
 │   ├── utils/                        ← date-utils, domain, user-utils
 │   ├── constants/                    ← badge-paleta, index
@@ -166,7 +165,7 @@ dashboard_v22/
 │
 ├── prisma/                           ← Schema Prisma + seed
 ├── public/
-└── tests/                            ← 146 tests Vitest
+└── tests/                            ← 168 tests Vitest
 ```
 
 ## Backend (PostgreSQL + Prisma + MVC + Joi/Zod)
@@ -223,18 +222,6 @@ npx prisma generate
 
 Una vez ejecutado `prisma generate`, los `any` temporales en los services se pueden reemplazar por los tipos generados (`Prisma.HistoriaUsuarioCreateInput`, etc.).
 
-### Swap frontend → backend
-
-Editar `lib/services/index.ts`:
-```ts
-// Cambiar esto:
-export { historiaStorageService as historiaService } from "./localStorage/historia.service"
-// Por esto:
-export { historiaApiService as historiaService } from "./api/historia.service"
-```
-
-El resto del frontend no cambia.
-
 ---
 
 ## Seguridad
@@ -285,7 +272,7 @@ next.config.mjs         ← Headers de seguridad HTTP
 
 ## Tests
 
-El proyecto cuenta con **146 tests automatizados** en 14 archivos usando Vitest 3 + React Testing Library 16. Los tests de API routes corren en entorno `node`; los de UI/hooks en `jsdom`.
+El proyecto cuenta con **237 tests automatizados** en 23 archivos usando Vitest 3 + React Testing Library 16. Los tests de API routes corren en entorno `node`; los de UI/hooks en `jsdom`.
 
 ### Comandos
 
@@ -300,7 +287,7 @@ pnpm test:ui     # Interfaz visual de Vitest
 | Archivo | Entorno | Tests | Qué cubre |
 |---|---|---|---|
 | `tests/auth-login.test.ts` | jsdom | 12 | Login, bloqueo por intentos, guards de addUser/deleteUser |
-| `tests/casoHandlers.test.ts` | jsdom | 15 | Flujo de aprobación, retesteo, notificaciones por rol |
+| `tests/casoHandlers.test.ts` | jsdom | 20 | Flujo de aprobación, retesteo, notificaciones por rol; `handleCompletarCasoEtapa` (guard bloqueos, historial síncrono) |
 | `tests/useHistoriasVisibles.test.ts` | jsdom | 14 | Scoping por rol: Owner, Admin, QA Lead, QA |
 | `tests/api-auth-endpoints.test.ts` | node | 9 | GET /me · POST /logout · PUT /password |
 | `tests/api-historias.test.ts` | node | 10 | CRUD + sync de historias de usuario |
@@ -309,16 +296,201 @@ pnpm test:ui     # Interfaz visual de Vitest
 | `tests/api-users.test.ts` | node | 10 | CRUD usuarios + reset-password + desbloquear |
 | `tests/api-config.test.ts` | node | 6 | GET/PUT config con guards de rol |
 | `tests/api-metricas.test.ts` | node | 5 | Agregaciones del dashboard QA |
-| `tests/api-sprints.test.ts` | node | 13 | CRUD sprints + sprint activo + validaciones |
+| `tests/api-sprints.test.ts` | node | 15 | CRUD sprints + sprint activo + validaciones |
 | `tests/api-notificaciones.test.ts` | node | 11 | GET/POST/PATCH notificaciones, scoping por rol |
 | `tests/api-export.test.ts` | node | 10 | Export CSV historias/casos + filtros + cabecera |
 | `tests/api-historial.test.ts` | node | 8 | GET historial paginado: 401, 404, orden desc, paginación, límites |
+| `tests/bloqueo-guards.test.ts` | jsdom | 12 | Guardias: tarea bloqueada impide completar caso; caso bloqueado impide avanzar HU |
+| `tests/useConfig-sprints.test.ts` | jsdom | 10 | Carga inicial desde API, addSprint (duplicado, optimista, reemplazo ID), updateSprint, deleteSprint |
+| `tests/tareaHandlers.test.ts` | jsdom | 11 | `handleBloquearTarea` y `handleDesbloquearTarea`: historial síncrono, guard de tarea inexistente, estado tras desbloqueo parcial |
+| `tests/bloqueoHandlers.test.ts` | jsdom | 7 | `handleResolverBloqueoTarea`: historial síncrono, guard, estado residual con múltiples bloqueos activos |
+| `tests/metricas-cache.test.ts` | node | 7 | Módulo de caché (get/set/invalidate) y cache hit/miss en `GET /api/metricas` |
+| `tests/huHandlers.test.ts` | jsdom | 21 | `handleIniciarHU`, `handleCancelarHU`, `handleFallarHU`, `handleBulkCambiarEstado/Responsable`, `handleImportarHUs`, `handleAvanzarEtapa` |
+| `tests/comentarioHandlers.test.ts` | jsdom | 7 | `handleAddComentarioHU` y `handleAddComentarioCaso`: autor, fecha, unicidad de IDs, aislamiento entre entidades |
+| `tests/notificacion-service.test.ts` | node | 5 | `rolToDestinatario`: mapeo de cada rol posible a su destinatario |
+| `tests/crearEvento.test.ts` | jsdom | 4 | `crearEvento`: tipo/descripción/usuario, fecha `Date`, formato de ID, unicidad de 100 IDs |
 
 Los tests de API usan **Prisma y servicios mockeados** con `vi.mock` y generan JWTs reales con `signToken` — no requieren base de datos activa.
 
 ---
 
 ## Changelog
+
+### v2.17 — Optimizaciones: IDs únicos, validación Zod en sprints, `api.get()` en auth y metricas groupBy
+
+#### `lib/utils/domain.ts` — `crearEvento` usa `crypto.randomUUID()`
+El ID de evento se generaba como `` `ev-${Date.now()}-${Math.random().toString(36).slice(2, 6)}` ``. El sufijo aleatorio de 4 caracteres reducía la entropía y no garantizaba unicidad real. Reemplazado por `crypto.randomUUID()`, consistente con el resto de IDs del sistema.
+
+#### `POST /api/sprints` — Validación con Zod
+La ruta validaba el body manualmente con `if (!nombre || !fechaInicio || !fechaFin)`. Reemplazado por `CreateSprintSchema` Zod que valida campos requeridos con `min(1)` y el campo opcional `objetivo`, consistent con el resto de rutas POST del sistema.
+
+#### `PUT /api/sprints/[id]` — Validación con Zod
+La extracción de campos se hacía directamente con destructuring sin validación. Reemplazado por `UpdateSprintSchema` Zod con todos los campos opcionales y `nombre` validado con `min(1)`, previniendo actualizaciones con nombre vacío que antes llegaban a la BD.
+
+#### `lib/contexts/auth-context.tsx` — `fetch` raw reemplazado por `api.get()`
+La llamada a `GET /api/auth/me` usaba `fetch` directamente, bypasseando el reviver `revivirFechas` del cliente HTTP. El campo `fechaCreacion` del usuario llegaba como string en lugar de `Date`. Ahora usa `api.get<{ user: UserSafe }>("/api/auth/me")` para restaurar automáticamente las fechas.
+
+#### `lib/backend/services/metricas.service.ts` — Dos `tarea.count()` fusionados en un `groupBy`
+`getMetricas` ejecutaba dos queries separadas para el total de tareas y el conteo de tareas con resultado "fallido". Reemplazado por un único `prisma.tarea.groupBy({ by: ["resultado"] })` que devuelve ambos valores en una sola round-trip a la BD. El post-procesamiento extrae el total con `reduce` y el conteo de fallidos con `find`.
+
+#### Nuevos tests — cobertura de `crearEvento` y validación de sprints
+- `tests/crearEvento.test.ts` — 4 tests: tipo/descripción/usuario correctos, fecha `instanceof Date`, ID con prefijo `ev-`, 100 IDs únicos en llamadas sucesivas.
+- `tests/api-sprints.test.ts` — 2 tests adicionales: `nombre: ""` en POST → 400, `nombre: ""` en PUT → 400.
+
+**237/237 tests en verde.**
+
+---
+
+### v2.16 — Optimizaciones: useConfig, validación notificaciones y cobertura de tests
+
+#### `useConfig.ts` — IDs temporales de sprint con `crypto.randomUUID()`
+`addSprint` generaba el ID optimista como `` `sprint-${Date.now()}` ``. El mismo patrón de colisión corregido en v2.15 para comentarios. Reemplazado por `crypto.randomUUID()`.
+
+#### `useConfig.ts` — Debounce de 600 ms en el PUT de configuración
+El `useEffect` que sincroniza la config con `PUT /api/config` se disparaba de forma inmediata en cada cambio de cualquier campo. Ahora usa el mismo patrón de debounce (600 ms con `clearTimeout` + cleanup) que `useApiMirroredState`, evitando ráfagas de peticiones al editar campos de texto en la pantalla de configuración.
+
+#### `useConfig.ts` — Errores de carga expuestos en lugar de `null` hardcodeado
+El campo `error` retornaba siempre `null`. Si `GET /api/config` o `GET /api/sprints` fallaba, el error se descartaba silenciosamente. Ahora se capturan en `configError` y `sprintsError` y se exponen como `error: configError ?? sprintsError ?? null`, en línea con el comportamiento de `useDomainData`.
+
+#### `POST /api/notificaciones` — Validación con Zod
+La ruta validaba el body manualmente con condiciones `if (!campo)`, sin whitelist de valores. Un `tipo` o `destinatario` inválido pasaba sin error y llegaba a la BD. Reemplazado por un schema Zod que valida los enums `tipo` (6 valores) y `destinatario` (`"admin" | "qa"`), consistente con el resto de rutas POST.
+
+#### Nuevos tests — cobertura de huHandlers, comentarioHandlers y gaps de casoHandlers
+- `tests/huHandlers.test.ts` — 21 tests: `handleIniciarHU` (transición, historial, guard estado), `handleCancelarHU` y `handleFallarHU` (estado, motivo, fechaCierre, historial), `handleBulkCambiarEstado/Responsable` (aislamiento), `handleImportarHUs` (deduplicación por código), `handleAvanzarEtapa` (guard bloqueos, guard etapa incompleta, avance, cierre exitoso, guard HU completada).
+- `tests/comentarioHandlers.test.ts` — 7 tests: aislamiento entre HUs y casos, autor del usuario activo, unicidad de IDs con `crypto.randomUUID()`.
+- `tests/casoHandlers.test.ts` — 5 tests adicionales: `handleRetestearCaso` (historial síncrono, guard caso inexistente), `handleCompletarCasoEtapa` (guard tareas bloqueadas, guard caso inexistente, historial síncrono).
+- `tests/notificacion-service.test.ts` — 5 tests: `rolToDestinatario` para cada rol posible (`owner`, `admin`, `qa_lead`, `qa`, `viewer`).
+
+**231/231 tests en verde.**
+
+---
+
+### v2.15 — Optimizaciones: casoHandlers, import estático y IDs de comentarios
+
+#### Patrón `huIdAfectada = ""` eliminado en `casoHandlers.ts`
+`handleCompletarCasoEtapa` y `handleRetestearCaso` usaban el mismo anti-patrón corregido en v2.14 para `tareaHandlers` y `bloqueoHandlers`: declaraban `let huIdAfectada = ""` y lo asignaban con una mutación de variable libre dentro del updater de `setCasos`. El fix lee el caso directamente del array `casos` del contexto antes de llamar a `setCasos`, eliminando la mutación y haciendo la actualización del historial de HU completamente síncrona. Adicionalmente se añadió un guard de retorno temprano si el caso no existe.
+
+#### `await import()` innecesario eliminado en `GET /api/casos`
+`app/api/casos/route.ts` importaba `getAllCasos` y `createCaso` estáticamente desde `caso.service`, pero cargaba `getCasosByHU` con `await import(...)` dentro del handler. Al ser el mismo módulo, el dynamic import solo añadía latencia async sin ningún beneficio. Ahora `getCasosByHU` se importa estáticamente junto a los demás.
+
+#### IDs de comentarios con `crypto.randomUUID()` en lugar de `Date.now()`
+`comentarioHandlers.ts` generaba IDs como `` `com-${Date.now()}` ``, lo que produce colisiones si dos comentarios se crean en el mismo milisegundo (doble-click, tests rápidos, etc.). Reemplazado por `crypto.randomUUID()` que garantiza unicidad sin riesgo de colisión.
+
+**193/193 tests en verde.**
+
+---
+
+### v2.14 — Optimizaciones: handlers, caché con invalidación, login y config
+
+#### `setTimeout(50ms)` eliminados en handlers
+`handleBloquearTarea`, `handleDesbloquearTarea` (en `tareaHandlers.ts`) y `handleResolverBloqueoTarea` (en `bloqueoHandlers.ts`) usaban un `setTimeout(..., 50)` para diferir la actualización del historial de la HU, capturando `huId` dentro del updater de React. Era un patrón frágil: si React tardaba más de 50 ms, `huId` llegaba vacío y el historial no se registraba. El fix: leer `huId` directamente del array `tareas` del contexto antes de mutar el estado, eliminando la necesidad de espera artificial.
+
+#### Delay artificial de 600 ms en login eliminado
+`login-screen.tsx` añadía `await new Promise(resolve => setTimeout(resolve, 600))` antes de llamar a `login()`. No tenía propósito funcional — el spinner ya se mostraba al activar `isLoading`. Se eliminó: el login ahora inicia inmediatamente.
+
+#### `getConfig()` ya no escribe en cada lectura
+`config.service.ts` usaba `prisma.config.upsert({ update: {} })` para leer la configuración, lo que disparaba un `UPDATE` innecesario en cada `GET /api/config`. Reemplazado por `findUnique` con un `create` fallback solo cuando la fila no existe.
+
+#### Caché de métricas con invalidación explícita
+El caché en memoria de `GET /api/metricas` se invalidaba solo por TTL (60 s). Ahora todas las rutas de escritura (POST/PUT/DELETE en `/api/historias`, `/api/casos`, `/api/tareas` y sus rutas `/sync`) llaman a `invalidateMetricasCache()` desde el módulo compartido `lib/backend/metricas-cache.ts`, garantizando que el dashboard refleje cambios de inmediato.
+
+#### Nuevos tests
+- `tests/tareaHandlers.test.ts` — 11 tests para `handleBloquearTarea` y `handleDesbloquearTarea`: comportamiento síncrono del historial, guard de tarea inexistente, estado tras desbloqueo parcial.
+- `tests/bloqueoHandlers.test.ts` — 7 tests para `handleResolverBloqueoTarea`: actualización síncrona del historial, guard, estado residual con múltiples bloqueos.
+- `tests/metricas-cache.test.ts` — 7 tests: módulo de caché (get/set/invalidate) y comportamiento de cache hit/miss en `GET /api/metricas`.
+
+**193/193 tests en verde.**
+
+---
+
+### v2.13 — Optimizaciones: multi-usuario, caché, errores y limpieza
+
+#### Corrección crítica — pérdida de datos en multi-usuario
+Las rutas `/api/historias/sync`, `/api/casos/sync` y `/api/tareas/sync` ejecutaban `deleteMany({ id: { notIn: ids } })`, lo que borraba registros de otros usuarios cuando cualquiera sincronizaba su estado local. Se eliminó ese `deleteMany` de las tres rutas. Los borrados ahora son **explícitos**: los handlers `handleEliminarHUConfirmado`, `handleBulkEliminarConfirmado`, `handleEliminarCaso` y `handleEliminarTarea` llaman directamente a `DELETE /api/historias/[id]`, `DELETE /api/casos/[id]` y `DELETE /api/tareas/[id]`.
+
+#### Caché en métricas
+`GET /api/metricas` lanzaba 8 queries en paralelo en cada petición. Se añadió un caché en memoria con TTL de 60 s — los requests posteriores retornan el resultado cacheado sin tocar la BD.
+
+#### Estado de error propagado desde `useApiMirroredState`
+`useApiMirroredState` devolvía `[state, setState, loaded]`; los errores de carga se descartaban silenciosamente. Ahora devuelve `[state, setState, loaded, error]`. `useDomainData` expone `error = historiasError ?? casosError ?? tareasError ?? null` — los componentes pueden mostrar un aviso si la API no está disponible.
+
+#### `isLoading` real en `useConfig`
+`isLoading` estaba hardcodeado a `false`. Ahora refleja la carga inicial desde `/api/sprints` y `/api/config` — es `true` hasta que ambos efectos resuelven (o fallan).
+
+#### `revivirFechas` deduplicada
+La función existía idéntica en `lib/storage.ts` y `lib/services/api/client.ts`. Se exporta desde `storage.ts` y `client.ts` la importa — una sola fuente de verdad.
+
+**168/168 tests en verde.**
+
+---
+
+### v2.12 — Eliminación de código legado (servicios localStorage)
+
+Los siguientes archivos fueron eliminados por no tener ningún importador en el proyecto:
+
+- `lib/services/index.ts` — punto de entrada de servicios nunca importado
+- `lib/services/interfaces.ts` — contratos IHistoriaService, ICasoService, ITareaService, IConfigService, INotificacionService
+- `lib/services/localStorage/historia.service.ts`
+- `lib/services/localStorage/caso.service.ts`
+- `lib/services/localStorage/tarea.service.ts`
+- `lib/services/localStorage/config.service.ts`
+- Directorio `lib/services/localStorage/`
+
+Toda la persistencia real corre a través de los hooks de dominio (`useDomainData`, `useConfig`, `useNotificaciones`) que llaman directamente a `api.*` de `lib/services/api/client.ts`. La sección "Swap frontend → backend" del README fue eliminada porque el swap ya estaba completo a nivel de hooks.
+
+**168/168 tests en verde.**
+
+---
+
+### v2.11 — Sprints conectados a PostgreSQL
+
+`useConfig.ts` completó la conexión del último recurso que persistía solo en localStorage.
+
+- **Carga inicial**: `GET /api/sprints` al montar — reemplaza el estado local con los sprints de la BD; fallback a localStorage si la API no está disponible.
+- **`addSprint`**: inserción optimista con ID temporal + `POST /api/sprints`; el ID temporal se reemplaza con el CUID real devuelto por el servidor.
+- **`updateSprint`**: actualización local inmediata + `PUT /api/sprints/[id]` en background.
+- **`deleteSprint`**: eliminación local inmediata + `DELETE /api/sprints/[id]` en background.
+- **`lib/services/index.ts`** y `lib/services/localStorage/*.ts` son código legado no utilizado — el sistema usa `useApiMirroredState` y llamadas directas a `api.*` en todos los hooks de dominio.
+- **10 tests nuevos** en `tests/useConfig-sprints.test.ts`: carga inicial, fallback de red, duplicado de nombre, inserción optimista, reemplazo de ID, update, delete.
+- **168/168 tests en verde.**
+
+---
+
+### v2.10 — Seguridad y rendimiento
+
+#### Seguridad
+
+- **XSS en exportación PDF** (`auditoria-panel.tsx`, `bloqueos-panel.tsx`) — los campos del usuario (descripciones, títulos, notas) se interpolaban directamente en HTML sin escapar antes de escribirlos con `document.write()`. Un usuario malicioso podía guardar `<script>...</script>` en cualquier campo de texto y ejecutarlo en el navegador de otro usuario al generar el reporte. Corregido con función `esc()` que escapa `&`, `<`, `>`, `"`, `'` en todos los valores interpolados.
+
+- **Borrado masivo silencioso en endpoints de sync** (`/api/historias/sync`, `/api/casos/sync`, `/api/tareas/sync`) — el guard `if (ids.length === 0) return` ya existía pero se ejecutaba *después* del `deleteMany({ id: { notIn: ids } })`. Enviando `{ historias: [] }` se borraba toda la tabla antes de que el guard pudiera detenerlo. Corregido moviendo el check *antes* de la operación destructiva.
+
+#### Rendimiento
+
+- **`useMemo` en `page.tsx`** — `qaUsers`, `casosVisibles`, `tareasVisibles` y `totalBloqueoActivos` se recalculaban en cada render del componente raíz (cambios de tab, búsquedas, toasts). Todos envueltos en `useMemo` con sus dependencias correctas.
+- **Filtro duplicado eliminado** — `CasosTable` recibía `domain.casos.filter(c => historiasVisibles.some(...))` inline, calculando la misma lista ya disponible en `casosVisibles`. Reemplazado por la variable memoizada.
+
+#### Sin cambios en lógica de roles
+
+Los endpoints de sync mantienen `requireAuth` (cualquier usuario autenticado puede sincronizar). La lógica de permisos por rol no fue alterada.
+
+---
+
+### v2.9 — Guardias de bloqueos en cadena (tarea → caso → HU)
+
+#### Lógica de negocio
+
+- **`DomainCtx`** ahora expone `tareas: Tarea[]` como array legible, disponible para todos los módulos de handlers de dominio.
+- **`handleCompletarCasoEtapa`** (`casoHandlers.ts`) — antes de completar cualquier etapa de un caso de prueba, verifica que ninguna de sus tareas tenga bloqueos activos (`resuelto: false`). Si los hay, lanza toast de error y aborta sin mutar el estado.
+- **`handleAvanzarEtapa`** (`huHandlers.ts`) — antes de avanzar o completar una HU, verifica que ninguno de sus casos de prueba tenga bloqueos activos. Si los hay, lanza toast de error y aborta sin mutar el estado.
+- Los mensajes de error indican la cantidad de elementos afectados con concordancia de número (singular/plural).
+
+#### Tests
+
+- **12 tests nuevos** en `tests/bloqueo-guards.test.ts`: tarea bloqueada impide completar caso, tarea de otro caso no interfiere, bloqueo resuelto permite continuar, caso sin bloqueos permite continuar, mensajes en singular y plural — para ambas guardias (caso y HU).
+- **`casoHandlers.test.ts`** actualizado: `makeCtx` incluye `tareas: []` para cumplir con el nuevo campo en `DomainCtx`.
+- **158/158 tests en verde.**
+
+---
 
 ### v2.8 — Log de auditoría paginado para Historias de Usuario
 

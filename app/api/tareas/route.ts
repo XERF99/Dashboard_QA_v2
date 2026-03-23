@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@/lib/backend/middleware/auth.middleware"
 import { createTareaSchema } from "@/lib/backend/validators/tarea.validator"
 import { getAllTareas, createTarea, getTareasByCaso, getTareasByHU } from "@/lib/backend/services/tarea.service"
+import { invalidateMetricasCache } from "@/lib/backend/metricas-cache"
 
 export async function GET(request: NextRequest) {
   const payload = await requireAuth(request)
@@ -37,5 +38,6 @@ export async function POST(request: NextRequest) {
   }
 
   const tarea = await createTarea(value)
+  invalidateMetricasCache()
   return NextResponse.json({ tarea }, { status: 201 })
 }

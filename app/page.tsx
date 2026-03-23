@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useMemo } from "react"
 import { useToast } from "@/lib/hooks/useToast"
 import { useHUModals } from "@/lib/hooks/useHUModals"
 import { useHistoriasVisibles } from "@/lib/hooks/useHistoriasVisibles"
@@ -18,7 +18,6 @@ import {
   Settings2, FlaskConical, ClipboardList, Home, CalendarRange,
 } from "lucide-react"
 import { useAuth } from "@/lib/contexts/auth-context"
-import type { HistoriaUsuario } from "@/lib/types"
 import { useConfig } from "@/lib/hooks/useConfig"
 import { useNotificaciones } from "@/lib/hooks/useNotificaciones"
 import { useDomainData } from "@/lib/hooks/useDomainData"
@@ -44,7 +43,10 @@ function DashboardSkeleton() {
 export default function DashboardPage() {
   const isHydrated = useIsHydrated()
   const { isAuthenticated, sessionLoading, canManageUsers, verSoloPropios, isAdmin, isQALead, isQA, canCreateHU, isOwner, user, users, roles, pendingBlockEvents, clearBlockEvents } = useAuth()
-  const qaUsers = users.filter(u => u.activo && (roles.find(r => r.id === u.rol)?.permisos.includes("canEdit") ?? false)).map(u => u.nombre)
+  const qaUsers = useMemo(
+    () => users.filter(u => u.activo && (roles.find(r => r.id === u.rol)?.permisos.includes("canEdit") ?? false)).map(u => u.nombre),
+    [users, roles]
+  )
 
   // ── Toasts ────────────────────────────────────────────────
   const { toasts, addToast, dismissToast } = useToast()
@@ -91,8 +93,21 @@ export default function DashboardPage() {
   })
 
   // ── Datos con scope de visibilidad ───────────────────────
-  const casosVisibles  = domain.casos.filter(c  => historiasVisibles.some(h => h.id === c.huId))
-  const tareasVisibles = domain.tareas.filter(t => historiasVisibles.some(h => h.id === t.huId))
+  const casosVisibles  = useMemo(
+    () => domain.casos.filter(c  => historiasVisibles.some(h => h.id === c.huId)),
+    [domain.casos, historiasVisibles]
+  )
+  const tareasVisibles = useMemo(
+    () => domain.tareas.filter(t => historiasVisibles.some(h => h.id === t.huId)),
+    [domain.tareas, historiasVisibles]
+  )
+  const totalBloqueoActivos = useMemo(
+    () =>
+      historiasVisibles.reduce((n, h) => n + h.bloqueos.filter(b => !b.resuelto).length, 0) +
+      casosVisibles.reduce((n, c)    => n + c.bloqueos.filter(b => !b.resuelto).length, 0) +
+      tareasVisibles.reduce((n, t)   => n + t.bloqueos.filter(b => !b.resuelto).length, 0),
+    [historiasVisibles, casosVisibles, tareasVisibles]
+  )
 
   // ── Notificación cuando una cuenta queda bloqueada ───────
   useEffect(() => {
@@ -125,11 +140,6 @@ export default function DashboardPage() {
   )
 
   if (!isAuthenticated) return <LoginScreen />
-
-  const totalBloqueoActivos =
-    historiasVisibles.reduce((n, h) => n + h.bloqueos.filter(b => !b.resuelto).length, 0) +
-    casosVisibles.reduce((n, c)    => n + c.bloqueos.filter(b => !b.resuelto).length, 0) +
-    tareasVisibles.reduce((n, t)   => n + t.bloqueos.filter(b => !b.resuelto).length, 0)
 
   const tabCount = 6 + (canManageUsers ? 1 : 0)
 
@@ -251,7 +261,7 @@ export default function DashboardPage() {
 
           <TabsContent value="casos" className="mt-6">
             <CasosTable
-              casos={domain.casos.filter(c => historiasVisibles.some(h => h.id === c.huId))}
+              casos={casosVisibles}
               historias={historiasVisibles}
               onVerHU={abrirHU}
               tiposPrueba={config.tiposPrueba}

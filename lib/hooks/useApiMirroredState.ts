@@ -14,6 +14,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { cargarDeStorage, guardarEnStorage } from "@/lib/storage"
+import type { Dispatch, SetStateAction } from "react"
 
 // Tiempo de espera antes de enviar el sync a la API (ms).
 // Evita lanzar una petición por cada carácter al editar campos de texto.
@@ -24,10 +25,11 @@ export function useApiMirroredState<T>(
   fallback: T,
   fetcher: () => Promise<T>,
   syncer:  (data: T) => Promise<void>
-): [T, React.Dispatch<React.SetStateAction<T>>, boolean] {
+): [T, Dispatch<SetStateAction<T>>, boolean, string | null] {
   // Inicializar desde localStorage para render instantáneo
   const [state, setState]   = useState<T>(() => cargarDeStorage(storageKey, fallback))
   const [loaded, setLoaded] = useState(false)
+  const [error, setError]   = useState<string | null>(null)
   const isFirstSync         = useRef(true)
   const debounceTimer       = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -39,8 +41,9 @@ export function useApiMirroredState<T>(
         guardarEnStorage(storageKey, data)
         setLoaded(true)
       })
-      .catch(() => {
-        // API no disponible — usar localStorage como fallback silencioso
+      .catch((err: unknown) => {
+        // API no disponible — usar localStorage como fallback
+        setError(err instanceof Error ? err.message : "Error al cargar datos")
         setLoaded(true)
       })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -71,5 +74,5 @@ export function useApiMirroredState<T>(
     }
   }, [state]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  return [state, setState, loaded]
+  return [state, setState, loaded, error]
 }

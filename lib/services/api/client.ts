@@ -3,12 +3,7 @@
 //  Reutiliza el revisor de fechas ISO de storage.ts.
 // ═══════════════════════════════════════════════════════════
 
-function revivirFechas(_key: string, value: unknown): unknown {
-  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value)) {
-    return new Date(value)
-  }
-  return value
-}
+import { revivirFechas } from "@/lib/storage"
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {

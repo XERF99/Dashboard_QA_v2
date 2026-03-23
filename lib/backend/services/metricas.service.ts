@@ -12,8 +12,7 @@ export async function getMetricas() {
     tareasPorEstado,
     tareasPendientesPorAsignado,
     velocidadPorSprint,
-    totalTareas,
-    tareasConResultadoFallido,
+    tareasCountPorResultado,
   ] = await Promise.all([
     // Historias agrupadas por estado
     prisma.historiaUsuario.groupBy({ by: ["estado"], _count: { _all: true } }),
@@ -46,13 +45,12 @@ export async function getMetricas() {
       _count: { _all: true },
     }),
 
-    // Total de tareas (base para tasa de defectos)
-    prisma.tarea.count(),
-
-    // Tareas con resultado fallido
-    prisma.tarea.count({ where: { resultado: "fallido" } }),
+    // Distribución por resultado (extrae total + fallidos en una sola query)
+    prisma.tarea.groupBy({ by: ["resultado"], _count: { _all: true } }),
   ])
 
+  const totalTareas              = tareasCountPorResultado.reduce((s, r) => s + r._count._all, 0)
+  const tareasConResultadoFallido = tareasCountPorResultado.find(r => r.resultado === "fallido")?._count._all ?? 0
   const tasaDefectos = totalTareas > 0
     ? Math.round((tareasConResultadoFallido / totalTareas) * 100 * 10) / 10
     : 0

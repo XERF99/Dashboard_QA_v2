@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { createCasoHandlers } from "@/lib/hooks/domain/casoHandlers"
 import type { DomainCtx } from "@/lib/hooks/domain/types"
-import type { CasoPrueba, HistoriaUsuario } from "@/lib/types"
+import type { CasoPrueba, HistoriaUsuario, Tarea } from "@/lib/types"
 
 // ── Factories ────────────────────────────────────────────────
 
@@ -75,6 +75,7 @@ function makeCtx(
   const ctx: DomainCtx = {
     historias: initialHistorias,
     casos: initialCasos,
+    tareas: [],
     setCasos: vi.fn((updater: (prev: CasoPrueba[]) => CasoPrueba[]) => {
       casosState = updater(casosState)
     }),
@@ -330,5 +331,79 @@ describe("handleRetestearCaso", () => {
     expect(etapa.estado).toBe("en_ejecucion")
     expect(etapa.resultado).toBe("pendiente")
     expect(etapa.intentos[0].comentarioCorreccion).toBe("Se corrigió el bug #123")
+  })
+
+  it("actualiza el historial de la HU síncronamente (sin mutación en updater)", () => {
+    const caso = makeCaso({
+      id: "c1", huId: "hu-1",
+      resultadosPorEtapa: [{
+        etapa: "dev", estado: "completado", resultado: "fallido",
+        intentos: [{ numero: 1, resultado: "fallido", fecha: new Date(), ejecutadoPor: "QA" }],
+      }],
+    })
+    const { ctx, getHistorias } = makeCtx([caso], [makeHU()])
+
+    createCasoHandlers(ctx).handleRetestearCaso("c1", "dev", "Corrección aplicada")
+
+    expect(getHistorias()[0].historial).toHaveLength(1)
+    expect(getHistorias()[0].historial[0].tipo).toBe("caso_retesteo_solicitado")
+  })
+
+  it("no hace nada si el caso no existe", () => {
+    const { ctx } = makeCtx([], [makeHU()])
+
+    createCasoHandlers(ctx).handleRetestearCaso("inexistente", "dev", "Corrección")
+
+    expect(ctx.setCasos).not.toHaveBeenCalled()
+    expect(ctx.setHistorias).not.toHaveBeenCalled()
+  })
+})
+
+// ════════════════════════════════════════════════════════════
+// handleCompletarCasoEtapa
+// ════════════════════════════════════════════════════════════
+
+describe("handleCompletarCasoEtapa", () => {
+  it("bloquea la completación si hay tareas con bloqueos activos", () => {
+    const caso = makeCaso({
+      id: "c1",
+      resultadosPorEtapa: [{ etapa: "dev", estado: "en_ejecucion", resultado: "pendiente", intentos: [] }],
+    })
+    const tareaConBloqueo: Tarea = {
+      id: "t1", casoPruebaId: "c1", huId: "hu-1",
+      titulo: "Tarea", descripcion: "", asignado: "QA",
+      estado: "bloqueada", resultado: "pendiente", tipo: "ejecucion",
+      prioridad: "media", horasEstimadas: 1, horasReales: 0,
+      fechaCreacion: new Date(), evidencias: "", creadoPor: "qa",
+      bloqueos: [{ id: "b1", descripcion: "bloqueo", reportadoPor: "QA", fecha: new Date(), resuelto: false }],
+    }
+    const { ctx, getCasos } = makeCtx([caso], [makeHU()], { tareas: [tareaConBloqueo] })
+
+    createCasoHandlers(ctx).handleCompletarCasoEtapa("c1", "dev", "exitoso")
+
+    expect(getCasos()[0].resultadosPorEtapa[0].estado).toBe("en_ejecucion")
+    expect(ctx.addToast).toHaveBeenCalledWith(expect.objectContaining({ type: "error" }))
+  })
+
+  it("no hace nada si el caso no existe", () => {
+    const { ctx } = makeCtx([], [makeHU()])
+
+    createCasoHandlers(ctx).handleCompletarCasoEtapa("inexistente", "dev", "exitoso")
+
+    expect(ctx.setCasos).not.toHaveBeenCalled()
+    expect(ctx.setHistorias).not.toHaveBeenCalled()
+  })
+
+  it("actualiza el historial de la HU síncronamente (sin mutación en updater)", () => {
+    const caso = makeCaso({
+      id: "c1", huId: "hu-1",
+      resultadosPorEtapa: [{ etapa: "dev", estado: "en_ejecucion", resultado: "pendiente", intentos: [] }],
+    })
+    const { ctx, getHistorias } = makeCtx([caso], [makeHU()])
+
+    createCasoHandlers(ctx).handleCompletarCasoEtapa("c1", "dev", "exitoso")
+
+    expect(getHistorias()[0].historial).toHaveLength(1)
+    expect(getHistorias()[0].historial[0].tipo).toBe("caso_completado")
   })
 })

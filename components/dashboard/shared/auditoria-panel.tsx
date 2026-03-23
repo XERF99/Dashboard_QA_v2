@@ -8,6 +8,11 @@ import { fmtCorto, fmtHora } from "@/lib/types"
 import type { HistoriaUsuario, EventoHistorial, TipoEvento } from "@/lib/types"
 import { Paginador } from "@/components/ui/paginator"
 
+// ── Escape HTML para evitar XSS en exportaciones PDF ──────
+function esc(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;")
+}
+
 // ── Config visual por tipo de evento ──────────────────────
 const EVENTO_CFG: Partial<Record<TipoEvento, { label: string; color: string }>> = {
   hu_creada:                    { label: "HU Creada",            color: "var(--chart-2)" },
@@ -121,10 +126,10 @@ export function AuditoriaPanel({ historias, onVerHU }: Props) {
     const filas = filtrados.map(ev => `
       <tr>
         <td>${fmtCorto(new Date(ev.fecha))}<br/><span class="sub">${fmtHora(new Date(ev.fecha))}</span></td>
-        <td><span class="badge">${getEventoCfg(ev.tipo).label}</span></td>
-        <td>${ev.descripcion}</td>
-        <td>${ev.usuario}</td>
-        <td><strong>${ev.huCodigo}</strong><br/><span class="sub">${ev.huTitulo}</span></td>
+        <td><span class="badge">${esc(getEventoCfg(ev.tipo).label)}</span></td>
+        <td>${esc(ev.descripcion)}</td>
+        <td>${esc(ev.usuario)}</td>
+        <td><strong>${esc(ev.huCodigo)}</strong><br/><span class="sub">${esc(ev.huTitulo)}</span></td>
       </tr>`).join("")
     const html = `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"/>
       <title>Auditoría ${fecha}</title>

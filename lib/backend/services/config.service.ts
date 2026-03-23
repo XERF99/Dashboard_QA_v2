@@ -8,11 +8,10 @@ import { prisma } from "@/lib/backend/prisma"
 const CONFIG_ID = "singleton"
 
 export async function getConfig() {
-  return prisma.config.upsert({
-    where:  { id: CONFIG_ID },
-    update: {},
-    create: { id: CONFIG_ID },
-  })
+  return (
+    await prisma.config.findUnique({ where: { id: CONFIG_ID } }) ??
+    await prisma.config.create({ data: { id: CONFIG_ID } })
+  )
 }
 
 export async function updateConfig(data: {

@@ -125,6 +125,13 @@ describe("POST /api/sprints", () => {
     expect(data.error).toMatch(/fechaInicio/i)
   })
 
+  it("nombre vacío → 400", async () => {
+    const res = await POST(makeReq("POST", "/api/sprints", {
+      nombre: "", fechaInicio: "2026-03-01", fechaFin: "2026-03-14",
+    }, token))
+    expect(res.status).toBe(400)
+  })
+
   it("crea sprint correctamente → 201", async () => {
     vi.mocked(createSprint).mockResolvedValueOnce(sprintBase as never)
 
@@ -170,6 +177,14 @@ describe("PUT /api/sprints/[id]", () => {
   it("fechas inválidas → 400", async () => {
     const res = await PUT(
       makeReq("PUT", "/api/sprints/sp-1", { fechaInicio: "2026-03-14", fechaFin: "2026-03-01" }, token),
+      { params: Promise.resolve({ id: "sp-1" }) }
+    )
+    expect(res.status).toBe(400)
+  })
+
+  it("nombre vacío → 400", async () => {
+    const res = await PUT(
+      makeReq("PUT", "/api/sprints/sp-1", { nombre: "" }, token),
       { params: Promise.resolve({ id: "sp-1" }) }
     )
     expect(res.status).toBe(400)

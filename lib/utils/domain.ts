@@ -161,7 +161,7 @@ export function crearEvento(
   detalles?: Record<string, string>,
 ): EventoHistorial {
   return {
-    id: `ev-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    id: `ev-${crypto.randomUUID()}`,
     tipo,
     descripcion,
     fecha: new Date(),

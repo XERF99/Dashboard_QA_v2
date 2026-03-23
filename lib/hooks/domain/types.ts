@@ -18,6 +18,7 @@ export type AddNotificacionFn = (
 export interface DomainCtx {
   historias: HistoriaUsuario[]
   casos: CasoPrueba[]
+  tareas: Tarea[]
   setHistorias: (updater: (prev: HistoriaUsuario[]) => HistoriaUsuario[]) => void
   setCasos: (updater: (prev: CasoPrueba[]) => CasoPrueba[]) => void
   setTareas: (updater: (prev: Tarea[]) => Tarea[]) => void

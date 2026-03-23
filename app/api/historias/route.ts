@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@/lib/backend/middleware/auth.middleware"
 import { createHistoriaSchema } from "@/lib/backend/validators/historia.validator"
 import { getAllHistorias, createHistoria } from "@/lib/backend/services/historia.service"
+import { invalidateMetricasCache } from "@/lib/backend/metricas-cache"
 
 export async function GET(request: NextRequest) {
   const payload = await requireAuth(request)
@@ -24,5 +25,6 @@ export async function POST(request: NextRequest) {
   }
 
   const historia = await createHistoria(value)
+  invalidateMetricasCache()
   return NextResponse.json({ historia }, { status: 201 })
 }

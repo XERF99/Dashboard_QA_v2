@@ -2,12 +2,20 @@
 // ── PUT    /api/sprints/[id] — actualizar sprint
 // ── DELETE /api/sprints/[id] — eliminar sprint
 import { NextRequest, NextResponse } from "next/server"
+import { z } from "zod"
 import { requireAuth } from "@/lib/backend/middleware/auth.middleware"
 import {
   getSprintById,
   updateSprint,
   deleteSprint,
 } from "@/lib/backend/services/sprint.service"
+
+const UpdateSprintSchema = z.object({
+  nombre:      z.string().min(1).optional(),
+  fechaInicio: z.string().optional(),
+  fechaFin:    z.string().optional(),
+  objetivo:    z.string().optional(),
+})
 
 type Ctx = { params: Promise<{ id: string }> }
 
@@ -26,8 +34,11 @@ export async function PUT(request: NextRequest, { params }: Ctx) {
   if (payload instanceof NextResponse) return payload
 
   const { id } = await params
-  const body = await request.json()
-  const { nombre, fechaInicio, fechaFin, objetivo } = body
+  const parsed = UpdateSprintSchema.safeParse(await request.json())
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Payload inválido", details: parsed.error.flatten() }, { status: 400 })
+  }
+  const { nombre, fechaInicio, fechaFin, objetivo } = parsed.data
 
   if (fechaInicio && fechaFin && new Date(fechaInicio) >= new Date(fechaFin)) {
     return NextResponse.json(

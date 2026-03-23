@@ -1,6 +1,6 @@
 "use client"
 
-import { usePersistedState, STORAGE_KEYS } from "@/lib/storage"
+import { usePersistedState, cargarDeStorage, guardarEnStorage, STORAGE_KEYS } from "@/lib/storage"
 import {
   ETAPAS_PREDETERMINADAS,
   RESULTADOS_PREDETERMINADOS,
@@ -10,7 +10,7 @@ import {
 } from "@/lib/constants/index"
 import type { ConfigEtapas, TipoAplicacionDef, AmbienteDef, TipoPruebaDef, ResultadoDef, Sprint } from "@/lib/types/index"
 import { APLICACIONES_PREDETERMINADAS } from "@/components/dashboard/config/aplicaciones-config"
-import { useEffect, useRef } from "react"
+import { useState, useEffect, useRef } from "react"
 import { api } from "@/lib/services/api/client"
 
 /**
@@ -48,11 +48,31 @@ export function useConfig() {
   const [tiposPrueba, setTiposPrueba] = usePersistedState<TipoPruebaDef[]>(
     STORAGE_KEYS.tiposPrueba, TIPOS_PRUEBA_PREDETERMINADOS
   )
-  const [sprints, setSprints] = usePersistedState<Sprint[]>(
-    STORAGE_KEYS.sprints, []
+  const [sprints, setSprints] = useState<Sprint[]>(
+    () => cargarDeStorage<Sprint[]>(STORAGE_KEYS.sprints, [])
   )
+  const [sprintsLoading, setSprintsLoading] = useState(true)
+  const [configLoading, setConfigLoading]   = useState(true)
+  const [sprintsError, setSprintsError]     = useState<string | null>(null)
+  const [configError, setConfigError]       = useState<string | null>(null)
 
-  // ── Carga inicial desde API ─────────────────────────────
+  // ── Carga inicial de sprints desde API ──────────────────
+  const sprintsLoadDone = useRef(false)
+  useEffect(() => {
+    if (sprintsLoadDone.current) return
+    sprintsLoadDone.current = true
+    api.get<{ sprints: Sprint[] }>("/api/sprints")
+      .then(r => {
+        setSprints(r.sprints)
+        guardarEnStorage(STORAGE_KEYS.sprints, r.sprints)
+      })
+      .catch((err: unknown) => {
+        setSprintsError(err instanceof Error ? err.message : "Error al cargar sprints")
+      })
+      .finally(() => setSprintsLoading(false))
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Carga inicial de config desde API ───────────────────
   const initialLoadDone = useRef(false)
   useEffect(() => {
     if (initialLoadDone.current) return
@@ -66,31 +86,63 @@ export function useConfig() {
         if (c.tiposPrueba     && c.tiposPrueba.length)             setTiposPrueba(c.tiposPrueba as TipoPruebaDef[])
         if (c.aplicaciones    && c.aplicaciones.length)            setAplicaciones(c.aplicaciones)
       })
-      .catch(() => { /* usar localStorage como fallback */ })
+      .catch((err: unknown) => {
+        setConfigError(err instanceof Error ? err.message : "Error al cargar configuración")
+      })
+      .finally(() => setConfigLoading(false))
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Sync a API cuando cambia la config ──────────────────
-  const configLoaded = useRef(false)
+  // ── Sync a API cuando cambia la config (debounced 600 ms) ──
+  const configLoaded    = useRef(false)
+  const configSyncTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
     if (!configLoaded.current) { configLoaded.current = true; return }
-    api.put("/api/config", {
-      etapas: configEtapas, resultados: configResultados,
-      tiposAplicacion, ambientes, tiposPrueba, aplicaciones,
-    }).catch(err => console.warn("[Config] Error sincronizando config:", err))
+    if (configSyncTimer.current) clearTimeout(configSyncTimer.current)
+    configSyncTimer.current = setTimeout(() => {
+      api.put("/api/config", {
+        etapas: configEtapas, resultados: configResultados,
+        tiposAplicacion, ambientes, tiposPrueba, aplicaciones,
+      }).catch(err => console.warn("[Config] Error sincronizando config:", err))
+    }, 600)
+    return () => {
+      if (configSyncTimer.current) clearTimeout(configSyncTimer.current)
+    }
   }, [configEtapas, configResultados, tiposAplicacion, ambientes, tiposPrueba, aplicaciones]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const addSprint = (data: Omit<Sprint, "id">) => {
     if (sprints.some(s => s.nombre.toLowerCase() === data.nombre.toLowerCase()))
       return { success: false, error: "Ya existe un sprint con ese nombre" }
-    setSprints(p => [...p, { id: `sprint-${Date.now()}`, ...data }])
+    const tempId = `sprint-${crypto.randomUUID()}`
+    const optimistic: Sprint = { id: tempId, ...data }
+    setSprints(p => [...p, optimistic])
+    api.post<{ sprint: Sprint }>("/api/sprints", {
+      nombre: data.nombre,
+      fechaInicio: data.fechaInicio,
+      fechaFin: data.fechaFin,
+      objetivo: data.objetivo,
+    }).then(r => {
+      setSprints(p => p.map(s => s.id === tempId ? r.sprint : s))
+    }).catch(() => {
+      console.warn("[Sprints] Error al crear sprint en API")
+    })
     return { success: true }
   }
   const updateSprint = (s: Sprint) => {
     setSprints(p => p.map(x => x.id === s.id ? s : x))
+    api.put(`/api/sprints/${s.id}`, {
+      nombre: s.nombre,
+      fechaInicio: s.fechaInicio,
+      fechaFin: s.fechaFin,
+      objetivo: s.objetivo,
+    }).catch(() => {
+      console.warn("[Sprints] Error al actualizar sprint en API")
+    })
     return { success: true }
   }
   const deleteSprint = (id: string) => {
     setSprints(p => p.filter(s => s.id !== id))
+    api.delete(`/api/sprints/${id}`)
+      .catch(() => console.warn("[Sprints] Error al eliminar sprint en API"))
     return { success: true }
   }
 
@@ -106,9 +158,9 @@ export function useConfig() {
   }
 
   return {
-    // Async shape — listos para backend (con localStorage siempre false/null)
-    isLoading: false as boolean,
-    error: null as string | null,
+    // Async shape — isLoading refleja la carga inicial desde la API
+    isLoading: sprintsLoading || configLoading,
+    error: configError ?? sprintsError ?? null,
     refetch: () => { /* noop con localStorage */ },
     // Estado
     configEtapas, setConfigEtapas,

@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@/lib/backend/middleware/auth.middleware"
 import { updateCasoSchema } from "@/lib/backend/validators/caso.validator"
 import { getCasoById, updateCaso, deleteCaso } from "@/lib/backend/services/caso.service"
+import { invalidateMetricasCache } from "@/lib/backend/metricas-cache"
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const payload = await requireAuth(request)
@@ -28,6 +29,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   }
 
   const caso = await updateCaso(id, value)
+  invalidateMetricasCache()
   return NextResponse.json({ caso })
 }
 
@@ -37,5 +39,6 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
   const { id } = await params
   await deleteCaso(id)
+  invalidateMetricasCache()
   return NextResponse.json({ success: true })
 }

@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { requireAuth } from "@/lib/backend/middleware/auth.middleware"
 import { prisma } from "@/lib/backend/prisma"
+import { invalidateMetricasCache } from "@/lib/backend/metricas-cache"
 import type { CasoPrueba } from "@/lib/types"
 
 const SyncBodySchema = z.object({
@@ -24,10 +25,9 @@ export async function POST(request: NextRequest) {
   await prisma.$transaction(async (tx) => {
     const ids = casos.map(c => c.id)
 
-    await tx.casoPrueba.deleteMany({ where: { id: { notIn: ids } } })
-
     if (ids.length === 0) return
 
+    // Deletes se gestionan explícitamente desde los handlers (no deleteMany notIn)
     const existing = await tx.casoPrueba.findMany({
       where: { id: { in: ids } },
       select: { id: true },
@@ -53,5 +53,6 @@ export async function POST(request: NextRequest) {
     }))
   })
 
+  invalidateMetricasCache()
   return NextResponse.json({ success: true, count: casos.length })
 }
