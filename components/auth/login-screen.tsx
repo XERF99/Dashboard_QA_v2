@@ -4,10 +4,10 @@ import { useState, useEffect } from "react"
 import { useAuth } from "@/lib/contexts/auth-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { AlertCircle, Lock, Mail, ArrowRight, Loader2, Sun, Moon, KeyRound } from "lucide-react"
+import { AlertCircle, Lock, Mail, ArrowRight, Loader2, Sun, Moon, KeyRound, Clock } from "lucide-react"
 
 export function LoginScreen() {
-  const { login, pendientePassword, cambiarPassword } = useAuth()
+  const { login, pendientePassword, cambiarPassword, sessionExpired } = useAuth()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
@@ -145,6 +145,32 @@ export function LoginScreen() {
         </div>
 
         <div style={{ background: cardBg, border: `1px solid ${cardBorder}`, borderRadius: "16px", padding: "36px 32px", backdropFilter: "blur(20px)", boxShadow: cardShadow }}>
+
+          {/* ── Aviso de sesión expirada ── */}
+          {sessionExpired && !showChangePassword && (
+            <div style={{
+              display: "flex", alignItems: "flex-start", gap: 12,
+              padding: "14px 16px", borderRadius: 10, marginBottom: 24,
+              background: isDark ? "rgba(234,179,8,0.07)" : "rgba(161,98,7,0.06)",
+              border: `1px solid ${isDark ? "rgba(234,179,8,0.22)" : "rgba(161,98,7,0.18)"}`,
+            }}>
+              <div style={{
+                width: 32, height: 32, borderRadius: "50%", flexShrink: 0,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                background: isDark ? "rgba(234,179,8,0.12)" : "rgba(161,98,7,0.1)",
+              }}>
+                <Clock style={{ width: 15, height: 15, color: isDark ? "#eab308" : "#a16207" }} />
+              </div>
+              <div>
+                <p style={{ fontSize: 13, fontWeight: 600, color: isDark ? "#fde68a" : "#78350f", letterSpacing: "0.01em" }}>
+                  Tu sesión ha expirado
+                </p>
+                <p style={{ fontSize: 12, color: isDark ? "#ca8a04" : "#a16207", marginTop: 3, lineHeight: 1.4 }}>
+                  Por seguridad, vuelve a ingresar para continuar.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* ── Formulario de cambio de contraseña ── */}
           {showChangePassword ? (

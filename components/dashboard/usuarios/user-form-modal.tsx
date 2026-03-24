@@ -209,11 +209,11 @@ export function UserFormModal({ open, userToEdit, onClose }: UserFormModalProps)
                   maxHeight: 180, overflowY: "auto", padding: "6px 8px",
                   borderRadius: 8, border: "1px solid var(--border)", background: "var(--secondary)",
                 }}>
-                  {users.filter(u => u.activo && u.id !== userToEdit.id).length === 0 ? (
+                  {users.filter(u => u.activo && u.id !== userToEdit.id && !getRoleDef(u.rol)?.permisos.includes("isSuperAdmin")).length === 0 ? (
                     <p style={{ fontSize: 12, color: "var(--muted-foreground)", textAlign: "center", padding: 8 }}>
                       No hay otros usuarios activos
                     </p>
-                  ) : users.filter(u => u.activo && u.id !== userToEdit.id).map(u => (
+                  ) : users.filter(u => u.activo && u.id !== userToEdit.id && !getRoleDef(u.rol)?.permisos.includes("isSuperAdmin")).map(u => (
                     <label key={u.id} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "5px 6px", borderRadius: 6 }} className="hover:bg-card">
                       <input
                         type="checkbox"

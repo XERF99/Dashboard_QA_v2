@@ -97,14 +97,15 @@ export function UserManagement() {
     return true
   }
 
-  // Scoping: Admin sin equipo solo ve su propia cuenta
+  // Scoping: Admin sin equipo solo ve su propia cuenta. No-owners nunca ven usuarios owner.
+  const usersBase = isOwner ? users : users.filter(u => !getRoleDef(u.rol)?.permisos.includes("isSuperAdmin"))
   const usersVisibles: typeof users = isOwner
     ? users
     : isAdmin && currentUser
       ? (currentUser.equipoIds && currentUser.equipoIds.length > 0)
-        ? users.filter(u => u.id === currentUser.id || currentUser.equipoIds!.includes(u.id))
-        : users.filter(u => u.id === currentUser.id)
-      : users
+        ? usersBase.filter(u => u.id === currentUser.id || currentUser.equipoIds!.includes(u.id))
+        : usersBase.filter(u => u.id === currentUser.id)
+      : usersBase
 
   const activeCount   = usersVisibles.filter(u => u.activo).length
   const inactiveCount = usersVisibles.length - activeCount
@@ -170,8 +171,8 @@ export function UserManagement() {
           </CardHeader>
         </Card>
 
-        {/* Por rol */}
-        {roles.map(r => {
+        {/* Por rol (owner oculto para no-owners) */}
+        {roles.filter(r => isOwner || !r.permisos.includes("isSuperAdmin")).map(r => {
           const count  = usersVisibles.filter(u => u.rol === r.id).length
           const pct    = usersVisibles.length > 0 ? (count / usersVisibles.length) * 100 : 0
           const accent = getRoleAccentColor(r.id)

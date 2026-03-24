@@ -101,7 +101,7 @@ export function HistoriaUsuarioDetail({ open, onClose, hu, casos, tareas }: Prop
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent style={{ width:"min(1200px, calc(100vw - 32px))", maxWidth:"min(1200px, calc(100vw - 32px))", maxHeight:"92vh", overflowY:"auto", padding:0 }} className="no-scrollbar">
+      <DialogContent style={{ width:"min(1200px, calc(100vw - 32px))", maxWidth:"min(1200px, calc(100vw - 32px))", maxHeight:"92vh", overflowY:"auto", padding:0 }} className="no-scrollbar" aria-describedby={undefined}>
         <DialogTitle style={{ position:"absolute", width:1, height:1, overflow:"hidden", clip:"rect(0,0,0,0)", whiteSpace:"nowrap" }}>{hu.titulo}</DialogTitle>
 
         <div style={{ padding:"24px 28px" }}>

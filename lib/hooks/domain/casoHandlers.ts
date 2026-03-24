@@ -165,6 +165,22 @@ export function createCasoHandlers({ historias, casos, tareas, setHistorias, set
     addToast({ type: resultado === "exitoso" ? "success" : resultado === "fallido" ? "error" : "info", title: `Caso: ${resultado}`, desc: `Etapa ${etapa}` })
   }
 
+  const handleImportarCasos = (nuevosCasos: CasoPrueba[]) => {
+    setCasos(prev => [...prev, ...nuevosCasos])
+    // Agregar cada caso al casosIds de su HU
+    setHistorias(prev => prev.map(h => {
+      const suyos = nuevosCasos.filter(c => c.huId === h.id)
+      if (suyos.length === 0) return h
+      const ev = crearEvento("caso_creado", `${suyos.length} caso${suyos.length !== 1 ? "s" : ""} importado${suyos.length !== 1 ? "s" : ""} desde CSV`, user?.nombre || "Sistema")
+      return {
+        ...h,
+        casosIds: [...h.casosIds, ...suyos.map(c => c.id)],
+        historial: [...h.historial, ev],
+      }
+    }))
+    addToast({ type: "success", title: `${nuevosCasos.length} caso${nuevosCasos.length !== 1 ? "s" : ""} importado${nuevosCasos.length !== 1 ? "s" : ""}`, desc: "Desde archivo CSV" })
+  }
+
   const handleRetestearCaso = (casoId: string, etapa: EtapaEjecucion, comentarioCorreccion: string) => {
     const casoAfectado = casos.find(c => c.id === casoId)
     if (!casoAfectado) return
@@ -201,5 +217,6 @@ export function createCasoHandlers({ historias, casos, tareas, setHistorias, set
     handleIniciarEjecucion,
     handleCompletarCasoEtapa,
     handleRetestearCaso,
+    handleImportarCasos,
   }
 }

@@ -10,8 +10,10 @@ export async function GET(request: NextRequest) {
   const payload = await requireAdmin(request)
   if (payload instanceof NextResponse) return payload
 
+  const where = payload.rol !== "owner" ? { NOT: { rol: "owner" } } : {}
   const users = await prisma.user.findMany({
     select: { id: true, nombre: true, email: true, rol: true, activo: true, debeCambiarPassword: true, bloqueado: true, fechaCreacion: true },
+    where,
     orderBy: { fechaCreacion: "asc" },
   })
   return NextResponse.json({ users })
@@ -25,6 +27,10 @@ export async function POST(request: NextRequest) {
   const { error, value } = createUserSchema.validate(body, { abortEarly: false })
   if (error) {
     return NextResponse.json({ error: error.details.map(d => d.message).join(", ") }, { status: 400 })
+  }
+
+  if (value.rol === "owner" && payload.rol !== "owner") {
+    return NextResponse.json({ error: "Permisos insuficientes" }, { status: 403 })
   }
 
   const result = await createUserService(value)

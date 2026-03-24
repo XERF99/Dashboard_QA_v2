@@ -29,7 +29,7 @@ type ApiConfig = {
   aplicaciones: string[]
 }
 
-export function useConfig() {
+export function useConfig({ isAuthenticated = false }: { isAuthenticated?: boolean } = {}) {
   const [configEtapas, setConfigEtapas] = usePersistedState<ConfigEtapas>(
     STORAGE_KEYS.configEtapas, ETAPAS_PREDETERMINADAS
   )
@@ -59,6 +59,7 @@ export function useConfig() {
   // ── Carga inicial de sprints desde API ──────────────────
   const sprintsLoadDone = useRef(false)
   useEffect(() => {
+    if (!isAuthenticated) return
     if (sprintsLoadDone.current) return
     sprintsLoadDone.current = true
     api.get<{ sprints: Sprint[] }>("/api/sprints")
@@ -70,11 +71,12 @@ export function useConfig() {
         setSprintsError(err instanceof Error ? err.message : "Error al cargar sprints")
       })
       .finally(() => setSprintsLoading(false))
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isAuthenticated]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Carga inicial de config desde API ───────────────────
   const initialLoadDone = useRef(false)
   useEffect(() => {
+    if (!isAuthenticated) return
     if (initialLoadDone.current) return
     initialLoadDone.current = true
     api.get<{ config: ApiConfig }>("/api/config")
@@ -90,18 +92,23 @@ export function useConfig() {
         setConfigError(err instanceof Error ? err.message : "Error al cargar configuración")
       })
       .finally(() => setConfigLoading(false))
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isAuthenticated]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Sync a API cuando cambia la config (debounced 600 ms) ──
   const configLoaded    = useRef(false)
   const configSyncTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
     if (!configLoaded.current) { configLoaded.current = true; return }
+    if (!isAuthenticated) return
     if (configSyncTimer.current) clearTimeout(configSyncTimer.current)
     configSyncTimer.current = setTimeout(() => {
       api.put("/api/config", {
-        etapas: configEtapas, resultados: configResultados,
-        tiposAplicacion, ambientes, tiposPrueba, aplicaciones,
+        etapas: configEtapas,
+        resultados: configResultados,
+        tiposAplicacion: tiposAplicacion.filter(t => t.label.trim() !== ""),
+        ambientes:       ambientes.filter(a => a.label.trim() !== ""),
+        tiposPrueba:     tiposPrueba.filter(t => t.label.trim() !== ""),
+        aplicaciones:    aplicaciones.filter(a => a.trim() !== ""),
       }).catch(err => console.warn("[Config] Error sincronizando config:", err))
     }, 600)
     return () => {

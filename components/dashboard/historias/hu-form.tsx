@@ -147,7 +147,7 @@ export function HUForm({ open, onClose, onSubmit, huEditar, currentUser, configE
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="cambio-form-modal">
+      <DialogContent className="cambio-form-modal" aria-describedby={undefined}>
         <form onSubmit={handleSubmit}>
           <div className="px-4 sm:px-7.5 py-6.5">
             {/* HEADER */}

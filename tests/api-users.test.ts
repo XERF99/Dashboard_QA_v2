@@ -13,6 +13,7 @@ vi.mock("@/lib/backend/prisma", () => ({
   prisma: {
     user: {
       findMany:  vi.fn(),
+      findUnique: vi.fn(),
       update:    vi.fn(),
       delete:    vi.fn(),
     },
@@ -49,10 +50,12 @@ const userBase = {
 }
 
 let adminToken: string
+let ownerToken: string
 let qaToken:    string
 
 beforeAll(async () => {
   adminToken = await signToken({ sub: "usr-001", email: "admin@empresa.com", nombre: "Admin", rol: "admin" })
+  ownerToken = await signToken({ sub: "usr-000", email: "owner@empresa.com", nombre: "Owner", rol: "owner" })
   qaToken    = await signToken({ sub: "usr-006", email: "maria@empresa.com", nombre: "Maria", rol: "qa" })
 })
 
@@ -179,5 +182,73 @@ describe("DELETE /api/users/[id]", () => {
 
     expect(res.status).toBe(200)
     expect(data.success).toBe(true)
+  })
+})
+
+// ── Visibilidad de usuarios Owner ─────────────────────────
+
+describe("Owner invisibility — GET /api/users", () => {
+  it("admin token → findMany called con where NOT rol owner", async () => {
+    vi.mocked(prisma.user.findMany).mockResolvedValueOnce([userBase] as never)
+
+    await GET(makeReq("GET", "/api/users", undefined, adminToken))
+
+    expect(prisma.user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { NOT: { rol: "owner" } } })
+    )
+  })
+
+  it("owner token → findMany called con where vacío", async () => {
+    vi.mocked(prisma.user.findMany).mockResolvedValueOnce([userBase] as never)
+
+    await GET(makeReq("GET", "/api/users", undefined, ownerToken))
+
+    expect(prisma.user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: {} })
+    )
+  })
+})
+
+describe("Owner invisibility — POST /api/users", () => {
+  it("admin intenta crear usuario con rol owner → 403", async () => {
+    const res  = await POST(
+      makeReq("POST", "/api/users", { nombre: "Fake Owner", email: "fake@empresa.com", rol: "owner" }, adminToken)
+    )
+    const data = await res.json()
+
+    expect(res.status).toBe(403)
+    expect(data.error).toMatch(/permisos insuficientes/i)
+  })
+})
+
+describe("Owner invisibility — PUT /api/users/[id]", () => {
+  it("admin intenta editar usuario owner → 404", async () => {
+    vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({ rol: "owner" } as never)
+
+    const res = await PUT(
+      makeReq("PUT", "/api/users/usr-000", {
+        nombre: "X", email: "owner@empresa.com", rol: "owner", activo: true, debeCambiarPassword: false,
+      }, adminToken),
+      { params: Promise.resolve({ id: "usr-000" }) }
+    )
+    const data = await res.json()
+
+    expect(res.status).toBe(404)
+    expect(data.error).toMatch(/no encontrado/i)
+  })
+})
+
+describe("Owner invisibility — DELETE /api/users/[id]", () => {
+  it("admin intenta eliminar usuario owner → 404", async () => {
+    vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({ rol: "owner" } as never)
+
+    const res  = await DELETE(
+      makeReq("DELETE", "/api/users/usr-000", undefined, adminToken),
+      { params: Promise.resolve({ id: "usr-000" }) }
+    )
+    const data = await res.json()
+
+    expect(res.status).toBe(404)
+    expect(data.error).toMatch(/no encontrado/i)
   })
 })

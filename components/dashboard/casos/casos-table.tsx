@@ -4,7 +4,7 @@ import { useState, useMemo } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Eye, AlertTriangle, Layers, Filter, X, ArrowUpDown, ArrowUp, ArrowDown, CheckCircle, Clock, XCircle, FileText, BookOpen } from "lucide-react"
+import { Eye, AlertTriangle, Layers, Filter, X, ArrowUpDown, ArrowUp, ArrowDown, CheckCircle, Clock, XCircle, FileText, BookOpen, Upload } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import { Paginador } from "@/components/ui/paginator"
 import {
@@ -38,9 +38,10 @@ interface Props {
   historias: HistoriaUsuario[]
   onVerHU: (hu: HistoriaUsuario) => void
   tiposPrueba?: TipoPruebaDef[]
+  onImportCSV?: () => void
 }
 
-export function CasosTable({ casos, historias, onVerHU, tiposPrueba }: Props) {
+export function CasosTable({ casos, historias, onVerHU, tiposPrueba, onImportCSV }: Props) {
   // ── Filtros ──
   const [filtroAprobacion,  setFiltroAprobacion]  = useState<EstadoAprobacion | "todos">("todos")
   const [filtroComplejidad, setFiltroComplejidad] = useState<ComplejidadCaso | "todos">("todos")
@@ -165,9 +166,24 @@ export function CasosTable({ casos, historias, onVerHU, tiposPrueba }: Props) {
             <span style={{ fontFamily:"monospace", fontSize:11 }}>{counters[key]}</span>
           </button>
         ))}
-        <span style={{ marginLeft:"auto", fontSize:12, color:"var(--muted-foreground)", alignSelf:"center" }}>
-          {casos.length} caso{casos.length !== 1 ? "s" : ""} en total
-        </span>
+        <div style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:8 }}>
+          {onImportCSV && (
+            <button
+              onClick={onImportCSV}
+              title="Importar casos desde CSV"
+              style={{
+                display:"inline-flex", alignItems:"center", gap:5,
+                padding:"5px 10px", borderRadius:7, fontSize:11, fontWeight:600, cursor:"pointer",
+                border:"1px solid var(--border)", background:"var(--secondary)", color:"var(--foreground)",
+              }}
+            >
+              <Upload size={13}/> <span className="hidden sm:inline">Importar</span>
+            </button>
+          )}
+          <span style={{ fontSize:12, color:"var(--muted-foreground)" }}>
+            {casos.length} caso{casos.length !== 1 ? "s" : ""} en total
+          </span>
+        </div>
       </div>
 
       {/* ── Barra de búsqueda + filtros ── */}

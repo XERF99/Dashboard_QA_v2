@@ -1,12 +1,12 @@
 "use client"
 
-import { useEffect, useMemo } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useToast } from "@/lib/hooks/useToast"
 import { useHUModals } from "@/lib/hooks/useHUModals"
 import { useHistoriasVisibles } from "@/lib/hooks/useHistoriasVisibles"
 import { Header, ToastContainer, ConfirmDeleteModal, BloqueosPanel, AuditoriaPanel, NavTabGroup } from "@/components/dashboard/shared"
 import { HistoriasTable, HistoriaUsuarioDetail, HUForm, CSVImportModal, HUStatsCards } from "@/components/dashboard/historias"
-import { CasosTable } from "@/components/dashboard/casos"
+import { CasosTable, CSVImportCasosModal } from "@/components/dashboard/casos"
 import { HomeDashboard, CargaOcupacional, AnalyticsKPIs } from "@/components/dashboard/analytics"
 import { UserManagement } from "@/components/dashboard/usuarios"
 import { RolesConfig, EtapasConfig, ResultadosConfig, AplicacionesConfig, TiposAplicacionConfig, AmbientesConfig, TiposPruebaConfig, SprintsConfig } from "@/components/dashboard/config"
@@ -52,7 +52,7 @@ export default function DashboardPage() {
   const { toasts, addToast, dismissToast } = useToast()
 
   // ── Hooks de dominio ──────────────────────────────────────
-  const config = useConfig()
+  const config = useConfig({ isAuthenticated })
   const notif  = useNotificaciones()
   const domain = useDomainData({ user, configEtapas: config.configEtapas, configResultados: config.configResultados, addToast, addNotificacion: notif.addNotificacion })
 
@@ -76,6 +76,8 @@ export default function DashboardPage() {
     onEliminarConfirmado: domain.handleEliminarHUConfirmado,
     onBulkEliminarConfirmado: domain.handleBulkEliminarConfirmado,
   })
+
+  const [importCasosModalOpen, setImportCasosModalOpen] = useState(false)
 
   // ── Filtros de visibilidad ────────────────────────────────
   const { filtroNombresCarga, historiasVisibles } = useHistoriasVisibles({
@@ -265,6 +267,7 @@ export default function DashboardPage() {
               historias={historiasVisibles}
               onVerHU={abrirHU}
               tiposPrueba={config.tiposPrueba}
+              onImportCSV={canCreateHU ? () => setImportCasosModalOpen(true) : undefined}
             />
           </TabsContent>
 
@@ -357,6 +360,15 @@ export default function DashboardPage() {
         ambientes={config.ambientes}
         currentUser={user?.nombre}
         codigosExistentes={domain.historias.map(h => h.codigo)}
+      />
+
+      <CSVImportCasosModal
+        open={importCasosModalOpen}
+        onClose={() => setImportCasosModalOpen(false)}
+        onImport={domain.handleImportarCasos}
+        historias={domain.historias}
+        tiposPrueba={config.tiposPrueba}
+        currentUser={user?.nombre}
       />
 
       <HUDetailProvider value={{

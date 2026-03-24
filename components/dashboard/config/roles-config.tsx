@@ -4,7 +4,7 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Trash2, Lock, ChevronDown, ChevronUp, UserCog, Info } from "lucide-react"
+import { Plus, Lock, ChevronDown, ChevronUp, UserCog, Info } from "lucide-react"
 import {
   useAuth,
   PERMISOS_INFO,
@@ -13,6 +13,7 @@ import {
 } from "@/lib/contexts/auth-context"
 
 import { BADGE_PALETA } from "@/lib/constants/badge-paleta"
+import { DeleteConfirmButton } from "./delete-confirm-button"
 
 const TODOS_PERMISOS: PermisoId[] = [
   "canEdit", "canCreateHU", "canApproveCases", "canManageUsers", "verSoloPropios",
@@ -160,7 +161,7 @@ function RoleEditPanel({
 
 // ── Componente principal ──────────────────────────────────
 export function RolesConfig() {
-  const { roles, users, addRole, updateRole, deleteRole } = useAuth()
+  const { roles, users, addRole, updateRole, deleteRole, isOwner } = useAuth()
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [creando, setCreando] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -209,9 +210,9 @@ export function RolesConfig() {
         </div>
       )}
 
-      {/* Lista de roles */}
+      {/* Lista de roles (owner oculto para no-owners) */}
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        {roles.map(role => {
+        {roles.filter(r => isOwner || !r.permisos.includes("isSuperAdmin")).map(role => {
           const expanded = expandedId === role.id
           const usersCount = users.filter(u => u.rol === role.id).length
 
@@ -250,19 +251,12 @@ export function RolesConfig() {
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
                   {!role.esBase && (
-                    <button
-                      onClick={e => { e.stopPropagation(); handleDelete(role.id) }}
+                    <DeleteConfirmButton
+                      onConfirm={() => handleDelete(role.id)}
                       title={usersCount > 0 ? "No se puede eliminar: tiene usuarios asignados" : "Eliminar rol"}
                       disabled={usersCount > 0}
-                      style={{
-                        background: "none", border: "none",
-                        cursor: usersCount > 0 ? "not-allowed" : "pointer",
-                        color: "var(--chart-4)", padding: 4,
-                        opacity: usersCount > 0 ? 0.35 : 1,
-                      }}
-                    >
-                      <Trash2 size={13} />
-                    </button>
+                      stopPropagation
+                    />
                   )}
                   {expanded
                     ? <ChevronUp size={14} style={{ color: "var(--muted-foreground)" }} />

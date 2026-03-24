@@ -71,7 +71,7 @@ export function PerfilDialog({ open, onClose }: PerfilDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) handleClose() }}>
-      <DialogContent className="max-w-md p-0 overflow-hidden gap-0">
+      <DialogContent className="max-w-md p-0 overflow-hidden gap-0" aria-describedby={undefined}>
         {/* Franja de color superior */}
         <div style={{ height: 3, background: "linear-gradient(90deg, var(--primary), color-mix(in oklch, var(--primary) 60%, var(--chart-2)))" }} />
 

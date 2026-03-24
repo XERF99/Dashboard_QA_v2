@@ -3,8 +3,9 @@
 import type { ReactNode } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Plus, Trash2, ArrowUp, ArrowDown, RotateCcw } from "lucide-react"
+import { Plus, ArrowUp, ArrowDown, RotateCcw } from "lucide-react"
 import { useListConfig, type IdLabelItem } from "@/lib/hooks/useListConfig"
+import { DeleteConfirmButton } from "./delete-confirm-button"
 
 interface GenericListConfigProps<T extends IdLabelItem> {
   title: string
@@ -47,7 +48,9 @@ export function GenericListConfig<T extends IdLabelItem>({
             {emptyMessage}
           </p>
         )}
-        {items.map((item, idx) => (
+        {items.map((item, idx) => {
+          const isDefault = defaults.some(d => d.id === item.id)
+          return (
           <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--card)" }}>
 
             {/* Botones de orden */}
@@ -68,8 +71,9 @@ export function GenericListConfig<T extends IdLabelItem>({
 
             <Input
               value={item.label}
-              onChange={e => editarLabel(idx, e.target.value)}
-              style={{ height: 28, fontSize: 12, flex: 1 }}
+              readOnly={isDefault}
+              onChange={isDefault ? undefined : e => editarLabel(idx, e.target.value)}
+              style={{ height: 28, fontSize: 12, flex: 1, ...(isDefault ? { background: "var(--secondary)", cursor: "default", color: "var(--muted-foreground)" } : {}) }}
               placeholder="Nombre"
             />
 
@@ -82,13 +86,14 @@ export function GenericListConfig<T extends IdLabelItem>({
               </span>
             )}
 
-            <button
-              onClick={() => eliminar(idx)}
-              title="Eliminar"
-              style={{ background: "none", border: "none", cursor: "pointer", color: "var(--chart-4)", padding: 2, flexShrink: 0 }}
-            ><Trash2 size={13} /></button>
+            {isDefault ? (
+              <span style={{ width: 17, flexShrink: 0 }} />
+            ) : (
+              <DeleteConfirmButton onConfirm={() => eliminar(idx)} title="Eliminar" />
+            )}
           </div>
-        ))}
+          )
+        })}
       </div>
 
       {/* Agregar nuevo */}

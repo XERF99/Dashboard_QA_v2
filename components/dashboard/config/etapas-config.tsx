@@ -4,7 +4,7 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { AlertTriangle, Plus, Trash2, ArrowUp, ArrowDown, RotateCcw, ChevronDown, ChevronUp, Settings2 } from "lucide-react"
+import { AlertTriangle, Plus, ArrowUp, ArrowDown, RotateCcw, ChevronDown, ChevronUp, Settings2, History } from "lucide-react"
 import {
   ETAPAS_PREDETERMINADAS,
   TIPOS_APLICACION_PREDETERMINADOS,
@@ -16,6 +16,7 @@ import {
 
 import { BADGE_PALETA } from "@/lib/constants/badge-paleta"
 import { labelToId } from "@/lib/hooks/useListConfig"
+import { DeleteConfirmButton } from "./delete-confirm-button"
 
 interface EtapasConfigProps {
   config: ConfigEtapas
@@ -63,6 +64,27 @@ export function EtapasConfig({ config, onChange, tipos: tiposProp, historias }: 
   function cambiarCls(tipo: string, idx: number, cls: string) {
     const etapas = config[tipo].map((e, i) => i === idx ? { ...e, cls } : e)
     onChange({ ...config, [tipo]: etapas })
+  }
+
+  function reutilizarEtapa(tid: string, etapa: EtapaDefinicion) {
+    if ((config[tid] ?? []).some(e => e.id === etapa.id)) return
+    onChange({ ...config, [tid]: [...(config[tid] ?? []), etapa] })
+  }
+
+  function etapasDisponibles(tid: string): EtapaDefinicion[] {
+    const idsActuales = new Set((config[tid] ?? []).map(e => e.id))
+    const seen = new Set<string>()
+    const result: EtapaDefinicion[] = []
+    for (const [otroTid, etapas] of Object.entries(config)) {
+      if (otroTid === tid) continue
+      for (const e of etapas) {
+        if (!idsActuales.has(e.id) && !seen.has(e.id)) {
+          seen.add(e.id)
+          result.push(e)
+        }
+      }
+    }
+    return result
   }
 
   function restaurarTipo(tipoId: string) {
@@ -120,11 +142,11 @@ export function EtapasConfig({ config, onChange, tipos: tiposProp, historias }: 
               onClick={() => setExpandedTipo(expanded ? null : tid)}
               className="hover:bg-secondary/50"
             >
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <p style={{ fontSize: 13, fontWeight: 600, color: "var(--foreground)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: 1 }}>
+                <p style={{ fontSize: 13, fontWeight: 600, color: "var(--foreground)", flexShrink: 0 }}>
                   {tipoDef.label}
                 </p>
-                <div style={{ display: "flex", gap: 4 }}>
+                <div className="hidden sm:flex" style={{ gap: 4, flexWrap: "wrap" }}>
                   {etapas.map(e => (
                     <Badge key={e.id} variant="outline" className={`${e.cls} text-[9px]`} style={{ padding: "0px 6px" }}>
                       {e.label}
@@ -132,7 +154,7 @@ export function EtapasConfig({ config, onChange, tipos: tiposProp, historias }: 
                   ))}
                 </div>
                 {dirty && (
-                  <Badge variant="outline" className="bg-chart-3/20 text-chart-3 border-chart-3/30 text-[9px]" style={{ padding: "0px 6px" }}>
+                  <Badge variant="outline" className="bg-chart-3/20 text-chart-3 border-chart-3/30 text-[9px]" style={{ padding: "0px 6px", flexShrink: 0 }}>
                     Modificado
                   </Badge>
                 )}
@@ -173,92 +195,139 @@ export function EtapasConfig({ config, onChange, tipos: tiposProp, historias }: 
                       Sin etapas — agrega al menos una
                     </p>
                   )}
-                  {etapas.map((etapa, idx) => (
-                    <div key={etapa.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--card)" }}>
-                      {/* Orden */}
-                      <div style={{ display: "flex", flexDirection: "column", gap: 1, flexShrink: 0 }}>
-                        <button
-                          onClick={() => moverEtapa(tid, idx, -1)}
-                          disabled={idx === 0}
-                          style={{ background: "none", border: "none", cursor: idx === 0 ? "default" : "pointer", padding: 1, opacity: idx === 0 ? 0.3 : 1 }}
-                        ><ArrowUp size={11} /></button>
-                        <button
-                          onClick={() => moverEtapa(tid, idx, 1)}
-                          disabled={idx === etapas.length - 1}
-                          style={{ background: "none", border: "none", cursor: idx === etapas.length - 1 ? "default" : "pointer", padding: 1, opacity: idx === etapas.length - 1 ? 0.3 : 1 }}
-                        ><ArrowDown size={11} /></button>
-                      </div>
+                  {(() => {
+                    const defaultIds = new Set((ETAPAS_PREDETERMINADAS[tid] ?? []).map(e => e.id))
+                    return etapas.map((etapa, idx) => {
+                      const isDefault = defaultIds.has(etapa.id)
+                      return (
+                      <div key={etapa.id} style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8, padding: "8px 10px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--card)" }}>
+                        {/* Grupo 1: orden + número + label — ancho completo en móvil, flex-1 en escritorio */}
+                        <div className="flex items-center w-full sm:flex-1 sm:min-w-0" style={{ gap: 8 }}>
+                          {/* Orden */}
+                          <div style={{ display: "flex", flexDirection: "column", gap: 1, flexShrink: 0 }}>
+                            <button
+                              onClick={() => moverEtapa(tid, idx, -1)}
+                              disabled={idx === 0}
+                              style={{ background: "none", border: "none", cursor: idx === 0 ? "default" : "pointer", padding: 1, opacity: idx === 0 ? 0.3 : 1 }}
+                            ><ArrowUp size={11} /></button>
+                            <button
+                              onClick={() => moverEtapa(tid, idx, 1)}
+                              disabled={idx === etapas.length - 1}
+                              style={{ background: "none", border: "none", cursor: idx === etapas.length - 1 ? "default" : "pointer", padding: 1, opacity: idx === etapas.length - 1 ? 0.3 : 1 }}
+                            ><ArrowDown size={11} /></button>
+                          </div>
 
-                      {/* Número de orden */}
-                      <span style={{ fontSize: 10, fontWeight: 700, color: "var(--muted-foreground)", minWidth: 14, textAlign: "center" }}>{idx + 1}</span>
+                          {/* Número de orden */}
+                          <span style={{ fontSize: 10, fontWeight: 700, color: "var(--muted-foreground)", minWidth: 14, textAlign: "center", flexShrink: 0 }}>{idx + 1}</span>
 
-                      {/* Label editable */}
-                      <Input
-                        value={etapa.label}
-                        onChange={e => cambiarLabel(tid, idx, e.target.value)}
-                        style={{ height: 28, fontSize: 12, flex: 1 }}
-                        placeholder="Nombre de la etapa"
-                      />
-
-                      {/* Selector de color */}
-                      <div style={{ display: "flex", gap: 3, flexShrink: 0 }}>
-                        {BADGE_PALETA.map((p, pi) => (
-                          <button
-                            key={pi}
-                            title={`Color ${pi + 1}`}
-                            onClick={() => cambiarCls(tid, idx, p.cls)}
-                            style={{
-                              width: 14, height: 14, borderRadius: "50%", border: etapa.cls === p.cls ? "2px solid var(--foreground)" : "2px solid transparent",
-                              background: p.sample, cursor: "pointer", padding: 0,
-                            }}
+                          {/* Label (readonly si es predeterminada) */}
+                          <Input
+                            value={etapa.label}
+                            readOnly={isDefault}
+                            onChange={isDefault ? undefined : e => cambiarLabel(tid, idx, e.target.value)}
+                            style={{ height: 28, fontSize: 12, flex: 1, minWidth: 0, ...(isDefault ? { background: "var(--secondary)", cursor: "default", color: "var(--muted-foreground)" } : {}) }}
+                            placeholder="Nombre de la etapa"
                           />
-                        ))}
+                        </div>
+
+                        {/* Grupo 2: color + preview + eliminar — baja a segunda línea en móvil */}
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                          {/* Selector de color */}
+                          <div style={{ display: "flex", gap: 3 }}>
+                            {BADGE_PALETA.map((p, pi) => (
+                              <button
+                                key={pi}
+                                title={`Color ${pi + 1}`}
+                                onClick={() => cambiarCls(tid, idx, p.cls)}
+                                style={{
+                                  width: 14, height: 14, borderRadius: "50%", border: etapa.cls === p.cls ? "2px solid var(--foreground)" : "2px solid transparent",
+                                  background: p.sample, cursor: "pointer", padding: 0,
+                                }}
+                              />
+                            ))}
+                          </div>
+
+                          {/* Preview badge */}
+                          <Badge variant="outline" className={`${etapa.cls} text-[9px]`} style={{ padding: "0px 6px", flexShrink: 0, minWidth: 60, textAlign: "center" }}>
+                            {etapa.label || "—"}
+                          </Badge>
+
+                          {/* Eliminar (oculto si es predeterminada) */}
+                          {isDefault ? (
+                            <span style={{ width: 17, flexShrink: 0 }} />
+                          ) : (
+                            <DeleteConfirmButton onConfirm={() => eliminarEtapa(tid, idx)} title="Eliminar etapa" />
+                          )}
+                        </div>
                       </div>
-
-                      {/* Preview badge */}
-                      <Badge variant="outline" className={`${etapa.cls} text-[9px]`} style={{ padding: "0px 6px", flexShrink: 0, minWidth: 60, textAlign: "center" }}>
-                        {etapa.label || "—"}
-                      </Badge>
-
-                      {/* Eliminar */}
-                      <button
-                        onClick={() => eliminarEtapa(tid, idx)}
-                        title="Eliminar etapa"
-                        style={{ background: "none", border: "none", cursor: "pointer", color: "var(--chart-4)", padding: 2, flexShrink: 0 }}
-                      ><Trash2 size={13} /></button>
-                    </div>
-                  ))}
+                      )
+                    })
+                  })()}
                 </div>
 
                 {/* Agregar nueva etapa */}
-                <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10 }}>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10, flexWrap: "wrap" }}>
                   <Input
                     value={nuevoLabel[tid] ?? ""}
                     onChange={e => setNuevoLabel(p => ({ ...p, [tid]: e.target.value }))}
                     onKeyDown={e => { if (e.key === "Enter") agregarEtapa(tid) }}
                     placeholder="Nueva etapa (ej: UAT, Staging...)"
-                    style={{ height: 30, fontSize: 12, flex: 1 }}
+                    style={{ height: 30, fontSize: 12, flex: 1, minWidth: 150 }}
                   />
-                  {/* Selector color para la nueva */}
-                  <div style={{ display: "flex", gap: 3 }}>
-                    {BADGE_PALETA.map((p, pi) => (
-                      <button
-                        key={pi}
-                        onClick={() => setNuevoCls(prev => ({ ...prev, [tid]: p.cls }))}
-                        style={{
-                          width: 14, height: 14, borderRadius: "50%",
-                          border: (nuevoCls[tid] ?? BADGE_PALETA[etapas.length % BADGE_PALETA.length].cls) === p.cls
-                            ? "2px solid var(--foreground)" : "2px solid transparent",
-                          background: p.sample, cursor: "pointer", padding: 0,
-                        }}
-                      />
-                    ))}
+                  {/* Selector color + botón agregar */}
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
+                    <div style={{ display: "flex", gap: 3 }}>
+                      {BADGE_PALETA.map((p, pi) => (
+                        <button
+                          key={pi}
+                          onClick={() => setNuevoCls(prev => ({ ...prev, [tid]: p.cls }))}
+                          style={{
+                            width: 14, height: 14, borderRadius: "50%",
+                            border: (nuevoCls[tid] ?? BADGE_PALETA[etapas.length % BADGE_PALETA.length].cls) === p.cls
+                              ? "2px solid var(--foreground)" : "2px solid transparent",
+                            background: p.sample, cursor: "pointer", padding: 0,
+                          }}
+                        />
+                      ))}
+                    </div>
+                    <Button size="sm" style={{ height: 30, gap: 4 }} onClick={() => agregarEtapa(tid)}
+                      disabled={!(nuevoLabel[tid] ?? "").trim()}>
+                      <Plus size={12} /> Agregar
+                    </Button>
                   </div>
-                  <Button size="sm" style={{ height: 30, gap: 4 }} onClick={() => agregarEtapa(tid)}
-                    disabled={!(nuevoLabel[tid] ?? "").trim()}>
-                    <Plus size={12} /> Agregar
-                  </Button>
                 </div>
+
+                {/* Reusar etapas existentes de otros tipos */}
+                {(() => {
+                  const disponibles = etapasDisponibles(tid)
+                  if (disponibles.length === 0) return null
+                  return (
+                    <div style={{ marginBottom: 10 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                        <History size={11} style={{ color: "var(--muted-foreground)", flexShrink: 0 }} />
+                        <p style={{ fontSize: 11, color: "var(--muted-foreground)" }}>Reusar etapa existente:</p>
+                      </div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                        {disponibles.map(e => (
+                          <button
+                            key={e.id}
+                            title={`Agregar "${e.label}" a este tipo`}
+                            onClick={() => reutilizarEtapa(tid, e)}
+                            style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}
+                          >
+                            <Badge
+                              variant="outline"
+                              className={`${e.cls} text-[10px] hover:opacity-80 transition-opacity`}
+                              style={{ padding: "2px 8px", cursor: "pointer" }}
+                            >
+                              + {e.label}
+                            </Badge>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })()}
 
                 {/* Restaurar */}
                 {dirty && ETAPAS_PREDETERMINADAS[tid] && (

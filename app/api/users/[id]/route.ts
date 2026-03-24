@@ -11,6 +11,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   if (payload instanceof NextResponse) return payload
 
   const { id } = await params
+
+  if (payload.rol !== "owner") {
+    const target = await prisma.user.findUnique({ where: { id }, select: { rol: true } })
+    if (target?.rol === "owner") {
+      return NextResponse.json({ error: "No encontrado" }, { status: 404 })
+    }
+  }
+
   const body = await request.json()
 
   const { searchParams } = new URL(request.url)
@@ -51,6 +59,13 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   const { id } = await params
   if (payload.sub === id) {
     return NextResponse.json({ error: "No puedes eliminar tu propia cuenta" }, { status: 400 })
+  }
+
+  if (payload.rol !== "owner") {
+    const target = await prisma.user.findUnique({ where: { id }, select: { rol: true } })
+    if (target?.rol === "owner") {
+      return NextResponse.json({ error: "No encontrado" }, { status: 404 })
+    }
   }
 
   await prisma.user.delete({ where: { id } })

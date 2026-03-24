@@ -1,4 +1,4 @@
-# QAControl — Dashboard de Gestión de Pruebas · v2.17
+# QAControl — Dashboard de Gestión de Pruebas · v2.26
 
 Sistema integral de gestión de calidad para equipos QA. Permite administrar Historias de Usuario, casos de prueba, flujos de aprobación, bloqueos y carga ocupacional del equipo, con control de acceso basado en roles.
 
@@ -99,7 +99,7 @@ Sistema integral de gestión de calidad para equipos QA. Permite administrar His
 - **Aplicaciones**: lista de aplicaciones del proyecto
 - **Ambientes**: entornos de prueba disponibles (Dev, QA, Staging, Prod, etc.)
 - **Tipos de Prueba**: categorías de prueba disponibles (Funcional, Regresión, Smoke, etc.)
-- **Etapas**: configuración de las etapas de ejecución por tipo de aplicación
+- **Etapas**: configuración de las etapas de ejecución por tipo de aplicación; al agregar nuevas etapas se muestran sugerencias de etapas ya existentes en otros tipos para poder reutilizarlas con un clic
 - **Sprints**: gestión de sprints con nombre, fechas de inicio/fin y objetivo; las HUs se asignan a un sprint desde un selector (no texto libre)
 
 ---
@@ -165,7 +165,7 @@ dashboard_v22/
 │
 ├── prisma/                           ← Schema Prisma + seed
 ├── public/
-└── tests/                            ← 168 tests Vitest
+└── tests/                            ← 333 tests Vitest
 ```
 
 ## Backend (PostgreSQL + Prisma + MVC + Joi/Zod)
@@ -272,7 +272,7 @@ next.config.mjs         ← Headers de seguridad HTTP
 
 ## Tests
 
-El proyecto cuenta con **237 tests automatizados** en 23 archivos usando Vitest 3 + React Testing Library 16. Los tests de API routes corren en entorno `node`; los de UI/hooks en `jsdom`.
+El proyecto cuenta con **333 tests automatizados** en 31 archivos usando Vitest 3 + React Testing Library 16. Los tests de API routes corren en entorno `node`; los de UI/hooks en `jsdom`.
 
 ### Comandos
 
@@ -293,7 +293,7 @@ pnpm test:ui     # Interfaz visual de Vitest
 | `tests/api-historias.test.ts` | node | 10 | CRUD + sync de historias de usuario |
 | `tests/api-casos.test.ts` | node | 11 | CRUD + filtros + sync de casos de prueba |
 | `tests/api-tareas.test.ts` | node | 12 | CRUD + filtros + sync de tareas |
-| `tests/api-users.test.ts` | node | 10 | CRUD usuarios + reset-password + desbloquear |
+| `tests/api-users.test.ts` | node | 16 | CRUD usuarios + reset-password + desbloquear + owner invisibility |
 | `tests/api-config.test.ts` | node | 6 | GET/PUT config con guards de rol |
 | `tests/api-metricas.test.ts` | node | 5 | Agregaciones del dashboard QA |
 | `tests/api-sprints.test.ts` | node | 15 | CRUD sprints + sprint activo + validaciones |
@@ -309,12 +309,194 @@ pnpm test:ui     # Interfaz visual de Vitest
 | `tests/comentarioHandlers.test.ts` | jsdom | 7 | `handleAddComentarioHU` y `handleAddComentarioCaso`: autor, fecha, unicidad de IDs, aislamiento entre entidades |
 | `tests/notificacion-service.test.ts` | node | 5 | `rolToDestinatario`: mapeo de cada rol posible a su destinatario |
 | `tests/crearEvento.test.ts` | jsdom | 4 | `crearEvento`: tipo/descripción/usuario, fecha `Date`, formato de ID, unicidad de 100 IDs |
+| `tests/auth-session-expiry.test.ts` | jsdom | 5 | `sessionExpired` inicial false; polling 401 → logout; login post-expiración → resetea; sin usuario el intervalo no arranca; polling ok → sin cambio |
+| `tests/etapas-reuse.test.tsx` | jsdom | 5 | Sin etapas en otros tipos → sin sugerencias; etapa ausente → badge visible; etapa presente → badge oculto; deduplicación entre tipos; clic en sugerencia → `onChange` con etapa añadida |
+| `tests/useConfig-sync.test.ts` | jsdom | 3 | `tiposAplicacion` vacío no se envía al PUT; `ambientes` vacío no se envía; labels válidos se envían completos |
+| `tests/labelToId.test.ts` | jsdom | 15 | `labelToId`: lowercase, tildes, espacios, especiales, vacío, combinado · `useListConfig`: agregar, duplicado, vacío, eliminar, mover, límites, `hayDiferencias`, restaurar |
+| `tests/useHistoriasFilters.test.ts` | jsdom | 16 | Filtros por estado/prioridad/responsable/tipo/sprint/ambiente + combinados + `__sin_sprint__` + `limpiarFiltros` + `filtrosActivos`; ordenamiento asc/desc/campo; valores únicos (responsables, sprints) |
+| `tests/rate-limit.test.ts` | node | 10 | `checkRateLimit`: primera petición, conteo hasta límite, bloqueo al superar, IPs independientes, `resetAt`, expiración de ventana con fake timers · `getClientIp`: `x-forwarded-for`, `x-real-ip`, fallback `unknown`, precedencia |
+| `tests/resultados-config.test.tsx` | jsdom | 10 | Renderizado labels; `Máx. ret.` solo para no aceptados; sin botón Eliminar en base; botón + confirmación en personalizados; toggle aceptado (↓ y ↑); agregar estado custom; restaurar con diferencias; sin botón Restaurar cuando lista es igual |
+| `tests/csv-import-casos.test.tsx` | jsdom | 26 | Renderizado (open=false, título, formato, onClose); parseo CSV: fila válida → OK, HU no encontrada, título vacío, código vacío, conteo múltiples; importación: onImport con casos válidos, sin botón cuando no hay válidos, "Cambiar archivo", IDs únicos; defaults: complejidad/entorno/horas/estadoAprobacion |
 
 Los tests de API usan **Prisma y servicios mockeados** con `vi.mock` y generan JWTs reales con `signToken` — no requieren base de datos activa.
 
 ---
 
 ## Changelog
+
+### v2.26 — Importación masiva de Casos de Prueba desde CSV + 26 nuevos tests
+
+#### `components/dashboard/casos/csv-import-casos-modal.tsx` (nuevo)
+Modal de importación en 3 fases (Cargar → Preview → Importar) para casos de prueba, con la misma estética que el modal de importación de HUs. Soporta arrastrar & soltar o seleccionar archivo. Parsea el CSV validando que el Código HU exista en el sistema, que el título no esté vacío y que haya columnas suficientes. En la vista Preview muestra un resumen (n válidos / n errores) y una tabla por fila con estado OK o mensaje de error. Al importar genera objetos `CasoPrueba` con `estadoAprobacion: "borrador"` y los vincula automáticamente a sus HUs. Valores por defecto: `complejidad=media`, `entorno=test`, `horasEstimadas=1`.
+
+Columnas CSV: `Código HU * | Título * | Descripción | Tipo de Prueba | Complejidad | Horas Estimadas | Entorno`
+
+#### `lib/hooks/domain/casoHandlers.ts` — `handleImportarCasos`
+Nuevo handler que recibe `CasoPrueba[]`, los agrega al estado global de casos y actualiza el `casosIds` de cada HU afectada, registrando un evento en el historial por cada HU. Integrado en `useDomainData` vía spread.
+
+#### `components/dashboard/casos/casos-table.tsx` — botón Importar
+Nuevo prop `onImportCSV?: () => void`. Cuando se provee, aparece el botón **Importar** junto al contador de casos en la barra de KPI pills. Visible solo para usuarios con permiso `canCreateHU`.
+
+#### `app/page.tsx` — integración
+Importa `CSVImportCasosModal`, añade estado `importCasosModalOpen` y pasa `onImportCSV={() => setImportCasosModalOpen(true)}` a `<CasosTable>`. El modal recibe `historias`, `tiposPrueba` y `currentUser` del contexto.
+
+#### `tests/csv-import-casos.test.tsx` (26 tests · jsdom)
+Cubre: renderizado (open=false no monta, título visible, 7 columnas en formato, Cancelar llama onClose); parseo (fila válida → "OK", HU no encontrada → error, título vacío → error, código vacío → error, múltiples filas con conteo); importación (onImport recibe casos correctos con huId/complejidad/creadoPor, sin botón Importar cuando hay 0 válidos, "Cambiar archivo" vuelve a upload, IDs únicos); valores por defecto (complejidad→media, entorno→test, horas→1, estadoAprobacion→borrador).
+
+---
+
+### v2.25 — Fix: "Máx. ret." en móvil + 51 nuevos tests (4 áreas sin cobertura)
+
+#### `components/dashboard/config/resultados-config.tsx` — fix layout "Máx. ret." en móvil
+El bloque "Máx. ret." (label + input de retesteos) aparecía en la misma línea que el resto de controles del Grupo 2 (toggle, colores, badge), desbordándose hacia la derecha en pantallas estrechas. Se añade `className="w-full sm:w-auto"` al div contenedor: en móvil ocupa el 100 % del ancho dentro del flex-wrap de Grupo 2, bajando a su propia fila; en escritorio recupera ancho automático y convive en la misma línea que los demás controles.
+
+#### Nuevos tests (51 tests, 4 archivos)
+
+**`tests/labelToId.test.ts`** (15 tests · jsdom)
+Cubre `labelToId` (lowercase, tildes, espacios → guión bajo, caracteres especiales, vacío, combinaciones) y el hook `useListConfig` (agregar item, prevenir duplicados, rechazar label vacío, eliminar por índice, mover con guard de límites, `hayDiferencias` en ambos casos, `restaurar` con verificación de copia).
+
+**`tests/useHistoriasFilters.test.ts`** (16 tests · jsdom)
+Cubre el hook `useHistoriasFilters` completo: filtros por estado, prioridad, responsable, tipo de aplicación, sprint (cadena y `__sin_sprint__`), ambiente; filtros combinados (condición AND); `limpiarFiltros`; contador `filtrosActivos`; ordenamiento por código asc/desc y cambio de campo (reset a asc); valores únicos calculados para responsables y sprints.
+
+**`tests/rate-limit.test.ts`** (10 tests · node)
+Cubre `checkRateLimit` (primera petición, peticiones hasta el límite todas permitidas, superación del límite → `allowed=false`, aislamiento entre IPs, `resetAt` en el futuro, expiración de ventana con fake timers) y `getClientIp` (`x-forwarded-for` con múltiples IPs, `x-real-ip` como fallback, `"unknown"` sin headers, precedencia de `x-forwarded-for`).
+
+**`tests/resultados-config.test.tsx`** (10 tests · jsdom)
+Cubre el componente `ResultadosConfig`: renderiza los labels de los resultados recibidos; campo "Máx. ret." visible solo para `!esAceptado`; ausencia de botón Eliminar en estados base; presencia y flujo de confirmación en personalizados; toggle aceptado en ambas direcciones; agregar estado custom via formulario; botón Restaurar condicional.
+
+---
+
+### v2.24 — UX: diseño responsive en Configuración → Etapas y Resultados
+
+#### `components/dashboard/config/etapas-config.tsx`
+En pantallas móviles la fila de cada etapa se dividía en una sola línea con muchos controles (flechas de orden, input de nombre, selector de colores, badge de vista previa y botón de eliminar), desbordando el contenedor horizontal. Se reorganizan los controles en **dos grupos**:
+- **Grupo 1** (ancho completo): flechas de orden + número + input de nombre — se estira hasta ocupar el ancho disponible.
+- **Grupo 2** (baja a segunda línea en móvil): selector de colores + badge de vista previa + botón de eliminar — con `flex-wrap` pasa a la siguiente línea cuando no hay espacio.
+
+También se ocultan los badges de vista previa de la cabecera del acordeón en móvil (clase `hidden sm:flex`), evitando desbordamiento horizontal al haber muchas etapas. El formulario de "Agregar nueva etapa" agrupa el selector de color y el botón juntos, de modo que el input ocupa el ancho disponible y los controles se ajustan debajo en pantallas pequeñas.
+
+#### `components/dashboard/config/resultados-config.tsx`
+Cada fila de resultado concentraba en una sola línea: ID monospace, input de nombre, toggle Aceptado/No aceptado, selector de colores, badge, campo de máx. retesteos y botón de eliminar. Se aplica el mismo patrón de **dos grupos**:
+- **Grupo 1**: ID monospace + input de nombre, en fila expandible.
+- **Grupo 2**: toggle + selector de colores + badge + máx. retesteos + eliminar — con `flex-wrap` baja a línea siguiente en móvil.
+
+El Grupo 1 usa `w-full sm:flex-1` (Tailwind) en lugar de `flex: 1` inline: en móvil toma el 100 % del ancho forzando al Grupo 2 a la siguiente línea siempre; en pantallas `sm:` (≥ 640 px) recupera el comportamiento `flex: 1` para que ambos grupos quepan en una sola línea. Sin este cambio, las filas con IDs cortos (como `exitoso` o `bloqueado`) no generaban el salto de línea porque Grupo 1 + Grupo 2 juntos aún cabían horizontalmente, aplastando el input.
+
+La vista de escritorio no se ve afectada: ambos grupos caben en una sola línea con el ancho habitual.
+
+---
+
+### v2.23 — Fix: labels vacíos no se sincronizan + tests para expiración de sesión y reuso de etapas
+
+#### `lib/hooks/useConfig.ts` — filtro de labels vacíos antes de PUT /api/config
+El efecto de sincronización enviaba el array completo de `tiposAplicacion`, `ambientes`, `tiposPrueba` y `aplicaciones` sin validar. Si el usuario borraba el texto de un ítem mientras editaba, el debounce (600 ms) disparaba un PUT con `label: ""`, que el validador Joi rechazaba con HTTP 400. Añadido `.filter(t => t.label.trim() !== "")` en cada array antes de enviar, de modo que los estados transitorios (campo vacío durante la edición) no se propagan a la API.
+
+#### Nuevos tests (13 tests, 3 archivos)
+
+**`tests/auth-session-expiry.test.ts`** (5 tests · jsdom)
+Cubre el polling periódico de `auth-context`: estado inicial, detección de JWT expirado (polling 401 → `sessionExpired=true`, `user=null`), reset tras login exitoso, ausencia de intervalo cuando no hay usuario autenticado, y comportamiento sin cambios cuando el polling responde 200.
+
+**`tests/etapas-reuse.test.tsx`** (5 tests · jsdom)
+Cubre la nueva fila "Reusar etapa existente" de `EtapasConfig`: oculta cuando no hay sugerencias, visible con el badge correcto cuando hay etapas disponibles, filtrado de etapas ya presentes en el tipo actual, deduplicación de etapas repetidas en varios tipos, y acción correcta al hacer clic (`onChange` con el payload esperado).
+
+**`tests/useConfig-sync.test.ts`** (3 tests · jsdom)
+Verifica el filtro de labels vacíos con fake timers: `tiposAplicacion` vacío excluido del PUT, `ambientes` vacío excluido, labels válidos transmitidos sin modificar.
+
+---
+
+### v2.22 — Seguridad: expiración automática de sesión tras 8 horas
+
+#### `lib/contexts/auth-context.tsx`
+Se añade un intervalo de verificación que llama a `GET /api/auth/me` cada 5 minutos mientras el usuario está autenticado. Si el endpoint responde con HTTP 401 (JWT expirado o inválido), el contexto limpia el estado del usuario (`setUser(null)`) y activa el flag `sessionExpired`. Al hacer login exitosamente, `sessionExpired` se resetea a `false`.
+
+#### `components/auth/login-screen.tsx`
+Cuando `sessionExpired` es `true`, se muestra un aviso visible dentro de la tarjeta de login, antes del formulario. El aviso incluye un icono de reloj, el título **"Tu sesión ha expirado"** y la descripción **"Por seguridad, vuelve a ingresar para continuar."** Adapta sus colores al tema claro/oscuro activo. El aviso se oculta automáticamente al completar el login.
+
+---
+
+### v2.21 — UX: reusar etapas existentes al configurar un tipo de aplicación
+
+#### `etapas-config.tsx`
+Al expandir un tipo de aplicación en la sección Configuración → Etapas, ahora se muestra una fila de sugerencias **"Reusar etapa existente"** con todas las etapas que ya existen en otros tipos pero aún no están en el tipo actual. Cada sugerencia se presenta como un badge clickeable con el nombre y el color de la etapa original; al hacer clic se añade directamente a la lista sin necesidad de escribir el nombre manualmente. La fila solo aparece cuando hay etapas disponibles para reutilizar.
+
+---
+
+### v2.20.1 — Fix: Owner excluido del selector de equipo y de updateUser
+
+#### `user-form-modal.tsx` — Selector "Miembros del equipo"
+La lista de usuarios seleccionables para el equipo de un admin/lead filtraba solo `u.activo && u.id !== userToEdit.id`, dejando visible al usuario Owner. Añadido `&& !getRoleDef(u.rol)?.permisos.includes("isSuperAdmin")` al filtro: los usuarios con rol Owner no aparecen en el selector bajo ninguna circunstancia para usuarios no-owner.
+
+#### `auth-context.tsx` — Guard en `updateUser`
+Si un no-owner llamaba a `updateUser` con un objeto de usuario cuyo rol actual era Owner (p.ej. desde localStorage), la función lo procesaba sin restricción. Añadido guard que detecta si el usuario target es Owner (`targetIsOwnerUser`) y retorna `{ success: false, error: "No encontrado" }` cuando `!currentIsOwner`, consistente con el 404 del backend.
+
+---
+
+### v2.20 — UX: confirmación inline antes de eliminar en todas las configuraciones
+
+#### `components/dashboard/config/delete-confirm-button.tsx` (nuevo)
+Componente reutilizable `DeleteConfirmButton`. Al hacer clic en el icono de papelera, el botón se transforma en una confirmación inline `¿Eliminar? ✓ ✗` sin abrir ningún modal. El ✓ ejecuta la acción; el ✗ cancela y vuelve al estado inicial. Soporta `disabled` (botón inactivo con opacidad reducida) y `stopPropagation` (necesario para botones dentro de contenedores clickeables como el acordeón de roles).
+
+#### Archivos actualizados
+- `generic-list-config.tsx` — Ambientes, Tipos de Aplicación, Tipos de Prueba: ítems personalizados
+- `resultados-config.tsx` — Estados de resultado no-base
+- `etapas-config.tsx` — Etapas personalizadas (no predeterminadas)
+- `aplicaciones-config.tsx` — Aplicaciones/sistemas personalizadas
+- `roles-config.tsx` — Roles personalizados (respeta el `disabled` cuando el rol tiene usuarios asignados y usa `stopPropagation` por estar dentro del header del acordeón)
+
+---
+
+### v2.19.2 — Fix: aplicaciones predeterminadas no editables ni eliminables
+
+#### `aplicaciones-config.tsx`
+`AplicacionesConfig` usa `string[]` en lugar de objetos con `id`, por lo que la detección de ítem predeterminado se hace por contenido: `APLICACIONES_PREDETERMINADAS.includes(app)`. Mismo patrón que v2.18: `Input` en `readOnly` con fondo secundario y spacer en lugar del botón de eliminar para las aplicaciones predeterminadas.
+
+---
+
+### v2.19.1 — Fix: Owner también oculto en cards de stats y lista de roles
+
+#### `user-management.tsx` — Cards de estadísticas por rol
+La grilla de cards iteraba sobre todos los roles con `roles.map(...)` sin excluir el rol `owner`. Para usuarios no-owner, el card "Owner" era visible aunque la lista de usuarios ya lo filtraba. Añadido `.filter(r => isOwner || !r.permisos.includes("isSuperAdmin"))` antes del `map`.
+
+#### `roles-config.tsx` — Lista de gestión de roles
+La lista de roles en la sección Configuración → Roles también mostraba la entrada "Owner" para todos los usuarios (con "1 usuario"). Añadido `isOwner` al destructuring de `useAuth` y el mismo filtro `isSuperAdmin` antes del `map`.
+
+---
+
+### v2.19 — Seguridad: usuario Owner invisible para no-owners
+
+El usuario con rol `owner` representa al super-administrador del sistema. Ningún otro usuario debe conocer su existencia para evitar ataques dirigidos a esa cuenta.
+
+#### `GET /api/users` — filtro en capa de base de datos
+Cuando el requester no tiene `rol === "owner"`, la query agrega `where: { NOT: { rol: "owner" } }` al `prisma.user.findMany`. Los usuarios Owner nunca aparecen en la lista de ningún otro rol.
+
+#### `PUT /api/users/[id]` — 404 al intentar editar un Owner
+Antes de ejecutar el `update`, si el requester no es Owner, se hace un `findUnique` del target. Si el target tiene `rol === "owner"`, se retorna **404** (no 403) para no revelar que el usuario existe.
+
+#### `DELETE /api/users/[id]` — 404 al intentar eliminar un Owner
+Misma lógica que PUT: `findUnique` + 404 si target es Owner y requester no lo es.
+
+#### `POST /api/users` — 403 al intentar crear usuario con rol Owner
+Si el body incluye `rol: "owner"` y el requester no es Owner, se retorna 403 antes de llamar a `createUserService`. Complementa la protección ya existente en el formulario frontend (el selector de rol no muestra "Owner" para no-owners).
+
+#### `user-management.tsx` — filtro en frontend
+`usersVisibles` ahora calcula primero `usersBase`: si el usuario activo no es Owner, filtra todos los usuarios con `isSuperAdmin` en sus permisos. Este filtro cubre también el caso en que localStorage tenga usuarios Owner cacheados de una sesión anterior de Owner.
+
+**243/243 tests en verde.**
+
+---
+
+### v2.18 — UX configuración: ítems predeterminados no editables ni eliminables
+
+#### `generic-list-config.tsx` — Ambientes, Tipos de Aplicación y Tipos de Prueba
+Los ítems predeterminados (aquellos cuyo `id` existe en el array `defaults` del componente) ahora son de solo lectura: el campo de texto muestra fondo secundario y cursor por defecto, y el botón de eliminar es reemplazado por un spacer para mantener el layout. Solo se puede modificar el texto y eliminar ítems personalizados (agregados por el usuario).
+
+#### `resultados-config.tsx` — Estados de Resultado base
+Los estados base (`esBase: true`: Exitoso, Fallido, Error preexistente, Bloqueado) ya no permiten editar la etiqueta — el `Input` es `readOnly` con estilo de fondo secundario. El selector de color y el toggle de "Aceptado" siguen siendo editables. El banner informativo fue actualizado para reflejar el nuevo comportamiento.
+
+#### `etapas-config.tsx` — Etapas predeterminadas por tipo de aplicación
+Las etapas cuyo `id` existe en `ETAPAS_PREDETERMINADAS[tipo]` ahora tienen el `Input` de nombre en `readOnly` y sin botón de eliminar (spacer en su lugar). El selector de color permanece activo para permitir personalización visual sin alterar el nombre. Las etapas personalizadas (agregadas por el usuario) mantienen el comportamiento completo.
+
+---
 
 ### v2.17 — Optimizaciones: IDs únicos, validación Zod en sprints, `api.get()` en auth y metricas groupBy
 
@@ -676,7 +858,7 @@ Los endpoints de sync mantienen `requireAuth` (cualquier usuario autenticado pue
 - **`tests/api-historias.test.ts`** — 10 tests: listar (sin token→401, con token→200), crear (body inválido→400, exitoso→201), obtener por id (no existe→404, existe→200), actualizar→200, eliminar→200, sync (sin token→401, array completo→200+count).
 - **`tests/api-casos.test.ts`** — 11 tests: listar todos→200, filtrar por `huId`→200, crear (inválido→400, exitoso→201), obtener por id (no existe→404, existe→200), actualizar→200, eliminar→200, sync (array vacío→count 0, con casos→count correcto).
 - **`tests/api-tareas.test.ts`** — 12 tests: listar todos→200, filtrar por `casoPruebaId`→200, filtrar por `huId`→200, crear (inválido→400, exitoso→201), obtener por id (no existe→404, existe→200), actualizar→200, eliminar→200, sync (sin token→401, con tareas→count correcto).
-- **`tests/api-users.test.ts`** — 10 tests: listar (QA→403, admin→200), crear (sin email→400, email duplicado→409, exitoso→201), actualizar→200, reset-password→200, desbloquear→200, eliminar propia cuenta→400, eliminar otro→200.
+- **`tests/api-users.test.ts`** — 16 tests: listar (QA→403, admin→200), crear (sin email→400, email duplicado→409, exitoso→201), actualizar→200, reset-password→200, desbloquear→200, eliminar propia cuenta→400, eliminar otro→200; owner invisibility: GET (admin→`where NOT owner`, owner→`where {}`), POST (admin crea owner→403), PUT (admin edita owner→404), DELETE (admin elimina owner→404).
 - **`tests/api-config.test.ts`** — 7 tests: leer (sin token→401, autenticado→200), actualizar (QA→403, body inválido→400, aplicaciones→200, etapas con formato correcto→200).
 
 ### v2.2 — Refactorización de componentes grandes y consolidación de config (opt10)
@@ -910,6 +1092,7 @@ dashboard_v22/
 │   │   ├── casos/            # Módulo Casos de Prueba
 │   │   │   ├── casos-table.tsx
 │   │   │   ├── caso-prueba-card.tsx
+│   │   │   ├── csv-import-casos-modal.tsx
 │   │   │   └── index.ts
 │   │   ├── analytics/        # Módulo Analíticas
 │   │   │   ├── home-dashboard.tsx

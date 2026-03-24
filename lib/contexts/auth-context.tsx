@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react"
 import { usePersistedState, STORAGE_KEYS } from "@/lib/storage"
-import { api } from "@/lib/services/api/client"
+import { api, ApiError } from "@/lib/services/api/client"
 
 // ── Permisos disponibles ──────────────────────────────────
 export type PermisoId =
@@ -161,6 +161,7 @@ interface AuthContextType {
   roles: RoleDef[]
   isAuthenticated: boolean
   sessionLoading: boolean
+  sessionExpired: boolean           // true = JWT expiró durante la sesión activa
   pendientePassword: boolean        // true = debe cambiar contraseña antes de usar el app
   pendingBlockEvents: { id: string; nombre: string }[]
   clearBlockEvents: () => void
@@ -195,6 +196,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserSafe | null>(null)
   const [sessionLoading, setSessionLoading] = useState(true)
+  const [sessionExpired, setSessionExpired] = useState(false)
   const [users, setUsers] = usePersistedState<User[]>(STORAGE_KEYS.users, usuariosIniciales)
   const [roles, setRoles] = usePersistedState<RoleDef[]>(STORAGE_KEYS.roles, ROLES_PREDETERMINADOS)
   const [pendientePassword, setPendientePassword] = useState(false)
@@ -222,6 +224,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setSessionLoading(false))
   }, [])
 
+  // ── Verificación periódica de sesión (cada 5 min) ─────
+  useEffect(() => {
+    if (!user) return
+    const id = setInterval(async () => {
+      try {
+        await api.get<{ user: UserSafe }>("/api/auth/me")
+      } catch (err: unknown) {
+        if (err instanceof ApiError && err.status === 401) {
+          setUser(null)
+          setPendientePassword(false)
+          setSessionExpired(true)
+        }
+      }
+    }, 5 * 60 * 1000)
+    return () => clearInterval(id)
+  }, [user])
+
   const login = useCallback(async (email: string, password: string) => {
     try {
       const res = await fetch("/api/auth/login", {
@@ -239,6 +258,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       setUser(data.user)
+      setSessionExpired(false)
       if (data.debeCambiar) {
         setPendientePassword(true)
         return { success: true, debeCambiar: true }
@@ -314,6 +334,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const targetRolDef   = roles.find(r => r.id === updatedUser.rol)
     const currentIsOwner = user ? (roles.find(r => r.id === user.rol)?.permisos.includes("isSuperAdmin") ?? false) : false
     const existingUser   = users.find(u => u.id === updatedUser.id)
+
+    // No-owners no pueden editar al usuario Owner
+    const targetIsOwnerUser = roles.find(r => r.id === (existingUser?.rol ?? ""))?.permisos.includes("isSuperAdmin") ?? false
+    if (targetIsOwnerUser && !currentIsOwner) return { success: false, error: "No encontrado" }
     if (
       targetRolDef?.permisos.includes("canManageUsers") &&
       !currentIsOwner &&
@@ -471,7 +495,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider value={{
-      user, users, roles, isAuthenticated: user !== null, sessionLoading,
+      user, users, roles, isAuthenticated: user !== null, sessionLoading, sessionExpired,
       pendientePassword,
       pendingBlockEvents, clearBlockEvents,
       login, logout, cambiarPassword, updateProfile,
