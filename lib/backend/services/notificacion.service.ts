@@ -9,9 +9,12 @@ export function rolToDestinatario(rol: string): "admin" | "qa" {
   return ["owner", "admin"].includes(rol) ? "admin" : "qa"
 }
 
-export async function getNotificacionesByDestinatario(destinatario: string) {
+export async function getNotificacionesByDestinatario(destinatario: string, grupoId?: string) {
   return prisma.notificacion.findMany({
-    where:   { destinatario },
+    where: {
+      destinatario,
+      ...(grupoId ? { grupoId } : {}),
+    },
     orderBy: { fecha: "desc" },
   })
 }
@@ -21,6 +24,7 @@ export async function createNotificacion(data: {
   titulo:      string
   descripcion: string
   destinatario: string
+  grupoId:     string
   casoId?:     string
   huId?:       string
   huTitulo?:   string
@@ -33,9 +37,9 @@ export async function marcarLeida(id: string) {
   return prisma.notificacion.update({ where: { id }, data: { leida: true } })
 }
 
-export async function marcarTodasLeidas(destinatario: string) {
+export async function marcarTodasLeidas(destinatario: string, grupoId?: string) {
   return prisma.notificacion.updateMany({
-    where: { destinatario, leida: false },
+    where: { destinatario, leida: false, ...(grupoId ? { grupoId } : {}) },
     data:  { leida: true },
   })
 }

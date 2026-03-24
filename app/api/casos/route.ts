@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ casos })
   }
 
-  const casos = await getAllCasos()
+  const casos = await getAllCasos(payload.grupoId)
   return NextResponse.json({ casos })
 }
 

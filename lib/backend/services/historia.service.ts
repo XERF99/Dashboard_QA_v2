@@ -1,11 +1,19 @@
 // ═══════════════════════════════════════════════════════════
 //  HISTORIA SERVICE — lógica de negocio para HUs
+//  grupoId: undefined = owner (ve todo), string = filtra al grupo
 // ═══════════════════════════════════════════════════════════
 
 import { prisma } from "@/lib/backend/prisma"
 
-export async function getAllHistorias() {
-  return prisma.historiaUsuario.findMany({ orderBy: { fechaCreacion: "desc" } })
+function grupoFilter(grupoId?: string) {
+  return grupoId ? { grupoId } : {}
+}
+
+export async function getAllHistorias(grupoId?: string) {
+  return prisma.historiaUsuario.findMany({
+    where: grupoFilter(grupoId),
+    orderBy: { fechaCreacion: "desc" },
+  })
 }
 
 export async function getHistoriaById(id: string) {
@@ -27,10 +35,16 @@ export async function deleteHistoria(id: string) {
   return prisma.historiaUsuario.delete({ where: { id } })
 }
 
-export async function getHistoriasBySprint(sprint: string) {
-  return prisma.historiaUsuario.findMany({ where: { sprint }, orderBy: { fechaCreacion: "desc" } })
+export async function getHistoriasBySprint(sprint: string, grupoId?: string) {
+  return prisma.historiaUsuario.findMany({
+    where: { sprint, ...grupoFilter(grupoId) },
+    orderBy: { fechaCreacion: "desc" },
+  })
 }
 
-export async function getHistoriasByResponsable(responsable: string) {
-  return prisma.historiaUsuario.findMany({ where: { responsable }, orderBy: { fechaCreacion: "desc" } })
+export async function getHistoriasByResponsable(responsable: string, grupoId?: string) {
+  return prisma.historiaUsuario.findMany({
+    where: { responsable, ...grupoFilter(grupoId) },
+    orderBy: { fechaCreacion: "desc" },
+  })
 }

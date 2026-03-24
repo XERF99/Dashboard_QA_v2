@@ -8,6 +8,6 @@ export async function PATCH(request: NextRequest) {
   if (payload instanceof NextResponse) return payload
 
   const destinatario = rolToDestinatario(payload.rol)
-  await marcarTodasLeidas(destinatario)
+  await marcarTodasLeidas(destinatario, payload.grupoId)
   return NextResponse.json({ success: true })
 }

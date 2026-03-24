@@ -1,11 +1,19 @@
 // ═══════════════════════════════════════════════════════════
 //  CASO SERVICE — lógica de negocio para Casos de Prueba
+//  grupoId: undefined = owner (ve todo), string = filtra al grupo
 // ═══════════════════════════════════════════════════════════
 
 import { prisma } from "@/lib/backend/prisma"
 
-export async function getAllCasos() {
-  return prisma.casoPrueba.findMany({ orderBy: { fechaCreacion: "desc" } })
+function grupoHUFilter(grupoId?: string) {
+  return grupoId ? { hu: { grupoId } } : {}
+}
+
+export async function getAllCasos(grupoId?: string) {
+  return prisma.casoPrueba.findMany({
+    where: grupoHUFilter(grupoId),
+    orderBy: { fechaCreacion: "desc" },
+  })
 }
 
 export async function getCasoById(id: string) {

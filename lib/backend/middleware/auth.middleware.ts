@@ -29,6 +29,7 @@ export interface JWTPayload {
   email: string
   nombre: string
   rol: string
+  grupoId?: string // undefined para el owner (acceso a todos los grupos)
   iat?: number
   exp?: number
 }

@@ -33,7 +33,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Permisos insuficientes" }, { status: 403 })
   }
 
-  const result = await createUserService(value)
+  // Admin hereda su propio grupoId; owner debe proveer uno en el body
+  const grupoId = payload.rol !== "owner"
+    ? (payload.grupoId ?? null)
+    : (value.grupoId ?? null)
+
+  const result = await createUserService({ ...value, grupoId })
   if (!result.success) return NextResponse.json({ error: result.error }, { status: 409 })
   return NextResponse.json({ user: result.user }, { status: 201 })
 }

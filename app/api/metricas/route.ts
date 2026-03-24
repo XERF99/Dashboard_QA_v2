@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
   const cached = getMetricasCache()
   if (cached) return NextResponse.json({ metricas: cached })
 
-  const metricas = await getMetricas()
+  const metricas = await getMetricas(payload.grupoId)
   setMetricasCache(metricas)
   return NextResponse.json({ metricas })
 }

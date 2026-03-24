@@ -1,11 +1,19 @@
 // ═══════════════════════════════════════════════════════════
 //  SPRINT SERVICE — lógica de negocio para Sprints
+//  grupoId: undefined = owner (ve todo), string = filtra al grupo
 // ═══════════════════════════════════════════════════════════
 
 import { prisma } from "@/lib/backend/prisma"
 
-export async function getAllSprints() {
-  return prisma.sprint.findMany({ orderBy: { fechaInicio: "desc" } })
+function grupoFilter(grupoId?: string) {
+  return grupoId ? { grupoId } : {}
+}
+
+export async function getAllSprints(grupoId?: string) {
+  return prisma.sprint.findMany({
+    where: grupoFilter(grupoId),
+    orderBy: { fechaInicio: "desc" },
+  })
 }
 
 export async function getSprintById(id: string) {
@@ -13,16 +21,17 @@ export async function getSprintById(id: string) {
 }
 
 /** Devuelve el sprint cuyo rango [fechaInicio, fechaFin] incluye la fecha actual. */
-export async function getSprintActivo() {
+export async function getSprintActivo(grupoId?: string) {
   const now = new Date()
   return prisma.sprint.findFirst({
-    where: { fechaInicio: { lte: now }, fechaFin: { gte: now } },
+    where: { fechaInicio: { lte: now }, fechaFin: { gte: now }, ...grupoFilter(grupoId) },
     orderBy: { fechaInicio: "desc" },
   })
 }
 
 export async function createSprint(data: {
   nombre: string
+  grupoId: string
   fechaInicio: Date | string
   fechaFin: Date | string
   objetivo?: string
@@ -30,6 +39,7 @@ export async function createSprint(data: {
   return prisma.sprint.create({
     data: {
       nombre:      data.nombre,
+      grupoId:     data.grupoId,
       fechaInicio: new Date(data.fechaInicio),
       fechaFin:    new Date(data.fechaFin),
       objetivo:    data.objetivo,

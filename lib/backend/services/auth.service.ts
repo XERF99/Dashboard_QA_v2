@@ -14,7 +14,7 @@ const SALT_ROUNDS  = 10
 
 // ── Login ─────────────────────────────────────────────────
 export async function loginService(email: string, password: string) {
-  const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } })
+  const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() }, include: { grupo: true } })
 
   // Mensaje genérico para usuario no encontrado: no revelar si el email existe
   if (!user)        return { success: false, error: "Credenciales inválidas." } as const
@@ -46,13 +46,19 @@ export async function loginService(email: string, password: string) {
     data: { intentosFallidos: 0, bloqueado: false, historialConexiones: historial },
   })
 
-  const token = await signToken({ sub: user.id, email: user.email, nombre: user.nombre, rol: user.rol })
+  const token = await signToken({
+    sub:     user.id,
+    email:   user.email,
+    nombre:  user.nombre,
+    rol:     user.rol,
+    ...(user.grupoId ? { grupoId: user.grupoId } : {}),
+  })
 
   return {
     success: true,
     token,
     debeCambiar: user.debeCambiarPassword,
-    user: { id: user.id, nombre: user.nombre, email: user.email, rol: user.rol, activo: user.activo, debeCambiarPassword: user.debeCambiarPassword },
+    user: { id: user.id, nombre: user.nombre, email: user.email, rol: user.rol, grupoId: user.grupoId ?? null, activo: user.activo, debeCambiarPassword: user.debeCambiarPassword },
   } as const
 }
 
@@ -83,17 +89,18 @@ export async function cambiarPasswordService(userId: string, actual: string, nue
 }
 
 // ── Crear usuario ─────────────────────────────────────────
-export async function createUserService(data: { nombre: string; email: string; rol: string }) {
+export async function createUserService(data: { nombre: string; email: string; rol: string; grupoId?: string | null }) {
   const exists = await prisma.user.findUnique({ where: { email: data.email.toLowerCase() } })
   if (exists) return { success: false, error: "Ya existe un usuario con este email" }
 
   const hash = await bcrypt.hash(PASSWORD_GENERICA, SALT_ROUNDS)
   const user = await prisma.user.create({
     data: {
-      nombre: data.nombre,
-      email:  data.email.toLowerCase(),
+      nombre:  data.nombre,
+      email:   data.email.toLowerCase(),
       passwordHash: hash,
-      rol:    data.rol,
+      rol:     data.rol,
+      grupoId: data.grupoId ?? null,
       debeCambiarPassword: true,
     },
   })

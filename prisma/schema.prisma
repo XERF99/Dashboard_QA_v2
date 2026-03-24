@@ -18,7 +18,25 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  // directUrl = env("DIRECT_URL")  // descomentar solo con Neon/Supabase en producción
+}
+
+// ── Grupos (workspaces de equipos) ───────────────────────────
+model Grupo {
+  id          String   @id @default(cuid())
+  nombre      String   @unique
+  descripcion String   @default("")
+  activo      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users          User[]
+  historias      HistoriaUsuario[]
+  sprints        Sprint[]
+  notificaciones Notificacion[]
+  config         Config?
+
+  @@map("grupos")
 }
 
 // ── Usuarios ─────────────────────────────────────────────────
@@ -28,6 +46,7 @@ model User {
   email               String   @unique
   passwordHash        String
   rol                 String
+  grupoId             String?  // null para el owner (acceso a todos los grupos)
   activo              Boolean  @default(true)
   debeCambiarPassword Boolean  @default(true)
   bloqueado           Boolean  @default(false)
@@ -36,6 +55,8 @@ model User {
   fechaCreacion       DateTime @default(now())
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
+
+  grupo Grupo? @relation(fields: [grupoId], references: [id], onDelete: SetNull)
 
   @@map("users")
 }
@@ -57,7 +78,8 @@ model Role {
 // ── Historias de Usuario ──────────────────────────────────────
 model HistoriaUsuario {
   id                       String    @id @default(cuid())
-  codigo                   String    @unique
+  codigo                   String
+  grupoId                  String
   titulo                   String
   descripcion              String    @default("")
   criteriosAceptacion      String    @default("")
@@ -89,6 +111,9 @@ model HistoriaUsuario {
   createdAt                DateTime  @default(now())
   updatedAt                DateTime  @updatedAt
 
+  grupo Grupo @relation(fields: [grupoId], references: [id], onDelete: Restrict)
+
+  @@unique([codigo, grupoId])
   @@map("historias_usuario")
 }
 
@@ -154,13 +179,17 @@ model Tarea {
 // ── Sprints ───────────────────────────────────────────────────
 model Sprint {
   id          String   @id @default(cuid())
-  nombre      String   @unique
+  nombre      String
+  grupoId     String
   fechaInicio DateTime
   fechaFin    DateTime
   objetivo    String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  grupo Grupo @relation(fields: [grupoId], references: [id], onDelete: Restrict)
+
+  @@unique([nombre, grupoId])
   @@map("sprints")
 }
 
@@ -173,6 +202,7 @@ model Notificacion {
   fecha        DateTime @default(now())
   leida        Boolean  @default(false)
   destinatario String
+  grupoId      String
   casoId       String?
   huId         String?
   huTitulo     String?
@@ -180,12 +210,15 @@ model Notificacion {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  grupo Grupo @relation(fields: [grupoId], references: [id], onDelete: Restrict)
+
   @@map("notificaciones")
 }
 
-// ── Configuracion global (una fila; multi-tenant: una por grupo) ──
+// ── Configuracion por grupo (una fila por grupo) ──────────────
 model Config {
   id              String   @id @default(cuid())
+  grupoId         String   @unique
   etapas          Json     @default("{}")
   resultados      Json     @default("[]")
   tiposAplicacion Json     @default("[]")
@@ -194,6 +227,8 @@ model Config {
   aplicaciones    Json     @default("[]")
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+
+  grupo Grupo @relation(fields: [grupoId], references: [id], onDelete: Restrict)
 
   @@map("config")
 }

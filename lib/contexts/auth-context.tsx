@@ -86,6 +86,7 @@ export interface User {
   email: string
   password: string
   rol: string
+  grupoId?: string | null       // null para el owner (acceso a todos los grupos)
   avatar?: string
   activo: boolean
   fechaCreacion: Date

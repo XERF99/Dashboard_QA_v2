@@ -1,10 +1,23 @@
 // ═══════════════════════════════════════════════════════════
 //  METRICAS SERVICE — agregaciones para el dashboard QA
+//  grupoId: undefined = owner (ve todo), string = filtra al grupo
 // ═══════════════════════════════════════════════════════════
 
 import { prisma } from "@/lib/backend/prisma"
 
-export async function getMetricas() {
+function grupoFilter(grupoId?: string) {
+  return grupoId ? { grupoId } : {}
+}
+
+function grupoHUFilter(grupoId?: string) {
+  return grupoId ? { hu: { grupoId } } : {}
+}
+
+function grupoHUCasoFilter(grupoId?: string) {
+  return grupoId ? { caso: { hu: { grupoId } } } : {}
+}
+
+export async function getMetricas(grupoId?: string) {
   const [
     historiasPorEstado,
     historiasPorSprint,
@@ -15,38 +28,54 @@ export async function getMetricas() {
     tareasCountPorResultado,
   ] = await Promise.all([
     // Historias agrupadas por estado
-    prisma.historiaUsuario.groupBy({ by: ["estado"], _count: { _all: true } }),
+    prisma.historiaUsuario.groupBy({
+      by: ["estado"],
+      where: grupoFilter(grupoId),
+      _count: { _all: true },
+    }),
 
     // Historias agrupadas por sprint (excluye nulos)
     prisma.historiaUsuario.groupBy({
       by: ["sprint"],
-      where: { sprint: { not: null } },
+      where: { sprint: { not: null }, ...grupoFilter(grupoId) },
       _count: { _all: true },
     }),
 
     // Casos agrupados por estadoAprobacion
-    prisma.casoPrueba.groupBy({ by: ["estadoAprobacion"], _count: { _all: true } }),
+    prisma.casoPrueba.groupBy({
+      by: ["estadoAprobacion"],
+      where: grupoHUFilter(grupoId),
+      _count: { _all: true },
+    }),
 
     // Tareas agrupadas por estado
-    prisma.tarea.groupBy({ by: ["estado"], _count: { _all: true } }),
+    prisma.tarea.groupBy({
+      by: ["estado"],
+      where: grupoHUCasoFilter(grupoId),
+      _count: { _all: true },
+    }),
 
     // Tareas pendientes/bloqueadas por asignado
     prisma.tarea.groupBy({
       by: ["asignado", "estado"],
-      where: { estado: { in: ["pendiente", "bloqueada"] } },
+      where: { estado: { in: ["pendiente", "bloqueada"] }, ...grupoHUCasoFilter(grupoId) },
       _count: { _all: true },
     }),
 
     // Velocidad por sprint: suma de puntos de historias "exitosas"
     prisma.historiaUsuario.groupBy({
       by: ["sprint"],
-      where: { estado: "exitosa", sprint: { not: null } },
+      where: { estado: "exitosa", sprint: { not: null }, ...grupoFilter(grupoId) },
       _sum: { puntos: true },
       _count: { _all: true },
     }),
 
-    // Distribución por resultado (extrae total + fallidos en una sola query)
-    prisma.tarea.groupBy({ by: ["resultado"], _count: { _all: true } }),
+    // Distribución por resultado
+    prisma.tarea.groupBy({
+      by: ["resultado"],
+      where: grupoHUCasoFilter(grupoId),
+      _count: { _all: true },
+    }),
   ])
 
   const totalTareas              = tareasCountPorResultado.reduce((s, r) => s + r._count._all, 0)

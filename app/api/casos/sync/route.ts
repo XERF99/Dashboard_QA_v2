@@ -28,8 +28,9 @@ export async function POST(request: NextRequest) {
     if (ids.length === 0) return
 
     // Deletes se gestionan explícitamente desde los handlers (no deleteMany notIn)
+    const grupoFilter = payload.grupoId ? { hu: { grupoId: payload.grupoId } } : {}
     const existing = await tx.casoPrueba.findMany({
-      where: { id: { in: ids } },
+      where: { id: { in: ids }, ...grupoFilter },
       select: { id: true },
     })
     const existingSet = new Set(existing.map(c => c.id))

@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
   if (payload instanceof NextResponse) return payload
 
   const destinatario = rolToDestinatario(payload.rol)
-  const notificaciones = await getNotificacionesByDestinatario(destinatario)
+  const notificaciones = await getNotificacionesByDestinatario(destinatario, payload.grupoId)
   return NextResponse.json({ notificaciones })
 }
 
@@ -39,8 +39,10 @@ export async function POST(request: NextRequest) {
   }
   const { tipo, titulo, descripcion, destinatario, casoId, huId, huTitulo, casoTitulo } = parsed.data
 
+  // grupoId requerido para aislar notificaciones por grupo
+  const grupoId = payload.grupoId ?? "grupo-default"
   const notificacion = await createNotificacion({
-    tipo, titulo, descripcion, destinatario, casoId, huId, huTitulo, casoTitulo,
+    tipo, titulo, descripcion, destinatario, grupoId, casoId, huId, huTitulo, casoTitulo,
   })
   return NextResponse.json({ notificacion }, { status: 201 })
 }

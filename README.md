@@ -1,4 +1,4 @@
-# QAControl — Dashboard de Gestión de Pruebas · v2.26
+# QAControl — Dashboard de Gestión de Pruebas · v2.27
 
 Sistema integral de gestión de calidad para equipos QA. Permite administrar Historias de Usuario, casos de prueba, flujos de aprobación, bloqueos y carga ocupacional del equipo, con control de acceso basado en roles.
 
@@ -126,6 +126,7 @@ dashboard_v22/
 │   │   ├── casos/                    ← Tabla y cards de casos de prueba
 │   │   ├── config/                   ← Roles, etapas, resultados, sprints, etc.
 │   │   ├── historias/                ← Tabla HU, detalle, formulario, CSV import
+│   │   ├── owner/                    ← Panel de grupos del Owner
 │   │   ├── shared/                   ← Header, nav tabs, panels, toast container
 │   │   └── usuarios/                 ← Gestión de usuarios y perfil
 │   └── ui/                           ← shadcn/ui primitives (Button, Dialog, etc.)
@@ -133,7 +134,7 @@ dashboard_v22/
 ├── lib/
 │   ├── backend/                      ← Código server-side exclusivo
 │   │   ├── middleware/               ← auth.middleware.ts, rate-limit.ts
-│   │   ├── services/                 ← auth, historia, caso, tarea, config, notificacion, sprint, metricas
+│   │   ├── services/                 ← auth, historia, caso, tarea, config, notificacion, sprint, metricas, grupo
 │   │   ├── validators/               ← Joi: auth, historia, caso, tarea, config
 │   │   └── prisma.ts
 │   ├── contexts/                     ← Todos los React Contexts
@@ -198,11 +199,14 @@ app/api/
   sprints/[id]/route.ts            ← GET · PUT · DELETE  /api/sprints/[id]
   export/route.ts                  ← GET   /api/export?tipo=historias|casos[&sprint=...][&estado=...]
   historias/[id]/historial/route.ts ← GET  /api/historias/[id]/historial[?page=1&limit=20]
+  grupos/route.ts                  ← GET   /api/grupos  · POST  /api/grupos          (owner)
+  grupos/[id]/route.ts             ← GET · PUT · DELETE  /api/grupos/[id]             (owner)
+  grupos/[id]/metricas/route.ts    ← GET   /api/grupos/[id]/metricas                 (owner)
 ```
 
 ### Schema Prisma
 
-Tablas: `users`, `roles`, `historias_usuario`, `casos_prueba`, `tareas`, `sprints`, `notificaciones`, `config`.
+Tablas: `grupos`, `users`, `roles`, `historias_usuario`, `casos_prueba`, `tareas`, `sprints`, `notificaciones`, `config`.
 
 Los campos con arrays complejos (`bloqueos`, `historial`, `comentarios`, `resultadosPorEtapa`) se almacenan como `Json` para preservar los tipos TypeScript sin cambios en el frontend. Se pueden normalizar a tablas relacionales en fases posteriores.
 
@@ -272,7 +276,7 @@ next.config.mjs         ← Headers de seguridad HTTP
 
 ## Tests
 
-El proyecto cuenta con **333 tests automatizados** en 31 archivos usando Vitest 3 + React Testing Library 16. Los tests de API routes corren en entorno `node`; los de UI/hooks en `jsdom`.
+El proyecto cuenta con **379 tests automatizados** en 33 archivos usando Vitest 3 + React Testing Library 16. Los tests de API routes corren en entorno `node`; los de UI/hooks en `jsdom`.
 
 ### Comandos
 
@@ -317,12 +321,74 @@ pnpm test:ui     # Interfaz visual de Vitest
 | `tests/rate-limit.test.ts` | node | 10 | `checkRateLimit`: primera petición, conteo hasta límite, bloqueo al superar, IPs independientes, `resetAt`, expiración de ventana con fake timers · `getClientIp`: `x-forwarded-for`, `x-real-ip`, fallback `unknown`, precedencia |
 | `tests/resultados-config.test.tsx` | jsdom | 10 | Renderizado labels; `Máx. ret.` solo para no aceptados; sin botón Eliminar en base; botón + confirmación en personalizados; toggle aceptado (↓ y ↑); agregar estado custom; restaurar con diferencias; sin botón Restaurar cuando lista es igual |
 | `tests/csv-import-casos.test.tsx` | jsdom | 26 | Renderizado (open=false, título, formato, onClose); parseo CSV: fila válida → OK, HU no encontrada, título vacío, código vacío, conteo múltiples; importación: onImport con casos válidos, sin botón cuando no hay válidos, "Cambiar archivo", IDs únicos; defaults: complejidad/entorno/horas/estadoAprobacion |
+| `tests/grupos.test.ts` | node | 20 | `getAllGrupos`, `getGrupoById` (existe/null), `createGrupo` (nombre único + config creada, duplicado, descripción vacía), `updateGrupo` (nombre, activo), `deleteGrupo` (vacío, con usuarios, con historias), `getMetricasGrupo` (totales, husPorEstado, casosPorEstado) |
+| `tests/owner-panel.test.tsx` | jsdom | 26 | Renderizado (título, tarjetas Alpha/Beta, badge INACTIVO, botón nuevo); métricas (totales globales, barra progreso 70%, sin barra para grupos sin HUs); formulario (abrir, disabled sin nombre, habilitado con nombre, cancelar, POST al crear); eliminación (confirmación modal, cancelar); estado vacío; error de API |
 
 Los tests de API usan **Prisma y servicios mockeados** con `vi.mock` y generan JWTs reales con `signToken` — no requieren base de datos activa.
 
 ---
 
 ## Changelog
+
+### v2.27 — Multi-equipo: Grupos (workspaces) + Panel del Owner + 46 nuevos tests
+
+Implementa aislamiento de datos por equipo. Cada admin gestiona su propio grupo (workspace) con HUs, casos, sprints, configuración y notificaciones completamente independientes. El Owner tiene acceso global y un panel dedicado para gestionar todos los grupos.
+
+#### `prisma/schema.prisma` — nuevo modelo `Grupo` + campo `grupoId`
+Nueva tabla `grupos` con id, nombre, descripción y activo. Relaciones: `User.grupoId?` (nullable para owner), `HistoriaUsuario.grupoId`, `Sprint.grupoId`, `Notificacion.grupoId`, `Config.grupoId @unique`. Los constraints únicos `historias_usuario.codigo` y `sprints.nombre` se convierten en compuestos `(codigo, grupoId)` y `(nombre, grupoId)` respectivamente, permitiendo el mismo código en grupos diferentes.
+
+#### `prisma/migrations/20260323000000_add_grupos/migration.sql`
+Migración con compatibilidad hacia atrás: crea la tabla `grupos`, inserta el grupo por defecto "Equipo Principal", añade las columnas `grupoId` como nullable, asigna todos los datos existentes al grupo por defecto, hace NOT NULL las columnas de contenido, recrea los índices únicos como compuestos y añade las foreign keys. El owner queda con `grupoId = null`.
+
+#### `lib/backend/middleware/auth.middleware.ts`
+Añade `grupoId?: string` al `JWTPayload`. El owner no tiene `grupoId` en el token (ve todo); admin y demás roles lo tienen.
+
+#### `lib/backend/services/auth.service.ts`
+`loginService` incluye `grupoId` al firmar el token. `createUserService` acepta `grupoId` opcional — admin hereda el suyo, owner puede asignarlo manualmente.
+
+#### `lib/backend/services/grupo.service.ts` (nuevo)
+CRUD completo: `getAllGrupos`, `getGrupoById`, `createGrupo` (crea config vacía automáticamente), `updateGrupo`, `deleteGrupo` (guarda contra eliminación si tiene usuarios o historias). Métricas: `getMetricasGrupo` (totales + distribuciones por estado) y `getMetricasGlobales` para el panel del Owner.
+
+#### Servicios actualizados con filtro `grupoId`
+Todos los servicios aceptan `grupoId?: string` — cuando es `undefined` (owner) retornan todos los datos; cuando es un string filtran al grupo:
+- `historia.service.ts` — `getAllHistorias`, `getHistoriasBySprint`, `getHistoriasByResponsable`
+- `caso.service.ts` — `getAllCasos` (join via `hu.grupoId`)
+- `sprint.service.ts` — `getAllSprints`, `getSprintActivo`, `createSprint` (requiere `grupoId`)
+- `config.service.ts` — `getConfig(grupoId)` y `updateConfig(grupoId, data)` por grupo
+- `notificacion.service.ts` — `getNotificacionesByDestinatario`, `createNotificacion` (incluye `grupoId`), `marcarTodasLeidas`
+- `metricas.service.ts` — todas las agregaciones con filtro de grupo
+
+#### `app/api/grupos/` (nuevas rutas — owner only)
+- `GET /api/grupos` · `POST /api/grupos` — listar y crear grupos
+- `GET/PUT/DELETE /api/grupos/[id]` — CRUD individual
+- `GET /api/grupos/[id]/metricas` — métricas de un grupo específico
+
+#### API routes existentes actualizadas
+Todas las rutas leen `payload.grupoId` del JWT y lo pasan a sus servicios: `/api/historias`, `/api/casos`, `/api/sprints`, `/api/config`, `/api/notificaciones`, `/api/metricas`, `/api/auth/me`. Los sync routes (`/historias/sync`, `/casos/sync`) filtran el upsert al grupo del usuario autenticado para no pisar datos de otros equipos.
+
+#### `components/dashboard/owner/owner-panel.tsx` (nuevo)
+Panel dedicado al Owner con:
+- **Resumen global** (grupos activos, HUs, casos, miembros totales)
+- **Tarjetas por grupo** con KPIs (historias, casos, tareas, miembros) y barra de progreso de HUs
+- Badge "INACTIVO" en grupos desactivados
+- **Crear grupo** — modal con nombre y descripción
+- **Editar grupo** — mismo modal pre-rellenado
+- **Activar/desactivar** — toggle sin confirmación
+- **Eliminar grupo** — modal de confirmación; rechaza si tiene usuarios o historias asignadas
+- Estado vacío con CTA para crear el primer grupo
+- Manejo de errores de API con banner dismissable
+- Diseño responsive (`auto-fill minmax(280px, 1fr)`)
+
+#### `app/page.tsx`
+Importa `OwnerPanel`. Añade tab "Grupos" visible solo para `isOwner` con icono `Layers` y color amarillo (`bg-yellow-500`) diferenciado. El `tabCount` suma +1 para el owner.
+
+#### `lib/contexts/auth-context.tsx`
+Añade `grupoId?: string | null` al interface `User` y `UserSafe`.
+
+#### `tests/grupos.test.ts` (20 tests · node)
+#### `tests/owner-panel.test.tsx` (26 tests · jsdom)
+
+---
 
 ### v2.26 — Importación masiva de Casos de Prueba desde CSV + 26 nuevos tests
 

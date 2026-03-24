@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
   const payload = await requireAuth(request)
   if (payload instanceof NextResponse) return payload
 
-  const historias = await getAllHistorias()
+  const historias = await getAllHistorias(payload.grupoId)
   return NextResponse.json({ historias })
 }
 
@@ -24,7 +24,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.details.map(d => d.message).join(", ") }, { status: 400 })
   }
 
-  const historia = await createHistoria(value)
+  // Añadir grupoId del usuario autenticado si no viene en el body
+  const historiaData = { ...value, grupoId: value.grupoId ?? payload.grupoId }
+  const historia = await createHistoria(historiaData)
   invalidateMetricasCache()
   return NextResponse.json({ historia }, { status: 201 })
 }

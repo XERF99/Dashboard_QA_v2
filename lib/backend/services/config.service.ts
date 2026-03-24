@@ -1,31 +1,36 @@
 // ═══════════════════════════════════════════════════════════
 //  CONFIG SERVICE — lógica de negocio para configuración
-//  Mantiene una única fila en la tabla config (upsert).
+//  Una fila de config por grupo (upsert por grupoId).
+//  Para retrocompatibilidad, si grupoId no se proporciona
+//  se usa 'grupo-default' (el grupo creado en la migración).
 // ═══════════════════════════════════════════════════════════
 
 import { prisma } from "@/lib/backend/prisma"
 
-const CONFIG_ID = "singleton"
+const DEFAULT_GRUPO_ID = "grupo-default"
 
-export async function getConfig() {
+export async function getConfig(grupoId: string = DEFAULT_GRUPO_ID) {
   return (
-    await prisma.config.findUnique({ where: { id: CONFIG_ID } }) ??
-    await prisma.config.create({ data: { id: CONFIG_ID } })
+    await prisma.config.findUnique({ where: { grupoId } }) ??
+    await prisma.config.create({ data: { grupoId } })
   )
 }
 
-export async function updateConfig(data: {
-  etapas?:          object
-  resultados?:      unknown[]
-  tiposAplicacion?: unknown[]
-  ambientes?:       unknown[]
-  tiposPrueba?:     unknown[]
-  aplicaciones?:    string[]
-}) {
+export async function updateConfig(
+  grupoId: string = DEFAULT_GRUPO_ID,
+  data: {
+    etapas?:          object
+    resultados?:      unknown[]
+    tiposAplicacion?: unknown[]
+    ambientes?:       unknown[]
+    tiposPrueba?:     unknown[]
+    aplicaciones?:    string[]
+  }
+) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return prisma.config.upsert({
-    where:  { id: CONFIG_ID },
+    where:  { grupoId },
     update: data as any,
-    create: { id: CONFIG_ID, ...(data as any) },
+    create: { grupoId, ...(data as any) },
   })
 }

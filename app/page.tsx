@@ -10,6 +10,7 @@ import { CasosTable, CSVImportCasosModal } from "@/components/dashboard/casos"
 import { HomeDashboard, CargaOcupacional, AnalyticsKPIs } from "@/components/dashboard/analytics"
 import { UserManagement } from "@/components/dashboard/usuarios"
 import { RolesConfig, EtapasConfig, ResultadosConfig, AplicacionesConfig, TiposAplicacionConfig, AmbientesConfig, TiposPruebaConfig, SprintsConfig } from "@/components/dashboard/config"
+import { OwnerPanel } from "@/components/dashboard/owner/owner-panel"
 import { LoginScreen } from "@/components/auth/login-screen"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
@@ -143,7 +144,7 @@ export default function DashboardPage() {
 
   if (!isAuthenticated) return <LoginScreen />
 
-  const tabCount = 6 + (canManageUsers ? 1 : 0)
+  const tabCount = 6 + (canManageUsers ? 1 : 0) + (isOwner ? 1 : 0)
 
   return (
     <div className="min-h-screen bg-background">
@@ -185,6 +186,11 @@ export default function DashboardPage() {
               {canManageUsers && (
                 <TabsTrigger value="admin" className="flex items-center gap-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
                   <Settings className="h-4 w-4 shrink-0"/> <span className="hidden sm:inline">Admin</span>
+                </TabsTrigger>
+              )}
+              {isOwner && (
+                <TabsTrigger value="grupos" className="flex items-center gap-1.5 data-[state=active]:bg-yellow-500 data-[state=active]:text-white">
+                  <Layers className="h-4 w-4 shrink-0"/> <span className="hidden sm:inline">Grupos</span>
                 </TabsTrigger>
               )}
             </TabsList>
@@ -330,6 +336,11 @@ export default function DashboardPage() {
                   )}
                 </div>
               </div>
+            </TabsContent>
+          )}
+          {isOwner && (
+            <TabsContent value="grupos" className="mt-6">
+              <OwnerPanel />
             </TabsContent>
           )}
         </Tabs>

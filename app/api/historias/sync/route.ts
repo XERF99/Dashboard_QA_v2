@@ -32,8 +32,10 @@ export async function POST(request: NextRequest) {
     // 1. Obtener IDs que ya existen en la BD (1 query)
     // Nota: los deletes se gestionan de forma explícita desde los handlers
     // para evitar borrar registros de otros usuarios en entornos multi-usuario.
+    // Filtrar por grupo del usuario para no pisar datos de otros equipos
+    const grupoFilter = payload.grupoId ? { grupoId: payload.grupoId } : {}
     const existing = await tx.historiaUsuario.findMany({
-      where: { id: { in: ids } },
+      where: { id: { in: ids }, ...grupoFilter },
       select: { id: true },
     })
     const existingSet = new Set(existing.map(h => h.id))
