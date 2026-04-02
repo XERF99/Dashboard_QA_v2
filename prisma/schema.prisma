@@ -58,6 +58,8 @@ model User {
 
   grupo Grupo? @relation(fields: [grupoId], references: [id], onDelete: SetNull)
 
+  @@index([grupoId])
+  @@index([rol])
   @@map("users")
 }
 
@@ -108,12 +110,18 @@ model HistoriaUsuario {
   historial                Json      @default("[]")
   comentarios              Json      @default("[]")
   casos                    CasoPrueba[]
+  deletedAt                DateTime? // soft delete — null = activa
   createdAt                DateTime  @default(now())
   updatedAt                DateTime  @updatedAt
 
   grupo Grupo @relation(fields: [grupoId], references: [id], onDelete: Restrict)
 
   @@unique([codigo, grupoId])
+  @@index([grupoId])
+  @@index([estado])
+  @@index([sprint])
+  @@index([responsable])
+  @@index([deletedAt])
   @@map("historias_usuario")
 }
 
@@ -143,9 +151,13 @@ model CasoPrueba {
   bloqueos                 Json            @default("[]")
   comentarios              Json            @default("[]")
   tareas                   Tarea[]
+  deletedAt                DateTime?       // soft delete — null = activo
   createdAt                DateTime        @default(now())
   updatedAt                DateTime        @updatedAt
 
+  @@index([huId])
+  @@index([estadoAprobacion])
+  @@index([deletedAt])
   @@map("casos_prueba")
 }
 
@@ -170,9 +182,15 @@ model Tarea {
   fechaInicio    DateTime?
   fechaFin       DateTime?
   bloqueos       Json       @default("[]")
+  deletedAt      DateTime?  // soft delete — null = activa
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 
+  @@index([casoPruebaId])
+  @@index([huId])
+  @@index([asignado])
+  @@index([estado])
+  @@index([deletedAt])
   @@map("tareas")
 }
 
@@ -190,6 +208,8 @@ model Sprint {
   grupo Grupo @relation(fields: [grupoId], references: [id], onDelete: Restrict)
 
   @@unique([nombre, grupoId])
+  @@index([grupoId])
+  @@index([grupoId, fechaInicio, fechaFin])
   @@map("sprints")
 }
 
@@ -212,7 +232,32 @@ model Notificacion {
 
   grupo Grupo @relation(fields: [grupoId], references: [id], onDelete: Restrict)
 
+  @@index([destinatario, grupoId])
+  @@index([destinatario, leida])
+  @@index([grupoId])
   @@map("notificaciones")
+}
+
+// ── Audit Log — registro inmutable de acciones clave ─────────
+// Nunca se actualiza ni se borra — solo INSERT.
+// grupoId null = acción del owner (scope global).
+model AuditLog {
+  id         String   @id @default(cuid())
+  timestamp  DateTime @default(now())
+  userId     String   // quién realizó la acción
+  userEmail  String
+  userRol    String
+  grupoId    String?  // workspace afectado
+  action     String   // CREATE | UPDATE | DELETE | APPROVE | REJECT | LOGIN | LOGOUT
+  resource   String   // historias | casos | tareas | users | grupos | config
+  resourceId String?  // id del recurso afectado
+  meta       Json     @default("{}") // datos extra: cambios, motivo, etc.
+
+  @@index([userId])
+  @@index([grupoId])
+  @@index([resource, resourceId])
+  @@index([timestamp])
+  @@map("audit_log")
 }
 
 // ── Configuracion por grupo (una fila por grupo) ──────────────

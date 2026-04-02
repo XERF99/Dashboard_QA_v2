@@ -23,8 +23,12 @@ export async function GET(request: NextRequest) {
   const deny = requireOwner(payload.rol)
   if (deny) return deny
 
-  const grupos = await getAllGrupos()
-  return NextResponse.json({ grupos })
+  const { searchParams } = new URL(request.url)
+  const page  = Math.max(1, parseInt(searchParams.get("page")  ?? "1")  || 1)
+  const limit = Math.min(200, Math.max(1, parseInt(searchParams.get("limit") ?? "50") || 50))
+
+  const result = await getAllGrupos(page, limit)
+  return NextResponse.json(result)
 }
 
 export async function POST(request: NextRequest) {

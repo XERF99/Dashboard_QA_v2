@@ -9,6 +9,9 @@ import type {
   AmbienteDef, TipoPruebaDef, ResultadoDef,
 } from "@/lib/types/index"
 
+// ── Contraseña genérica para usuarios nuevos / reset ─────────
+export const PASSWORD_GENERICA = "Qatesting1"
+
 // ── Etapas predeterminadas por tipo de aplicación ───────────
 export const ETAPAS_PREDETERMINADAS: ConfigEtapas = {
   aplicacion: [

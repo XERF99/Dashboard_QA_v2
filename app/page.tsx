@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useToast } from "@/lib/hooks/useToast"
 import { useHUModals } from "@/lib/hooks/useHUModals"
 import { useHistoriasVisibles } from "@/lib/hooks/useHistoriasVisibles"
@@ -13,6 +13,9 @@ import { RolesConfig, EtapasConfig, ResultadosConfig, AplicacionesConfig, TiposA
 import { OwnerPanel } from "@/components/dashboard/owner/owner-panel"
 import { LoginScreen } from "@/components/auth/login-screen"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select"
 import {
   BookOpen, Users, UserCog,
   BarChart2, Settings, ShieldAlert, History, Layers, Monitor, Globe,
@@ -31,12 +34,21 @@ import { HUDetailProvider } from "@/lib/contexts/hu-detail-context"
 // ═══════════════════════════════════════════════════════════
 function DashboardSkeleton() {
   return (
-    <div className="space-y-6 py-6">
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        {[0, 1, 2, 3].map(i => <Skeleton key={i} className="h-24 rounded-xl" />)}
+    <div className="min-h-screen flex items-center justify-center p-4">
+      <div className="w-full max-w-sm space-y-6">
+        <div className="flex flex-col items-center gap-2">
+          <Skeleton className="h-12 w-12 rounded-full" />
+          <Skeleton className="h-5 w-36 rounded" />
+          <Skeleton className="h-4 w-52 rounded" />
+        </div>
+        <div className="space-y-4 border border-border rounded-2xl p-8 bg-card">
+          <Skeleton className="h-3 w-14 rounded" />
+          <Skeleton className="h-10 w-full rounded-lg" />
+          <Skeleton className="h-3 w-20 rounded" />
+          <Skeleton className="h-10 w-full rounded-lg" />
+          <Skeleton className="h-10 w-full rounded-lg mt-2" />
+        </div>
       </div>
-      <Skeleton className="h-64 rounded-xl" />
-      <Skeleton className="h-48 rounded-xl" />
     </div>
   )
 }
@@ -80,9 +92,41 @@ export default function DashboardPage() {
 
   const [importCasosModalOpen, setImportCasosModalOpen] = useState(false)
 
+  // ── Reset de pestaña al cambiar de usuario ────────────────
+  // Evita "pantalla negra" cuando un owner en "grupos" cierra sesión
+  // y otro usuario (no-owner) inicia sesión — "grupos" no tiene TabsContent para no-owners.
+  const prevUserIdRef = useRef<string | undefined>(undefined)
+  useEffect(() => {
+    const currentId = user?.id
+    if (prevUserIdRef.current !== currentId) {
+      prevUserIdRef.current = currentId
+      setTabActiva("inicio")
+    }
+  }, [user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Filtro de workspace (solo owner) ─────────────────────
+  const [filtroGrupoOwner, setFiltroGrupoOwner] = useState<string | null>(null)
+  const [gruposDisponibles, setGruposDisponibles] = useState<{ id: string; nombre: string }[]>([])
+  useEffect(() => {
+    if (!isOwner) return
+    fetch("/api/grupos")
+      .then(r => r.ok ? r.json() : null)
+      .then((d: { grupos?: { id: string; nombre: string }[] } | null) => {
+        if (d?.grupos) setGruposDisponibles(d.grupos)
+      })
+      .catch(() => {})
+  }, [isOwner])
+
+  const historiasFiltradas = useMemo(
+    () => isOwner && filtroGrupoOwner
+      ? domain.historias.filter(h => h.grupoId === filtroGrupoOwner)
+      : domain.historias,
+    [domain.historias, isOwner, filtroGrupoOwner]
+  )
+
   // ── Filtros de visibilidad ────────────────────────────────
   const { filtroNombresCarga, historiasVisibles } = useHistoriasVisibles({
-    historias: domain.historias,
+    historias: historiasFiltradas,
     casos: domain.casos,
     busqueda,
     isOwner,
@@ -157,6 +201,29 @@ export default function DashboardPage() {
       />
 
       <main className="container mx-auto px-3 sm:px-6 py-4 sm:py-6 space-y-4 sm:space-y-6 min-h-[calc(100vh-124px)]">
+        {isOwner && gruposDisponibles.length > 0 && (
+          <div className="flex items-center gap-2">
+            <Globe className="h-4 w-4 text-muted-foreground shrink-0" />
+            <span className="text-sm text-muted-foreground">Workspace:</span>
+            <Select value={filtroGrupoOwner ?? "__all__"} onValueChange={v => setFiltroGrupoOwner(v === "__all__" ? null : v)}>
+              <SelectTrigger className="h-8 w-auto min-w-[180px] text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">Todos los workspaces</SelectItem>
+                {gruposDisponibles.map(g => (
+                  <SelectItem key={g.id} value={g.id}>{g.nombre}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {filtroGrupoOwner && (
+              <span className="text-xs bg-yellow-500/20 text-yellow-600 border border-yellow-500/30 rounded px-2 py-0.5">
+                {gruposDisponibles.find(g => g.id === filtroGrupoOwner)?.nombre}
+              </span>
+            )}
+          </div>
+        )}
+
         <Tabs value={tabActiva} onValueChange={setTabActiva} className="w-full">
           <div className="overflow-x-auto -mx-3 px-3 sm:mx-0 sm:px-0 pb-0.5 no-scrollbar">
             <TabsList className="bg-secondary grid w-full" style={{ gridTemplateColumns:`repeat(${tabCount},1fr)`, maxWidth: canManageUsers ? 1150 : 1050 }}>
@@ -189,7 +256,7 @@ export default function DashboardPage() {
                 </TabsTrigger>
               )}
               {isOwner && (
-                <TabsTrigger value="grupos" className="flex items-center gap-1.5 data-[state=active]:bg-yellow-500 data-[state=active]:text-white">
+                <TabsTrigger value="grupos" className="flex items-center gap-1.5 data-[state=active]:bg-amber-600 data-[state=active]:text-white">
                   <Layers className="h-4 w-4 shrink-0"/> <span className="hidden sm:inline">Grupos</span>
                 </TabsTrigger>
               )}

@@ -56,7 +56,7 @@ export function LoginScreen() {
     setError("")
     if (!newPass.trim()) { setError("Ingresa la nueva contraseña"); return }
     if (newPass !== confirmPass) { setError("Las contraseñas no coinciden"); return }
-    const result = cambiarPassword(currentPass, newPass)
+    const result = await cambiarPassword(currentPass, newPass)
     if (!result.success) setError(result.error || "Error al cambiar contraseña")
     else setShowChangePassword(false)
   }

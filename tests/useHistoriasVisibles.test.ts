@@ -35,9 +35,14 @@ function makeHU(id: string, responsable: string, overrides: Partial<HistoriaUsua
   }
 }
 
-const BASE_USER = { id: "usr-1", nombre: "Admin Principal", activo: true }
-const QA_USER = { id: "usr-2", nombre: "QA User", activo: true }
-const LEAD_USER = { id: "usr-3", nombre: "Laura Lead", activo: true }
+// Usuarios con rol explícito (como llegan del workspace)
+const ADMIN_USER  = { id: "usr-1", nombre: "Admin Principal", rol: "admin",   activo: true }
+const QA_USER     = { id: "usr-2", nombre: "QA User",         rol: "qa",      activo: true }
+const QA_USER_2   = { id: "usr-5", nombre: "QA Segundo",      rol: "qa",      activo: true }
+const LEAD_USER   = { id: "usr-3", nombre: "Laura Lead",      rol: "qa_lead", activo: true }
+const VIEWER_USER = { id: "usr-4", nombre: "Viewer",          rol: "viewer",  activo: true }
+
+const ALL_USERS = [ADMIN_USER, QA_USER, QA_USER_2, LEAD_USER, VIEWER_USER]
 
 // ── Tests de visibilidad por rol ─────────────────────────────
 
@@ -46,7 +51,8 @@ describe("useHistoriasVisibles — filtrado por rol", () => {
     makeHU("hu-1", "Admin Principal"),
     makeHU("hu-2", "QA User"),
     makeHU("hu-3", "Laura Lead"),
-    makeHU("hu-4", "Otro miembro"),
+    makeHU("hu-4", "QA Segundo"),
+    makeHU("hu-5", "Viewer"),
   ]
 
   const baseOptions = {
@@ -57,15 +63,15 @@ describe("useHistoriasVisibles — filtrado por rol", () => {
     isAdmin: false,
     isQALead: false,
     verSoloPropios: false,
-    user: BASE_USER,
-    users: [BASE_USER, QA_USER, LEAD_USER, { id: "usr-4", nombre: "Otro miembro", activo: true }],
+    user: ADMIN_USER,
+    users: ALL_USERS,
   }
 
-  it("owner ve todas las historias", () => {
+  it("owner ve todas las historias del workspace", () => {
     const { result } = renderHook(() =>
       useHistoriasVisibles({ ...baseOptions, isOwner: true }),
     )
-    expect(result.current.historiasVisibles).toHaveLength(4)
+    expect(result.current.historiasVisibles).toHaveLength(5)
   })
 
   it("owner tiene filtroNombresCarga undefined (sin restricción)", () => {
@@ -75,7 +81,28 @@ describe("useHistoriasVisibles — filtrado por rol", () => {
     expect(result.current.filtroNombresCarga).toBeUndefined()
   })
 
-  it("verSoloPropios solo ve sus propias HUs", () => {
+  it("admin ve todas las HUs del workspace", () => {
+    const { result } = renderHook(() =>
+      useHistoriasVisibles({ ...baseOptions, isAdmin: true, user: ADMIN_USER }),
+    )
+    expect(result.current.historiasVisibles).toHaveLength(5)
+  })
+
+  it("admin tiene filtroNombresCarga undefined (ve toda la carga del workspace)", () => {
+    const { result } = renderHook(() =>
+      useHistoriasVisibles({ ...baseOptions, isAdmin: true, user: ADMIN_USER }),
+    )
+    expect(result.current.filtroNombresCarga).toBeUndefined()
+  })
+
+  it("viewer ve todas las HUs del workspace", () => {
+    const { result } = renderHook(() =>
+      useHistoriasVisibles({ ...baseOptions, user: VIEWER_USER }),
+    )
+    expect(result.current.historiasVisibles).toHaveLength(5)
+  })
+
+  it("verSoloPropios (qa) solo ve sus propias HUs", () => {
     const { result } = renderHook(() =>
       useHistoriasVisibles({ ...baseOptions, verSoloPropios: true, user: QA_USER }),
     )
@@ -83,106 +110,93 @@ describe("useHistoriasVisibles — filtrado por rol", () => {
     expect(result.current.historiasVisibles[0].responsable).toBe("QA User")
   })
 
-  it("admin sin equipo solo ve sus propias HUs", () => {
+  it("qa lead ve sus propias HUs + las de todos los usuarios qa del workspace", () => {
     const { result } = renderHook(() =>
-      useHistoriasVisibles({
-        ...baseOptions,
-        isAdmin: true,
-        user: { ...BASE_USER, equipoIds: [] },
-      }),
-    )
-    expect(result.current.historiasVisibles).toHaveLength(1)
-    expect(result.current.historiasVisibles[0].responsable).toBe("Admin Principal")
-  })
-
-  it("admin con equipo ve sus propias HUs y las del equipo", () => {
-    const adminConEquipo = { ...BASE_USER, equipoIds: ["usr-2", "usr-3"] } // QA User + Laura Lead
-
-    const { result } = renderHook(() =>
-      useHistoriasVisibles({
-        ...baseOptions,
-        isAdmin: true,
-        user: adminConEquipo,
-      }),
+      useHistoriasVisibles({ ...baseOptions, isQALead: true, user: LEAD_USER }),
     )
     const responsables = result.current.historiasVisibles.map(h => h.responsable)
-    expect(responsables).toContain("Admin Principal")
-    expect(responsables).toContain("QA User")
-    expect(responsables).toContain("Laura Lead")
-    expect(responsables).not.toContain("Otro miembro")
+    expect(responsables).toContain("Laura Lead")   // propio
+    expect(responsables).toContain("QA User")      // qa del workspace
+    expect(responsables).toContain("QA Segundo")   // qa del workspace
+    expect(responsables).not.toContain("Admin Principal")
+    expect(responsables).not.toContain("Viewer")
   })
 
-  it("qa lead sin equipo ve todas las historias (sin restricción hasta asignar equipo)", () => {
-    // A diferencia del Admin, un QA Lead sin equipoIds no tiene scope restringido:
-    // la lógica del hook solo filtra cuando equipoIds.length > 0.
+  it("qa lead sin usuarios qa en workspace solo ve sus propias HUs", () => {
+    const soloAdminYLead = [ADMIN_USER, LEAD_USER, VIEWER_USER]
     const { result } = renderHook(() =>
       useHistoriasVisibles({
         ...baseOptions,
         isQALead: true,
-        user: { ...LEAD_USER, equipoIds: [] },
+        user: LEAD_USER,
+        users: soloAdminYLead,
       }),
     )
-    expect(result.current.historiasVisibles).toHaveLength(historias.length)
-  })
-
-  it("qa lead con equipo ve al equipo + sí mismo", () => {
-    const lead = { ...LEAD_USER, equipoIds: ["usr-2"] } // QA User
-
-    const { result } = renderHook(() =>
-      useHistoriasVisibles({ ...baseOptions, isQALead: true, user: lead }),
-    )
-    const responsables = result.current.historiasVisibles.map(h => h.responsable)
-    expect(responsables).toContain("Laura Lead")
-    expect(responsables).toContain("QA User")
-    expect(responsables).not.toContain("Admin Principal")
+    expect(result.current.historiasVisibles).toHaveLength(1)
+    expect(result.current.historiasVisibles[0].responsable).toBe("Laura Lead")
   })
 })
 
 // ── Tests de filtroNombresCarga ───────────────────────────────
 
 describe("useHistoriasVisibles — filtroNombresCarga", () => {
-  const users = [
-    BASE_USER,
-    QA_USER,
-    { id: "usr-5", nombre: "Miembro", activo: true },
-  ]
+  const baseOptions = {
+    historias: [],
+    casos: [] as CasoPrueba[],
+    busqueda: "",
+    isOwner: false,
+    isAdmin: false,
+    isQALead: false,
+    verSoloPropios: false,
+    user: LEAD_USER,
+    users: ALL_USERS,
+  }
 
-  it("admin sin equipo solo incluye su nombre", () => {
+  it("lead incluye su nombre + todos los qa activos", () => {
     const { result } = renderHook(() =>
-      useHistoriasVisibles({
-        historias: [],
-        casos: [],
-        busqueda: "",
-        isOwner: false,
-        isAdmin: true,
-        isQALead: false,
-        verSoloPropios: false,
-        user: { ...BASE_USER, equipoIds: [] },
-        users,
-      }),
+      useHistoriasVisibles({ ...baseOptions, isQALead: true }),
     )
-    expect(result.current.filtroNombresCarga).toEqual(["Admin Principal"])
+    expect(result.current.filtroNombresCarga).toContain("Laura Lead")
+    expect(result.current.filtroNombresCarga).toContain("QA User")
+    expect(result.current.filtroNombresCarga).toContain("QA Segundo")
+    expect(result.current.filtroNombresCarga).not.toContain("Admin Principal")
+    expect(result.current.filtroNombresCarga).not.toContain("Viewer")
   })
 
-  it("admin con equipo incluye nombre propio + miembros activos", () => {
-    const adminConEquipo = { ...BASE_USER, equipoIds: ["usr-2", "usr-5"] }
-
+  it("lead sin qa en workspace tiene filtroNombresCarga con solo su nombre", () => {
     const { result } = renderHook(() =>
       useHistoriasVisibles({
-        historias: [],
-        casos: [],
-        busqueda: "",
-        isOwner: false,
-        isAdmin: true,
-        isQALead: false,
-        verSoloPropios: false,
-        user: adminConEquipo,
-        users,
+        ...baseOptions,
+        isQALead: true,
+        users: [ADMIN_USER, LEAD_USER, VIEWER_USER],
       }),
     )
-    expect(result.current.filtroNombresCarga).toContain("Admin Principal")
-    expect(result.current.filtroNombresCarga).toContain("QA User")
-    expect(result.current.filtroNombresCarga).toContain("Miembro")
+    expect(result.current.filtroNombresCarga).toEqual(["Laura Lead"])
+  })
+
+  it("qa (verSoloPropios) tiene filtroNombresCarga con solo su nombre", () => {
+    const { result } = renderHook(() =>
+      useHistoriasVisibles({
+        ...baseOptions,
+        verSoloPropios: true,
+        user: QA_USER,
+      }),
+    )
+    expect(result.current.filtroNombresCarga).toEqual(["QA User"])
+  })
+
+  it("admin tiene filtroNombresCarga undefined", () => {
+    const { result } = renderHook(() =>
+      useHistoriasVisibles({ ...baseOptions, isAdmin: true, user: ADMIN_USER }),
+    )
+    expect(result.current.filtroNombresCarga).toBeUndefined()
+  })
+
+  it("viewer tiene filtroNombresCarga undefined", () => {
+    const { result } = renderHook(() =>
+      useHistoriasVisibles({ ...baseOptions, user: VIEWER_USER }),
+    )
+    expect(result.current.filtroNombresCarga).toBeUndefined()
   })
 })
 
@@ -202,8 +216,8 @@ describe("useHistoriasVisibles — búsqueda", () => {
     isAdmin: false,
     isQALead: false,
     verSoloPropios: false,
-    user: BASE_USER,
-    users: [BASE_USER],
+    user: ADMIN_USER,
+    users: [ADMIN_USER],
   }
 
   it("filtra por título (case-insensitive)", () => {

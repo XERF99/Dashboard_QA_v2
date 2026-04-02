@@ -4,30 +4,46 @@
 // ═══════════════════════════════════════════════════════════
 
 import { prisma } from "@/lib/backend/prisma"
+import { Prisma } from "@prisma/client"
 
 function grupoFilter(grupoId?: string) {
   return grupoId ? { grupoId } : {}
 }
 
-export async function getAllHistorias(grupoId?: string) {
-  return prisma.historiaUsuario.findMany({
-    where: grupoFilter(grupoId),
-    orderBy: { fechaCreacion: "desc" },
-  })
+export async function getAllHistorias(
+  grupoId?: string,
+  page    = 1,
+  limit   = 50,
+  filters?: { sprint?: string; responsable?: string }
+) {
+  const skip  = (page - 1) * limit
+  const where = {
+    ...grupoFilter(grupoId),
+    ...(filters?.sprint      ? { sprint:      filters.sprint }      : {}),
+    ...(filters?.responsable ? { responsable: filters.responsable } : {}),
+  }
+  const [historias, total] = await prisma.$transaction([
+    prisma.historiaUsuario.findMany({
+      where,
+      orderBy: { fechaCreacion: "desc" },
+      skip,
+      take: limit,
+    }),
+    prisma.historiaUsuario.count({ where }),
+  ])
+  return { historias, total, page, limit, pages: Math.ceil(total / limit) }
 }
 
 export async function getHistoriaById(id: string) {
   return prisma.historiaUsuario.findUnique({ where: { id }, include: { casos: true } })
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function createHistoria(data: Record<string, unknown>) {
-  return prisma.historiaUsuario.create({ data: data as any })
+export async function createHistoria(data: Prisma.HistoriaUsuarioUncheckedCreateInput) {
+  return prisma.historiaUsuario.create({ data })
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function updateHistoria(id: string, data: Record<string, unknown>) {
-  return prisma.historiaUsuario.update({ where: { id }, data: data as any })
+export async function updateHistoria(id: string, data: Prisma.HistoriaUsuarioUncheckedUpdateInput) {
+  return prisma.historiaUsuario.update({ where: { id }, data })
 }
 
 export async function deleteHistoria(id: string) {

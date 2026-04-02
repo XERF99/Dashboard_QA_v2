@@ -22,13 +22,20 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const payload = await requireAuth(request)
   if (payload instanceof NextResponse) return payload
 
-  const deny = requireOwner(payload.rol)
-  if (deny) return deny
-
   const { id } = await params
-  const grupo = await getGrupoById(id)
-  if (!grupo) return NextResponse.json({ error: "Grupo no encontrado" }, { status: 404 })
-  return NextResponse.json({ grupo })
+
+  // El owner puede ver cualquier grupo; cualquier usuario autenticado puede ver su propio grupo
+  if (payload.rol !== "owner" && payload.grupoId !== id) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 403 })
+  }
+
+  try {
+    const grupo = await getGrupoById(id)
+    if (!grupo) return NextResponse.json({ error: "Grupo no encontrado" }, { status: 404 })
+    return NextResponse.json({ grupo })
+  } catch (error) {
+    return NextResponse.json({ error: "Error al obtener el grupo" }, { status: 500 })
+  }
 }
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -44,8 +51,12 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ error: "Payload inválido", details: parsed.error.flatten() }, { status: 400 })
   }
 
-  const result = await updateGrupo(id, parsed.data)
-  return NextResponse.json({ grupo: result.grupo })
+  try {
+    const result = await updateGrupo(id, parsed.data)
+    return NextResponse.json({ grupo: result.grupo })
+  } catch (error) {
+    return NextResponse.json({ error: "Error al actualizar el grupo" }, { status: 500 })
+  }
 }
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -56,7 +67,11 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   if (deny) return deny
 
   const { id } = await params
-  const result = await deleteGrupo(id)
-  if (!result.success) return NextResponse.json({ error: result.error }, { status: 409 })
-  return NextResponse.json({ success: true })
+  try {
+    const result = await deleteGrupo(id)
+    if (!result.success) return NextResponse.json({ error: result.error }, { status: 409 })
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    return NextResponse.json({ error: "Error al eliminar el grupo" }, { status: 500 })
+  }
 }

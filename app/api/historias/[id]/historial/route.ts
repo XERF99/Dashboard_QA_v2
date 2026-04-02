@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@/lib/backend/middleware/auth.middleware"
 import { getHistoriaById } from "@/lib/backend/services/historia.service"
+import { prisma } from "@/lib/backend/prisma"
 
 interface EventoHistorial {
   id:          string
@@ -23,6 +24,15 @@ export async function GET(
   if (payload instanceof NextResponse) return payload
 
   const { id } = await params
+
+  // Verificar aislamiento de workspace
+  if (payload.grupoId) {
+    const meta = await prisma.historiaUsuario.findUnique({ where: { id }, select: { grupoId: true } })
+    if (!meta || meta.grupoId !== payload.grupoId) {
+      return NextResponse.json({ error: "Historia no encontrada" }, { status: 404 })
+    }
+  }
+
   const historia = await getHistoriaById(id)
   if (!historia) {
     return NextResponse.json({ error: "Historia no encontrada" }, { status: 404 })

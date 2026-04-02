@@ -58,7 +58,9 @@ function setupFetchMock() {
     if (typeof url === "string" && url.includes("/api/auth/logout")) {
       return { ok: true, json: async () => ({ success: true }), text: async () => "{}" } as unknown as Response
     }
-    return { ok: true, json: async () => ({}), text: async () => "{}" } as unknown as Response
+    // /api/auth/me y otras rutas: retorna 401 para que el api client lance ApiError
+    // y el catch de auth-context lo ignore silenciosamente sin sobrescribir el user
+    return { ok: false, status: 401, json: async () => ({ error: "No autenticado" }), text: async () => '{"error":"No autenticado"}' } as unknown as Response
   })
 }
 

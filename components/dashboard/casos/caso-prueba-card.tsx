@@ -10,8 +10,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   AlertTriangle, Plus, CheckCircle2,
   Send, ChevronDown, ChevronUp, Lock, Unlock, RefreshCw,
-  Pencil, Trash2, Bell, MessageSquare, XCircle,
+  Pencil, Trash2, Bell, MessageSquare, XCircle, UserX,
 } from "lucide-react"
+import { useAuth } from "@/lib/contexts/auth-context"
+import { isResponsableActivo } from "@/lib/utils/asignaciones"
 import {
   ESTADO_APROBACION_CFG, COMPLEJIDAD_CFG, TIPO_TAREA_LABEL, TIPO_TAREA_COLOR,
   getEtapaHUCfg,
@@ -529,6 +531,7 @@ interface TareaItemProps {
 
 function TareaItem({ tarea, casoId, huCerrada, onAbrirEditar }: TareaItemProps) {
   const { isQA, isAdmin, isQALead, currentUser, onEliminarTarea, onCompletarTarea, onBloquearTarea, onDesbloquearTarea } = useHUDetail()
+  const { users } = useAuth()
   const [showBloqueoForm, setShowBloqueoForm] = useState(false)
   const [bloqueoTexto, setBloqueoTexto] = useState("")
 
@@ -548,7 +551,12 @@ function TareaItem({ tarea, casoId, huCerrada, onAbrirEditar }: TareaItemProps) 
             <p style={{ fontSize:12, fontWeight:500, color:"var(--foreground)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{tarea.titulo}</p>
             {tareaBloqueos.length > 0 && <AlertTriangle size={10} style={{ color:"var(--chart-4)", flexShrink:0 }}/>}
           </div>
-          <p style={{ fontSize:10, color:"var(--muted-foreground)", marginTop:2 }}>{tarea.asignado} · {tarea.horasEstimadas}h</p>
+          <p style={{ fontSize:10, color:"var(--muted-foreground)", marginTop:2, display:"flex", alignItems:"center", gap:3 }}>
+            {tarea.asignado} · {tarea.horasEstimadas}h
+            {!isResponsableActivo(tarea.asignado, users) && (
+              <UserX size={9} style={{ color:"var(--chart-4)", flexShrink:0 }} title="Usuario sin workspace activo" />
+            )}
+          </p>
         </div>
         <Badge variant="outline" className={`text-[9px] ${
           tarea.estado === "completada" ? "bg-chart-2/20 text-chart-2 border-chart-2/30" :

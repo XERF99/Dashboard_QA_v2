@@ -13,7 +13,7 @@ import { signToken } from "@/lib/backend/middleware/auth.middleware"
 vi.mock("@/lib/backend/prisma", () => ({
   prisma: {
     user: {
-      findUnique: vi.fn(),
+      findUnique: vi.fn().mockResolvedValue({ activo: true, grupo: { activo: true } }),
     },
   },
 }))
@@ -56,11 +56,13 @@ describe("GET /api/auth/me", () => {
   })
 
   it("token válido → 200 con datos del usuario", async () => {
-    vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
-      id: "usr-001", nombre: "Admin Principal", email: "admin@empresa.com",
-      rol: "admin", activo: true, debeCambiarPassword: false,
-      fechaCreacion: new Date("2026-01-01"),
-    } as never)
+    vi.mocked(prisma.user.findUnique)
+      .mockResolvedValueOnce({ activo: true } as never)   // requireAuth activo check
+      .mockResolvedValueOnce({                            // /me route handler
+        id: "usr-001", nombre: "Admin Principal", email: "admin@empresa.com",
+        rol: "admin", activo: true, debeCambiarPassword: false,
+        fechaCreacion: new Date("2026-01-01"),
+      } as never)
 
     const res  = await meGET(makeReq("GET", "/api/auth/me", undefined, userToken))
     const data = await res.json()
@@ -70,7 +72,9 @@ describe("GET /api/auth/me", () => {
   })
 
   it("usuario no existe en DB → 404", async () => {
-    vi.mocked(prisma.user.findUnique).mockResolvedValueOnce(null)
+    vi.mocked(prisma.user.findUnique)
+      .mockResolvedValueOnce({ activo: true } as never)  // requireAuth activo check
+      .mockResolvedValueOnce(null)                       // /me route handler → 404
 
     const res = await meGET(makeReq("GET", "/api/auth/me", undefined, userToken))
     expect(res.status).toBe(404)
@@ -114,7 +118,7 @@ describe("PUT /api/auth/password", () => {
     vi.mocked(cambiarPasswordService).mockResolvedValueOnce({ success: false, error: "Contraseña actual incorrecta" })
 
     const res  = await passwordPUT(
-      makeReq("PUT", "/api/auth/password", { actual: "wrong", nueva: "nueva123" }, userToken)
+      makeReq("PUT", "/api/auth/password", { actual: "wrong", nueva: "Nueva@123" }, userToken)
     )
     const data = await res.json()
 
@@ -126,7 +130,7 @@ describe("PUT /api/auth/password", () => {
     vi.mocked(cambiarPasswordService).mockResolvedValueOnce({ success: true })
 
     const res  = await passwordPUT(
-      makeReq("PUT", "/api/auth/password", { actual: "admin123", nueva: "nueva123" }, userToken)
+      makeReq("PUT", "/api/auth/password", { actual: "admin123", nueva: "Nueva@123" }, userToken)
     )
     const data = await res.json()
 

@@ -56,31 +56,39 @@ export function useConfig({ isAuthenticated = false }: { isAuthenticated?: boole
   const [sprintsError, setSprintsError]     = useState<string | null>(null)
   const [configError, setConfigError]       = useState<string | null>(null)
 
-  // ── Carga inicial de sprints desde API ──────────────────
+  const [configSyncError, setConfigSyncError] = useState<string | null>(null)
+
+  // ── Carga inicial de sprints desde API — cancelable al desmontar ──
   const sprintsLoadDone = useRef(false)
   useEffect(() => {
     if (!isAuthenticated) return
     if (sprintsLoadDone.current) return
     sprintsLoadDone.current = true
+    const controller = new AbortController()
     api.get<{ sprints: Sprint[] }>("/api/sprints")
       .then(r => {
+        if (controller.signal.aborted) return
         setSprints(r.sprints)
         guardarEnStorage(STORAGE_KEYS.sprints, r.sprints)
       })
       .catch((err: unknown) => {
+        if (controller.signal.aborted) return
         setSprintsError(err instanceof Error ? err.message : "Error al cargar sprints")
       })
-      .finally(() => setSprintsLoading(false))
+      .finally(() => { if (!controller.signal.aborted) setSprintsLoading(false) })
+    return () => controller.abort()
   }, [isAuthenticated]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Carga inicial de config desde API ───────────────────
+  // ── Carga inicial de config desde API — cancelable al desmontar ──
   const initialLoadDone = useRef(false)
   useEffect(() => {
     if (!isAuthenticated) return
     if (initialLoadDone.current) return
     initialLoadDone.current = true
+    const controller = new AbortController()
     api.get<{ config: ApiConfig }>("/api/config")
       .then(({ config: c }) => {
+        if (controller.signal.aborted) return
         if (c.etapas          && Object.keys(c.etapas).length)    setConfigEtapas(c.etapas)
         if (c.resultados      && c.resultados.length)              setConfigResultados(c.resultados as ResultadoDef[])
         if (c.tiposAplicacion && c.tiposAplicacion.length)         setTiposAplicacion(c.tiposAplicacion as TipoAplicacionDef[])
@@ -89,9 +97,11 @@ export function useConfig({ isAuthenticated = false }: { isAuthenticated?: boole
         if (c.aplicaciones    && c.aplicaciones.length)            setAplicaciones(c.aplicaciones)
       })
       .catch((err: unknown) => {
+        if (controller.signal.aborted) return
         setConfigError(err instanceof Error ? err.message : "Error al cargar configuración")
       })
-      .finally(() => setConfigLoading(false))
+      .finally(() => { if (!controller.signal.aborted) setConfigLoading(false) })
+    return () => controller.abort()
   }, [isAuthenticated]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Sync a API cuando cambia la config (debounced 600 ms) ──
@@ -109,7 +119,11 @@ export function useConfig({ isAuthenticated = false }: { isAuthenticated?: boole
         ambientes:       ambientes.filter(a => a.label.trim() !== ""),
         tiposPrueba:     tiposPrueba.filter(t => t.label.trim() !== ""),
         aplicaciones:    aplicaciones.filter(a => a.trim() !== ""),
-      }).catch(err => console.warn("[Config] Error sincronizando config:", err))
+      }).catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : "Error al sincronizar configuración"
+        console.warn("[Config] Error sincronizando config:", msg)
+        setConfigSyncError(msg)
+      })
     }, 600)
     return () => {
       if (configSyncTimer.current) clearTimeout(configSyncTimer.current)
@@ -168,6 +182,7 @@ export function useConfig({ isAuthenticated = false }: { isAuthenticated?: boole
     // Async shape — isLoading refleja la carga inicial desde la API
     isLoading: sprintsLoading || configLoading,
     error: configError ?? sprintsError ?? null,
+    syncError: configSyncError,
     refetch: () => { /* noop con localStorage */ },
     // Estado
     configEtapas, setConfigEtapas,

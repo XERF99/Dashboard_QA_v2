@@ -1,4 +1,4 @@
-# QAControl — Dashboard de Gestión de Pruebas · v2.27
+# QAControl — Dashboard de Gestión de Pruebas · v2.61
 
 Sistema integral de gestión de calidad para equipos QA. Permite administrar Historias de Usuario, casos de prueba, flujos de aprobación, bloqueos y carga ocupacional del equipo, con control de acceso basado en roles.
 
@@ -14,8 +14,9 @@ Sistema integral de gestión de calidad para equipos QA. Permite administrar His
 | Componentes | shadcn/ui + Radix UI |
 | Iconos | Lucide React |
 | Gráficos | Recharts 2.15 |
-| Persistencia | localStorage (frontend) / PostgreSQL + Prisma (backend) |
-| Tests | Vitest 3 + React Testing Library 16 |
+| Persistencia | PostgreSQL + Prisma ORM (fuente de verdad) / localStorage (caché de UI) |
+| Tests unitarios | Vitest 3 + React Testing Library 16 |
+| Tests E2E | Playwright 1.58 |
 | Package manager | pnpm |
 | Despliegue | Vercel |
 
@@ -60,11 +61,11 @@ Sistema integral de gestión de calidad para equipos QA. Permite administrar His
 - Gráficos de distribución por estado, prioridad, tipo de aplicación y ambiente
 - Tasa de aprobación de casos de prueba
 - Métricas de ejecución por etapa
-- Filtrado automático según el rol del usuario (Owner ve todo, Admin ve su equipo, QA Lead ve su equipo, QA solo ve sus HUs)
+- Filtrado automático según el rol del usuario (Owner ve todo; Admin ve todo el workspace; QA Lead ve sus HUs y las de todos los usuarios qa del workspace; QA solo ve sus HUs)
 
 ### Carga Ocupacional
 - Visualización de la distribución de trabajo por miembro del equipo
-- Filtrado automático por rol: el Owner y Viewer ven a todos; Admin y QA Lead ven su equipo; QA solo se ve a sí mismo
+- Filtrado automático por rol: Owner y Admin ven a todos los miembros del workspace; QA Lead ve su propia carga y la de los usuarios qa; QA solo se ve a sí mismo; Viewer ve a todos (solo lectura)
 
 ### Bloqueos
 - Panel unificado de bloqueos activos en HUs, casos de prueba y tareas
@@ -85,13 +86,18 @@ Sistema integral de gestión de calidad para equipos QA. Permite administrar His
 #### Gestión de Usuarios
 - CRUD completo de usuarios (Owner y Admin)
 - Asignación de roles con descripción de permisos
-- Asignación de equipos a roles Admin y QA Lead (controla visibilidad de datos)
+- **Aislamiento por workspace**: Admin solo ve y gestiona usuarios de su propio workspace
+- **Usuarios sin workspace**: sección especial para que admins incorporen usuarios creados por el Owner aún sin workspace asignado
 - Activación / desactivación de cuentas
 - Reseteo de contraseña a la genérica (con cambio obligatorio en próximo login)
 - **Bloqueo automático** tras 5 intentos fallidos; desbloqueo manual disponible en el menú de acciones
 - **Notificación automática** al Admin/Owner cuando una cuenta queda bloqueada
-- **Visibilidad con scope**: Admin sin equipo solo ve su propia cuenta (seguridad); con equipo ve también a sus miembros; Owner ve todos
+- **Visibilidad role-based**: Admin ve todos los usuarios de su workspace; QA Lead ve sus HUs + las de usuarios qa; QA solo ve las propias; Viewer ve todo en modo lectura
 - Protección: solo el Owner puede crear o asignar roles de Admin u Owner
+- **Conteo de asignaciones en diálogo de quitar del workspace**: antes de confirmar, el diálogo muestra cuántas HUs y tareas tiene asignadas el usuario *(nuevo en v2.52)*
+- **Indicador visual de responsable/asignado sin workspace**: ícono `UserX` naranja en tarjetas de HU (kanban y tabla), detalle de HU y tarjetas de tarea cuando el responsable o asignado ya no está activo en el workspace *(nuevo en v2.52)*
+- **Eliminación de notificaciones**: botón eliminar en cada notificación *(nuevo en v2.53)*
+- **Aprobación/rechazo masivo de casos**: `PATCH /api/casos/batch` permite aprobar o rechazar múltiples casos en una sola operación *(nuevo en v2.53)*
 
 #### Configuración
 - **Roles**: creación y edición de roles personalizados con permisos granulares
@@ -109,10 +115,21 @@ Sistema integral de gestión de calidad para equipos QA. Permite administrar His
 ```
 dashboard_v22/
 ├── app/                              ← Next.js App Router (rutas y API)
-│   ├── api/                          ← API Routes (auth, users, historias, casos, tareas, config, notificaciones)
+│   ├── api/                          ← API Routes
+│   │   ├── auth/                     ← login, logout, me, password
+│   │   ├── users/                    ← CRUD usuarios + asignaciones
+│   │   ├── historias/                ← CRUD HU + sync + historial
+│   │   ├── casos/                    ← CRUD casos + sync + batch
+│   │   ├── tareas/                   ← CRUD tareas + sync
+│   │   ├── sprints/                  ← CRUD sprints
+│   │   ├── grupos/                   ← CRUD grupos (owner)
+│   │   ├── notificaciones/           ← GET/POST/PATCH/DELETE notificaciones
+│   │   ├── metricas/                 ← GET métricas agregadas
+│   │   ├── config/                   ← GET/PUT config por grupo
+│   │   └── export/                   ← GET export CSV/PDF
 │   ├── globals.css
 │   ├── layout.tsx
-│   └── page.tsx
+│   └── page.tsx                      ← SPA principal (login + dashboard)
 │
 ├── components/
 │   ├── layout/                       ← Componentes de layout global
@@ -122,51 +139,62 @@ dashboard_v22/
 │   ├── auth/
 │   │   └── login-screen.tsx
 │   ├── dashboard/
-│   │   ├── analytics/                ← Home, KPIs, carga ocupacional
-│   │   ├── casos/                    ← Tabla y cards de casos de prueba
-│   │   ├── config/                   ← Roles, etapas, resultados, sprints, etc.
-│   │   ├── historias/                ← Tabla HU, detalle, formulario, CSV import
-│   │   ├── owner/                    ← Panel de grupos del Owner
-│   │   ├── shared/                   ← Header, nav tabs, panels, toast container
-│   │   └── usuarios/                 ← Gestión de usuarios y perfil
-│   └── ui/                           ← shadcn/ui primitives (Button, Dialog, etc.)
+│   │   ├── analytics/                ← HomeDashboard, KPIs, CargaOcupacional
+│   │   ├── casos/                    ← CasosTable, CasoPruebaCard, CSVImportCasosModal
+│   │   ├── config/                   ← Roles, Etapas, Resultados, Sprints, Ambientes, etc.
+│   │   ├── historias/                ← HistoriasTable, HUDetail, HUForm, CSVImportModal
+│   │   ├── owner/                    ← OwnerPanel (gestión de grupos)
+│   │   ├── shared/                   ← Header, NavTabGroup, BloqueosPanel, AuditoriaPanel,
+│   │   │                               CommentThread, PanelRiesgos, SprintPanel, ToastContainer
+│   │   └── usuarios/                 ← UserManagement, UserFormModal, PerfilDialog
+│   └── ui/                           ← shadcn/ui primitives (Button, Dialog, Select, etc.)
 │
 ├── lib/
-│   ├── backend/                      ← Código server-side exclusivo
+│   ├── backend/                      ← Código server-side exclusivo (no importar desde cliente)
 │   │   ├── middleware/               ← auth.middleware.ts, rate-limit.ts
-│   │   ├── services/                 ← auth, historia, caso, tarea, config, notificacion, sprint, metricas, grupo
+│   │   ├── services/                 ← auth, historia, caso, tarea, config, notificacion,
+│   │   │                               sprint, metricas, grupo
 │   │   ├── validators/               ← Joi: auth, historia, caso, tarea, config
-│   │   └── prisma.ts
-│   ├── contexts/                     ← Todos los React Contexts
-│   │   ├── auth-context.tsx          ← AuthProvider, useAuth, User, permisos
+│   │   ├── metricas-cache.ts         ← Caché en memoria por workspace
+│   │   └── prisma.ts                 ← Singleton Prisma Client
+│   ├── contexts/                     ← React Contexts
+│   │   ├── auth-context.tsx          ← AuthProvider, useAuth, permisos, PASSWORD_GENERICA
 │   │   ├── theme-context.tsx         ← ThemeProvider, useTheme
-│   │   └── hu-detail-context.tsx     ← HUDetailProvider
-│   ├── hooks/                        ← Todos los hooks (dominio + UI)
-│   │   ├── domain/                   ← Handlers: huHandlers, casoHandlers, tareaHandlers
-│   │   ├── useApiMirroredState.ts
-│   │   ├── useConfig.ts
-│   │   ├── useDomainData.ts
-│   │   ├── useHistoriasFilters.ts
-│   │   ├── useHistoriasVisibles.ts
-│   │   ├── useHUModals.ts
-│   │   ├── useIsHydrated.ts
-│   │   ├── useListConfig.ts
-│   │   ├── useNotificaciones.ts
-│   │   ├── useTareaForm.ts
-│   │   ├── useToast.ts
-│   │   ├── use-mobile.ts
-│   │   └── use-toast.ts
+│   │   └── hu-detail-context.tsx     ← HUDetailProvider (estado del panel de detalle)
+│   ├── hooks/                        ← Hooks de dominio y UI
+│   │   ├── domain/                   ← Handlers: huHandlers, casoHandlers, tareaHandlers,
+│   │   │                               bloqueoHandlers, comentarioHandlers, types
+│   │   ├── useDomainData.ts          ← Carga y sincronización de datos principales
+│   │   ├── useHistoriasVisibles.ts   ← Scoping de HUs por rol
+│   │   ├── useHistoriasFilters.ts    ← Filtros, búsqueda y ordenamiento
+│   │   ├── useConfig.ts              ← Config del workspace (roles, etapas, sprints, etc.)
+│   │   ├── useHUModals.ts            ← Estado de modales de HU
+│   │   ├── useNotificaciones.ts      ← Polling de notificaciones
+│   │   ├── useApiMirroredState.ts    ← Estado optimista sincronizado con la API
+│   │   ├── useListConfig.ts          ← Gestión de listas de config editables
+│   │   ├── useTareaForm.ts           ← Formulario de tarea inline
+│   │   ├── useIsHydrated.ts          ← Guard de hidratación SSR
+│   │   ├── useToast.ts               ← Sistema de notificaciones toast
+│   │   └── use-mobile.ts             ← Detección de viewport mobile
 │   ├── services/
-│   │   └── api/                      ← client.ts (apiFetch helper)
-│   ├── types/                        ← Tipos TypeScript del dominio
-│   ├── utils/                        ← date-utils, domain, user-utils
-│   ├── constants/                    ← badge-paleta, index
-│   ├── export/                       ← Exportación a CSV/Excel
+│   │   └── api/                      ← client.ts (apiFetch helper con manejo de errores)
+│   ├── data/                         ← Datos de seed y fixtures estáticas
+│   ├── types/                        ← Tipos TypeScript del dominio (index.ts)
+│   ├── utils/                        ← date-utils, domain, user-utils, asignaciones
+│   ├── constants/                    ← badge-paleta, constantes de dominio
+│   ├── export/                       ← Exportación a CSV/PDF (hu-export, analytics-export)
 │   └── storage.ts                    ← localStorage helpers + STORAGE_KEYS
 │
-├── prisma/                           ← Schema Prisma + seed
-├── public/
-└── tests/                            ← 333 tests Vitest
+├── prisma/
+│   ├── schema.prisma                 ← Modelos + índices de rendimiento
+│   ├── seed.ts                       ← Datos iniciales (usuarios, roles, config base)
+│   └── migrations/                   ← Historial de migraciones SQL
+│
+├── public/                           ← Assets estáticos (favicon, iconos)
+├── playwright.config.ts              ← Configuración Playwright (E2E)
+├── vitest.config.ts                  ← Configuración Vitest (unit tests)
+└── tests/                            ← 700 tests Vitest + 14 tests E2E Playwright
+    └── e2e/                          ← flujo-completo.spec.ts (Playwright)
 ```
 
 ## Backend (PostgreSQL + Prisma + MVC + Joi/Zod)
@@ -192,7 +220,7 @@ app/api/
   tareas/[id]/route.ts             ← GET · PUT · DELETE  /api/tareas/[id]
   config/route.ts                  ← GET   /api/config  · PUT  /api/config
   notificaciones/route.ts          ← GET   /api/notificaciones  · POST /api/notificaciones
-  notificaciones/[id]/route.ts     ← PATCH /api/notificaciones/[id]  (marcar leída)
+  notificaciones/[id]/route.ts     ← PATCH /api/notificaciones/[id]  (marcar leída) · DELETE /api/notificaciones/[id]
   notificaciones/marcar-todas/route.ts ← PATCH /api/notificaciones/marcar-todas
   metricas/route.ts                ← GET   /api/metricas
   sprints/route.ts                 ← GET   /api/sprints  · POST  /api/sprints
@@ -202,13 +230,17 @@ app/api/
   grupos/route.ts                  ← GET   /api/grupos  · POST  /api/grupos          (owner)
   grupos/[id]/route.ts             ← GET · PUT · DELETE  /api/grupos/[id]             (owner)
   grupos/[id]/metricas/route.ts    ← GET   /api/grupos/[id]/metricas                 (owner)
+  users/[id]/asignaciones/route.ts ← GET   /api/users/[id]/asignaciones               (admin/owner)
+  casos/batch/route.ts             ← PATCH /api/casos/batch                            (admin/owner)
 ```
 
 ### Schema Prisma
 
-Tablas: `grupos`, `users`, `roles`, `historias_usuario`, `casos_prueba`, `tareas`, `sprints`, `notificaciones`, `config`.
+Modelos: `Grupo`, `User`, `Role`, `HistoriaUsuario`, `CasoPrueba`, `Tarea`, `Sprint`, `Notificacion`, `Config`.
 
-Los campos con arrays complejos (`bloqueos`, `historial`, `comentarios`, `resultadosPorEtapa`) se almacenan como `Json` para preservar los tipos TypeScript sin cambios en el frontend. Se pueden normalizar a tablas relacionales en fases posteriores.
+Los campos con arrays complejos (`bloqueos`, `historial`, `comentarios`, `resultadosPorEtapa`) se almacenan como `Json` para preservar los tipos TypeScript sin cambios en el frontend.
+
+Cada tabla tiene índices de rendimiento definidos con `@@index` en el schema. **Para aplicarlos en la DB hay que ejecutar una migración** (ver Setup).
 
 ### Setup inicial (requiere PostgreSQL)
 
@@ -217,14 +249,38 @@ Los campos con arrays complejos (`bloqueos`, `historial`, `comentarios`, `result
 #    DATABASE_URL="postgresql://usuario:password@localhost:5432/tcs_dashboard"
 #    JWT_SECRET="un-string-aleatorio-largo"
 
-# 2. Crear la base de datos y migrar el schema
-npx prisma migrate dev --name init
+# 2. Aplicar migraciones (tablas + índices de rendimiento)
+npx prisma migrate dev
 
 # 3. Generar el cliente Prisma (tipos TypeScript)
 npx prisma generate
+
+# 4. Cargar datos iniciales (usuarios, roles, config base)
+pnpm db:seed
 ```
 
-Una vez ejecutado `prisma generate`, los `any` temporales en los services se pueden reemplazar por los tipos generados (`Prisma.HistoriaUsuarioCreateInput`, etc.).
+> **Para instalaciones existentes** (DB ya creada sin los índices): ejecuta `npx prisma migrate dev --name add_performance_indexes` para aplicar los `@@index` que se añadieron desde v2.56/v2.58 y que no estaban en las migraciones anteriores.
+
+### Datos demo (opcionales)
+
+El script `scripts/demo-data.ts` crea un conjunto realista de datos de prueba para explorar la aplicación sin tener que cargar datos manualmente.
+
+```bash
+pnpm demo:seed    # Crea los datos demo
+pnpm demo:clean   # Borra todos los datos demo de una vez
+```
+
+**Qué crea `demo:seed`:**
+
+| Tipo | Cantidad | Detalle |
+|---|---|---|
+| Usuarios | 4 | Sofía Romero (qa), Daniel Vega (qa), Rosa Ibáñez (qa_lead), Pedro Alves (viewer) — contraseña: `Demo1234!` |
+| Sprint | 1 | "[DEMO] Sprint Demo Q2-2026" (abril 2026) |
+| Historias de Usuario | 5 | Distintos estados (sin iniciar, en progreso, completada), prioridades y tipos (web, api, mobile) |
+| Casos de prueba | ~10 | 1-3 por HU, con estados coherentes al de la HU |
+| Tareas | ~20 | 1-3 por caso, con horas estimadas y asignados |
+
+Todo queda marcado con el prefijo `[DEMO]` en títulos y dominio `@demo.tcs` en emails — `demo:clean` los elimina en cascada sin tocar los datos reales del seed.
 
 ---
 
@@ -240,9 +296,9 @@ El sistema implementa múltiples capas de defensa en los endpoints de la API.
 | Protección de cookies | `httpOnly`, `secure` (producción), `sameSite: lax` |
 | Hashing de contraseñas | bcryptjs con 10 rondas de salt |
 | Bloqueo por intentos | Cuenta bloqueada automáticamente tras 5 intentos fallidos |
-| Rate limiting | Máximo 10 intentos de login por IP cada 15 minutos → HTTP 429 |
+| Rate limiting | Login: 10 req/IP / 15 min → 429. Password: 10 req/usuario / 15 min → 429. Sync/export/batch: 20–30 req/IP·endpoint / 1 min → 429. Todos los 429 incluyen `Retry-After`, `X-RateLimit-Limit`, `X-RateLimit-Remaining` |
 | Control de acceso | Guards `requireAuth` y `requireAdmin` en todos los endpoints |
-| Validación de entrada | Joi en POST/PUT de auth/CRUD; Zod en rutas `/sync` — rechazan payloads inválidos con HTTP 400 |
+| Validación de entrada | Joi en POST/PUT de auth/CRUD; Zod en rutas `/sync` — rechazan payloads inválidos con HTTP 400. Límites `.max()` en email (254), password (128) y nombre (200) |
 | Whitelist de roles | El campo `rol` solo acepta: `owner`, `admin`, `qa_lead`, `qa`, `viewer` |
 | Prevención de enumeración | El login devuelve "Credenciales inválidas" tanto para email inexistente como para contraseña incorrecta |
 | Seguridad HTTP | Headers configurados en `next.config.mjs`: `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Strict-Transport-Security`, `Content-Security-Policy`, `Referrer-Policy`, `Permissions-Policy` |
@@ -276,14 +332,20 @@ next.config.mjs         ← Headers de seguridad HTTP
 
 ## Tests
 
-El proyecto cuenta con **379 tests automatizados** en 33 archivos usando Vitest 3 + React Testing Library 16. Los tests de API routes corren en entorno `node`; los de UI/hooks en `jsdom`.
+El proyecto cuenta con **700 tests automatizados** en 49 archivos usando Vitest 3 + React Testing Library 16. Los tests de API routes corren en entorno `node`; los de UI/hooks en `jsdom`.
 
 ### Comandos
 
 ```bash
+# Tests unitarios (Vitest)
 pnpm test        # Modo watch (desarrollo)
 pnpm test:run    # Ejecución única (CI)
 pnpm test:ui     # Interfaz visual de Vitest
+
+# Tests E2E (Playwright) — requiere servidor en localhost:3000 y DB con seed
+npx playwright test              # Ejecutar todos los E2E
+npx playwright test --ui         # Interfaz visual de Playwright
+npx playwright test --headed     # Con ventana del navegador visible
 ```
 
 ### Cobertura
@@ -292,23 +354,24 @@ pnpm test:ui     # Interfaz visual de Vitest
 |---|---|---|---|
 | `tests/auth-login.test.ts` | jsdom | 12 | Login, bloqueo por intentos, guards de addUser/deleteUser |
 | `tests/casoHandlers.test.ts` | jsdom | 20 | Flujo de aprobación, retesteo, notificaciones por rol; `handleCompletarCasoEtapa` (guard bloqueos, historial síncrono) |
-| `tests/useHistoriasVisibles.test.ts` | jsdom | 14 | Scoping por rol: Owner, Admin, QA Lead, QA |
+| `tests/useHistoriasVisibles.test.ts` | jsdom | 15 | Scoping por rol: Owner (todo), Admin (todo workspace), QA Lead (propias + qa del workspace), QA (verSoloPropios), Viewer (todo); filtroNombresCarga por rol |
 | `tests/api-auth-endpoints.test.ts` | node | 9 | GET /me · POST /logout · PUT /password |
 | `tests/api-historias.test.ts` | node | 10 | CRUD + sync de historias de usuario |
-| `tests/api-casos.test.ts` | node | 11 | CRUD + filtros + sync de casos de prueba |
-| `tests/api-tareas.test.ts` | node | 12 | CRUD + filtros + sync de tareas |
-| `tests/api-users.test.ts` | node | 16 | CRUD usuarios + reset-password + desbloquear + owner invisibility |
+| `tests/api-casos.test.ts` | node | 15 | CRUD + filtros + sync de casos de prueba + aislamiento workspace `?huId` |
+| `tests/api-tareas.test.ts` | node | 19 | CRUD + filtros + sync de tareas + aislamiento workspace `?casoPruebaId`/`?huId`/sync |
+| `tests/api-users.test.ts` | node | 30 | CRUD usuarios + reset-password + desbloquear + workspace filter GET + role restriction POST + workspace isolation PUT/DELETE + grupoId herencia |
+| `tests/user-form-modal.test.tsx` | jsdom | 15 | Renderizado, POST/PUT vía API, grupoId heredado del servidor, errores inline, sincronización estado local, sin equipoIds |
 | `tests/api-config.test.ts` | node | 6 | GET/PUT config con guards de rol |
 | `tests/api-metricas.test.ts` | node | 5 | Agregaciones del dashboard QA |
 | `tests/api-sprints.test.ts` | node | 15 | CRUD sprints + sprint activo + validaciones |
 | `tests/api-notificaciones.test.ts` | node | 11 | GET/POST/PATCH notificaciones, scoping por rol |
-| `tests/api-export.test.ts` | node | 10 | Export CSV historias/casos + filtros + cabecera |
-| `tests/api-historial.test.ts` | node | 8 | GET historial paginado: 401, 404, orden desc, paginación, límites |
+| `tests/api-export.test.ts` | node | 14 | Export CSV historias/casos + filtros + cabecera + aislamiento workspace (grupoId en `where`) |
+| `tests/api-historial.test.ts` | node | 12 | GET historial paginado: 401, 404, orden desc, paginación, límites + aislamiento workspace |
 | `tests/bloqueo-guards.test.ts` | jsdom | 12 | Guardias: tarea bloqueada impide completar caso; caso bloqueado impide avanzar HU |
 | `tests/useConfig-sprints.test.ts` | jsdom | 10 | Carga inicial desde API, addSprint (duplicado, optimista, reemplazo ID), updateSprint, deleteSprint |
 | `tests/tareaHandlers.test.ts` | jsdom | 11 | `handleBloquearTarea` y `handleDesbloquearTarea`: historial síncrono, guard de tarea inexistente, estado tras desbloqueo parcial |
 | `tests/bloqueoHandlers.test.ts` | jsdom | 7 | `handleResolverBloqueoTarea`: historial síncrono, guard, estado residual con múltiples bloqueos activos |
-| `tests/metricas-cache.test.ts` | node | 7 | Módulo de caché (get/set/invalidate) y cache hit/miss en `GET /api/metricas` |
+| `tests/metricas-cache.test.ts` | node | 12 | Módulo de caché (get/set/invalidate) + partición por workspace + aislamiento grupo-A/B en `GET /api/metricas` |
 | `tests/huHandlers.test.ts` | jsdom | 21 | `handleIniciarHU`, `handleCancelarHU`, `handleFallarHU`, `handleBulkCambiarEstado/Responsable`, `handleImportarHUs`, `handleAvanzarEtapa` |
 | `tests/comentarioHandlers.test.ts` | jsdom | 7 | `handleAddComentarioHU` y `handleAddComentarioCaso`: autor, fecha, unicidad de IDs, aislamiento entre entidades |
 | `tests/notificacion-service.test.ts` | node | 5 | `rolToDestinatario`: mapeo de cada rol posible a su destinatario |
@@ -323,12 +386,926 @@ pnpm test:ui     # Interfaz visual de Vitest
 | `tests/csv-import-casos.test.tsx` | jsdom | 26 | Renderizado (open=false, título, formato, onClose); parseo CSV: fila válida → OK, HU no encontrada, título vacío, código vacío, conteo múltiples; importación: onImport con casos válidos, sin botón cuando no hay válidos, "Cambiar archivo", IDs únicos; defaults: complejidad/entorno/horas/estadoAprobacion |
 | `tests/grupos.test.ts` | node | 20 | `getAllGrupos`, `getGrupoById` (existe/null), `createGrupo` (nombre único + config creada, duplicado, descripción vacía), `updateGrupo` (nombre, activo), `deleteGrupo` (vacío, con usuarios, con historias), `getMetricasGrupo` (totales, husPorEstado, casosPorEstado) |
 | `tests/owner-panel.test.tsx` | jsdom | 26 | Renderizado (título, tarjetas Alpha/Beta, badge INACTIVO, botón nuevo); métricas (totales globales, barra progreso 70%, sin barra para grupos sin HUs); formulario (abrir, disabled sin nombre, habilitado con nombre, cancelar, POST al crear); eliminación (confirmación modal, cancelar); estado vacío; error de API |
+| `tests/grupo-activo.test.ts` | node | 12 | `loginService`: permite login con grupo activo, rechaza si inactivo (error específico), owner sin grupo nunca bloqueado, error antes de verificar contraseña, cuenta desactivada prioritaria sobre grupo · `requireAuth`: permite con grupo activo, rechaza 403 + `GRUPO_INACTIVO` si inactivo, rechaza si grupo null/eliminado, owner sin grupoId no consulta DB, sin token → 401, token inválido → 401, reactivar grupo permite peticiones nuevamente |
+| `tests/api-users-asignaciones.test.ts` | node | 8 | `GET /api/users/[id]/asignaciones`: 401 sin token, 403 para QA, usuario sin workspace → `{historias:0,tareas:0}`, usuario inexistente → `{historias:0,tareas:0}`, conteos correctos de HUs y tareas, argumentos de filtro correctos a Prisma |
+| `tests/asignaciones-utils.test.ts` | jsdom | 7 | `isResponsableActivo`: activo → true, inactivo → false, desconocido → false, string vacío → false, array vacío → false, case-sensitive, múltiples activos → true |
+| `tests/api-pagination.test.ts` | node | 9 | Paginación en GET `/api/historias`, `/api/casos`, `/api/tareas`: metadatos `total/page/limit/pages`, parámetros correctos al servicio, límite máximo 200, defaults page=1/limit=50, filtro `?asignado` |
+| `tests/api-notificaciones-delete.test.ts` | node | 6 | `DELETE /api/notificaciones/[id]`: 401, notif no encontrada → 404, otro workspace → 404, destinatario incorrecto → 404, admin elimina la suya → 200, qa elimina la suya → 200 |
+| `tests/v254-features.test.ts` | node | 23 | Caché selectiva por workspace (`invalidateMetricasCache(grupoId)`); filtros `?sprint=` y `?responsable=` en GET `/api/historias`; cross-entity validation 422 en POST `/api/casos` y POST `/api/tareas`; rate limiting 429 en export / sync routes |
+| `tests/api-casos-batch.test.ts` | node | 9 | `PATCH /api/casos/batch`: 401, 403 para QA, ids vacío → 400, accion inválida → 400, aprobar lote → count, rechazar con motivo, aprobadoPor/fechaAprobacion, filtro workspace, owner sin grupoId |
+| `tests/services-pagination.test.ts` | node | 17 | Servicios: `getAllHistorias/Casos/Tareas` paginados (skip, take, pages, where); filtro `asignado` en tareas; `create/update` de historia/caso/tarea llaman Prisma con tipos sin `as any` |
+| `tests/v255-features.test.ts` | node | 34 | Paginación en notificaciones/sprints/grupos/users (metadatos, parámetros al servicio, límites); límites de tamaño en validators (historia, caso, tarea); loginSchema ≥8 chars; batch máx 1000 IDs; export límite 5000 |
+| `tests/v256-features.test.ts` | node | 24 | `rlKey`: unicidad de clave ip:ruta, independencia de contadores por endpoint; sync historias/casos/tareas: 401, 403, 429, límites de array (501→400, 1001→400, 2001→400), payload válido→200, workspace isolation→500 |
+| `tests/v257-features.test.ts` | node | 45 | Retry-After + X-RateLimit-* en 429 de sync/export/batch; rate limit en PUT /api/auth/password con clave por usuario; bug fix fechas parciales en PUT /api/sprints/[id]; límites `.max()` en validators de auth; try/catch 500 en GET/PUT /api/config; fusión double-query en GET/DELETE /api/historias/[id]; resolveNotif helper en PATCH/DELETE /api/notificaciones/[id] |
+| `tests/v258-features.test.ts` | node | 43 | Fusión double-query en GET/DELETE /api/casos/[id] y GET/DELETE /api/tareas/[id]; requireAuth 1 query (include grupo); rate limit POST /api/users (20/h) + POST /api/historias (60/h) con Retry-After; try/catch 500 en GET/PUT/DELETE /api/users y GET /api/export |
+| `tests/e2e/flujo-completo.spec.ts` | **Playwright** | 14 | Login, navegación entre tabs, crear HU, crear caso de prueba, agregar tarea, agregar comentario, tab Casos, Analytics, crear usuario, eliminar usuario, Bloqueos, Carga Ocupacional, Logout, credenciales incorrectas |
 
 Los tests de API usan **Prisma y servicios mockeados** con `vi.mock` y generan JWTs reales con `signToken` — no requieren base de datos activa.
+
+Los tests E2E **sí requieren** el servidor en `localhost:3000` y la base de datos con el seed aplicado.
 
 ---
 
 ## Changelog
+
+### v2.61 — Observabilidad completa: audit log, soft delete, startup check, CSP endurecido, rate limiting GET-by-ID
+
+#### Cambios
+
+| Área | Archivo | Descripción |
+|---|---|---|
+| Observabilidad | `lib/backend/logger.ts` | `logger.error` sustituye los 9 `console.error` restantes en `casos/[id]`, `casos/sync`, `casos/batch`, `historias/[id]`, `historias/sync`, `tareas/[id]`, `tareas/sync`, `config`, `notificaciones/[id]` |
+| Rate limiting | `app/api/historias/[id]/route.ts` | GET protegido con 200 req/min por IP |
+| Rate limiting | `app/api/casos/[id]/route.ts` | GET protegido con 200 req/min por IP |
+| Rate limiting | `app/api/tareas/[id]/route.ts` | GET protegido con 200 req/min por IP |
+| Rate limiting | `app/api/metricas/route.ts` | GET protegido con 60 req/min por IP |
+| Infraestructura | `lib/backend/startup-check.ts` | `assertRequiredEnv()` — lanza en producción si `DATABASE_URL` falta o `JWT_SECRET` < 32 chars; llamado al importar `prisma.ts` |
+| Seguridad | `next.config.mjs` | CSP: `'unsafe-eval'` solo se incluye en desarrollo (`isDev = NODE_ENV !== "production"`) |
+| Frontend | `components/layout/error-boundary.tsx` | `console.error` reemplazado por `clientError()` desde `lib/client-logger.ts` |
+| Frontend | `lib/client-logger.ts` | Nuevo logger cliente: JSON en prod, texto en dev; nunca propaga errores |
+| Soft delete | `prisma/schema.prisma` | `deletedAt DateTime?` + `@@index([deletedAt])` en `HistoriaUsuario`, `CasoPrueba` y `Tarea` |
+| Audit | `prisma/schema.prisma` | Nuevo modelo `AuditLog` (`@@map("audit_log")`) con campos `action`, `resource`, `resourceId`, `meta`, `userEmail`, `userRol`, `grupoId` e índices en `userId`, `grupoId`, `resource/resourceId` y `timestamp` |
+| Audit | `lib/backend/services/audit.service.ts` | `audit()` fire-and-forget: escribe en `audit_log`; captura errores de DB con `logger.error` y nunca lanza |
+| Audit | `app/api/audit/route.ts` | `GET /api/audit` solo para owner; paginado, filtrable por `grupoId/resource/action/userId`; rate limit 30 req/min |
+| Audit | `app/api/historias/route.ts`, `app/api/historias/[id]/route.ts` | `void audit(...)` en CREATE, UPDATE y DELETE de historias |
+| Audit | `app/api/casos/route.ts`, `app/api/casos/[id]/route.ts`, `app/api/casos/batch/route.ts` | `void audit(...)` en CREATE, APPROVE y REJECT de casos |
+| Audit | `app/api/users/route.ts`, `app/api/users/[id]/route.ts` | `void audit(...)` en CREATE, UPDATE, DELETE, RESET_PASSWORD y UNLOCK de usuarios |
+| Audit | `app/api/auth/logout/route.ts` | `void audit(...)` en LOGOUT |
+| Tests | `tests/v261-features.test.ts` | 14 tests: `assertRequiredEnv` (4), rate limiting historias/metricas (2), CSP producción (1), soft delete + AuditLog en schema (2), audit fire-and-forget (1), `GET /api/audit` control de acceso (2), audit DB write correctness (2) |
+
+#### Decisiones de diseño
+
+- **fire-and-forget en audit**: un fallo de escritura en el log nunca debe bloquear la petición principal. El patrón `void audit(...)` + try/catch interno garantiza esto sin complejidad adicional.
+- **assertRequiredEnv en prisma.ts**: al ser importado en el arranque del servidor, cualquier variable faltante falla rápido y con mensaje claro, antes de que llegue la primera petición real.
+- **deletedAt nullable sin migración de datos**: los campos son opcionales, por lo que el deployment puede hacerse en cero downtime; los servicios pueden adoptar el filtro `deletedAt: null` de forma incremental.
+- **CSP unsafe-eval solo en dev**: Next.js usa `eval` durante el hot-reload de desarrollo pero no en producción. Separar los dos contextos reduce la superficie XSS en prod sin romper el DX local.
+- **GET /api/audit owner-only**: el log de auditoría contiene acciones de todos los workspaces; solo el owner tiene visibilidad global. Los admins pueden auditar su propio workspace a través de los endpoints normales.
+
+**700 tests unitarios · 49 suites · 0 fallos + 14 tests E2E Playwright**
+
+---
+
+### v2.60 — Observabilidad y resiliencia: health endpoint, logger estructurado, try/catch completo, Prisma SIGTERM, imágenes condicionales
+
+#### Cambios
+
+| Área | Archivo | Descripción |
+|---|---|---|
+| Observabilidad | `app/api/health/route.ts` | Nuevo endpoint `GET /api/health` sin auth; retorna `200 ok` o `503 degraded` según estado de la DB |
+| Observabilidad | `lib/backend/logger.ts` | `logger.error` reemplaza los 18 `console.error` en 7 rutas API — JSON en prod, texto en dev |
+| Resiliencia | `app/api/grupos/[id]/route.ts` | GET, PUT y DELETE envueltos en try/catch → 500 estructurado |
+| Resiliencia | `app/api/auth/me/route.ts` | Consulta Prisma envuelta en try/catch → 500 estructurado |
+| Resiliencia | `app/api/auth/logout/route.ts` | `logoutService` envuelto en try/catch → 500 estructurado |
+| Resiliencia | `app/api/sprints/route.ts` | GET envuelto en try/catch → 500 estructurado |
+| Resiliencia | `app/api/notificaciones/route.ts` | GET y POST envueltos en try/catch → 500 estructurado |
+| Infraestructura | `lib/backend/prisma.ts` | `process.on("SIGTERM")` llama `$disconnect` en producción para cierre limpio |
+| Infraestructura | `next.config.mjs` | `images.unoptimized` es `true` solo fuera de producción |
+| Tests | `tests/v260-features.test.ts` | 13 tests: health 200/503, 7 rutas → 500 on DB/service failure, logger structured output (3 casos) |
+
+#### Decisiones de diseño
+
+- **Health sin auth**: un monitor externo o load balancer no tiene token JWT — el endpoint debe responder siempre, incluso si el sistema de auth está caído.
+- **Logger dual mode**: en desarrollo el texto plano facilita la lectura; en producción el JSON permite que herramientas como Datadog/CloudWatch parseen automáticamente campos estructurados.
+- **SIGTERM solo en producción**: en desarrollo con hot reload, desconectar el cliente Prisma en cada reinicio causaría errores innecesarios.
+
+**686 tests unitarios · 48 suites · 0 fallos + 14 tests E2E Playwright**
+
+---
+
+### v2.59 — Robustez de producción: try/catch sprints, paginación NaN, complejidad contraseña, JWT 2h, caché 5min, logger, retry sync, .env.example
+
+#### Cambios
+
+| Área | Archivo | Cambio |
+|---|---|---|
+| **try/catch** | `app/api/sprints/route.ts` | POST envuelto en try/catch → 500 estructurado en vez de crash; era la única ruta CRUD sin este guard |
+| **Paginación NaN** | 8 rutas (`historias`, `casos`, `tareas`, `sprints`, `users`, `grupos`, `notificaciones`, `export`) | `parseInt(x)` sin guardia devolvía `NaN` si el parámetro era no numérico (`?page=abc`); corregido con `Math.max(1, parseInt(x) \|\| default)` — nunca más llega `NaN` a Prisma |
+| **Complejidad contraseña** | `lib/backend/validators/auth.validator.ts` | `cambiarPasswordSchema.nueva` añade regex `(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^a-zA-Z\d])` — requiere mayúscula, minúscula, número y símbolo; mensaje claro en el 400 |
+| **JWT expiry** | `lib/backend/middleware/auth.middleware.ts` | `JWT_EXPIRY` reducido de `"8h"` a `"2h"` — ventana de exposición ante token robado pasa de 8 a 2 horas |
+| **Caché métricas** | `lib/backend/metricas-cache.ts` | `CACHE_TTL_MS` sube de `60_000` (1 min) a `300_000` (5 min) — las métricas no cambian en segundos; reduce carga en DB del endpoint Owner |
+| **Logger estructurado** | `lib/backend/logger.ts` | Nuevo módulo `logger.info/warn/error(context, msg, err?)` — emite JSON en producción (para Vercel Logs / alertas), texto legible en desarrollo. Reemplaza `console.error` en rutas críticas |
+| **Retry + syncError** | `lib/hooks/useApiMirroredState.ts` | El sync a la API reintenta hasta 3 veces con backoff exponencial (1s/2s/4s) antes de fallar; nuevo 5.º valor de retorno `syncError` expone el último fallo |
+| **Toast sync fallo** | `lib/hooks/useDomainData.ts` | `useEffect` sobre `syncError` de los tres recursos → muestra toast `"Error al guardar"` al usuario cuando el sync falla tras todos los reintentos |
+| **`.env.example`** | `.env.example` | Nuevo archivo plantilla con todas las variables requeridas, instrucción para generar JWT_SECRET seguro y nota sobre `connection_limit=1` para serverless |
+| **Tests** | `tests/v259-features.test.ts` | 19 nuevos tests: try/catch sprint DB error, paginación NaN (3 casos), complejidad contraseña (6 casos), JWT_EXPIRY=2h, CACHE_TTL 5min, logger JSON/texto (3 casos), syncWithRetry (3 casos) |
+| **Tests fix** | `tests/api-auth-endpoints.test.ts` | Actualiza fixtures de contraseña (`"nueva123"` → `"Nueva@123"`) para cumplir la nueva política de complejidad |
+
+#### Decisiones de diseño documentadas
+
+- **`Math.max(1, parseInt(x) || default)`**: el patrón `|| default` convierte `NaN` (y `0`) al valor por defecto antes de que `Math.max` lo procese; `Math.max(1, …)` garantiza que nunca llegue un valor ≤ 0 a Prisma `skip`/`take`. No se usó un helper compartido porque el valor por defecto varía por ruta (50/100/200/5000).
+- **JWT 2h sin refresh token**: bajar de 8h a 2h es la mejora de menor costo sin cambiar la arquitectura. El siguiente paso ideal es un refresh token rotativo (cookie `HttpOnly`, 7 días), pero implica un endpoint nuevo y cambios en el cliente — se documenta en el backlog.
+- **Logger con detección de entorno en runtime**: `process.env.NODE_ENV` se evalúa en cada llamada (no al importar el módulo) para que los tests puedan cambiar el entorno sin re-importar. Esto también permite que el mismo bundle funcione en dev y producción.
+- **Retry 3 × backoff exponencial**: los fallos de sync suelen ser transitorios (timeout de red, pod reiniciando). 3 reintentos cubren la mayoría sin bloquear la UI. El backoff evita que todos los tabs abren simultáneamente hagan thundering herd.
+
+**673 tests unitarios · 47 suites · 0 fallos + 14 tests E2E Playwright**
+
+---
+
+### v2.58 — Rendimiento y robustez: query fusion global, requireAuth en 1 query, rate limiting ampliado, try/catch en users/export, índice Sprint, E2E Playwright, bugfixes de fechas
+
+#### Cambios
+
+| Área | Archivo | Cambio |
+|---|---|---|
+| **N+1 fix** | `app/api/casos/[id]/route.ts` | `getCasoIfAllowed()`: fusiona access check + fetch en una sola `findUnique({ include: { tareas, hu: { select: { grupoId } } } })`. Ahorra 1 query por GET; PUT/DELETE usan select ligero inline |
+| **N+1 fix** | `app/api/tareas/[id]/route.ts` | `getTareaIfAllowed()`: fusiona acceso + fetch en `findUnique({ include: { caso: { select: { hu: { select: { grupoId } } } } } })`. Misma reducción de queries |
+| **Auth optimization** | `lib/backend/middleware/auth.middleware.ts` | `requireAuth` ahora usa **1 sola query** con `select: { activo, grupo: { select: { activo } } }` — antes eran 2 queries separadas (user + grupo). Afecta cada llamada autenticada |
+| **Rate limiting** | `app/api/users/route.ts` | POST: límite de 20 usuarios creados/hora por admin (clave `ip:ruta:userId`). Responde con `Retry-After`, `X-RateLimit-Limit`, `X-RateLimit-Remaining` en 429 |
+| **Rate limiting** | `app/api/historias/route.ts` | POST: límite de 60 historias creadas/hora por usuario. Mismos headers en 429 |
+| **try/catch** | `app/api/users/route.ts` | GET: `$transaction` envuelto en try/catch → 500 estructurado en vez de crash |
+| **try/catch** | `app/api/users/[id]/route.ts` | PUT y DELETE envueltos en try/catch → 500 estructurado con `{ error }` |
+| **try/catch** | `app/api/export/route.ts` | Ambas ramas (`historias`/`casos`) envueltas en un único try/catch → 500 estructurado |
+| **DB index** | `prisma/schema.prisma` | `Sprint @@index([grupoId, fechaInicio, fechaFin])` — acelera la query de `getSprintActivo` que filtra por rango de fechas |
+| **Tests** | `tests/v258-features.test.ts` | 43 nuevos tests cubriendo todas las funcionalidades anteriores |
+| **Tests fix** | 10 archivos de test | Actualiza mocks de `prisma.user.findUnique` para devolver `{ activo, grupo: { activo } }` — necesario tras la fusión de `requireAuth` |
+| **E2E** | `tests/e2e/flujo-completo.spec.ts` | 14 tests Playwright: login → HU → caso → tarea → comentario → usuarios → navegación completa → logout |
+| **Config** | `playwright.config.ts` | Configuración Playwright: `webServer` para levantar `pnpm dev`, timeout 60s, capturas en fallo, video en reintento |
+| **Bugfix runtime** | `components/dashboard/usuarios/user-management.tsx` | `formatFechaConexion` ahora acepta `Date \| string` y envuelve con `new Date(raw)` — las fechas de `historialConexiones` llegaban como strings ISO desde la API (JSON serializa `Date` → string) causando crash en `.toLocaleTimeString()`. Mismo ajuste en cálculo de duración |
+| **Bugfix sistémico** | `lib/hooks/useDomainData.ts` + 5 componentes | Las fechas (`fechaFinEstimada`, `fecha`, `proximaFechaFin`) llegan como strings ISO desde la API. Se añaden `parseHistorias()`, `parseCasos()` y `parseTareas()` en `useDomainData.ts` para normalizar las entidades a `Date` reales en el punto de entrada, eliminando crashes de `.getTime()` en `home-dashboard`, `carga-ocupacional`, `mini-calendario`, `panel-riesgos`, `bloqueos-panel` y `useHistoriasFilters` |
+
+#### Decisiones de diseño documentadas
+
+- **`requireAuth` 1 query**: Prisma soporta `include`/`select` anidado — al incluir `grupo: { select: { activo: true } }` en el `select` de `user.findUnique` se obtiene el estado del grupo en el mismo roundtrip. La lógica de verificación usa el campo cargado en lugar de hacer un segundo `grupo.findUnique`.
+- **Rate limit separado por creación de usuarios**: el límite de 20/h para POST `/api/users` usa `ip:ruta:userId` (no solo IP) para no penalizar a otros admins en la misma red corporativa. El límite es conservador porque crear usuarios es una operación administrativa, no de datos de negocio.
+- **try/catch en users/export**: antes un error de DB en GET `/api/users` causaba un crash sin respuesta HTTP al cliente. El try/catch garantiza un 500 JSON bien estructurado que el frontend puede manejar.
+- **Normalización de fechas en el boundary**: la API serializa `Date` a string ISO en JSON. En lugar de parchear cada `.getTime()` / `.toLocaleTimeString()` con `new Date()` en cada componente, `parseHistorias()` / `parseCasos()` / `parseTareas()` en `useDomainData.ts` convierten las fechas una sola vez al llegar los datos — todos los consumidores reciben `Date` reales.
+
+**649 tests unitarios · 46 suites · 0 fallos + 14 tests E2E Playwright**
+
+---
+
+### v2.57 — Robustez y seguridad: Retry-After, rate limit en password, bug fechas parciales, fusión de queries y límites en validadores
+
+#### Cambios
+
+| Área | Archivo | Cambio |
+|---|---|---|
+| **Rate limiting** | `app/api/auth/password/route.ts` | Añade `checkRateLimit` con clave `ip:ruta:userId` — 10 intentos / 15 min por usuario. Un usuario bloqueado no afecta a otros aunque vengan de la misma IP (NAT corporativo) |
+| **Retry-After** | `app/api/casos/sync/route.ts`, `historias/sync`, `tareas/sync`, `export`, `casos/batch` | Todos los 429 incluyen ahora `Retry-After: <secs>`, `X-RateLimit-Limit`, `X-RateLimit-Remaining` — el cliente puede respetar el backoff sin polling ciego |
+| **Retry-After** | `app/api/auth/password/route.ts` | El 429 de cambio de contraseña también incluye los tres headers |
+| **Bug fix** | `app/api/sprints/[id]/route.ts` | Corrección en validación de fechas para actualizaciones parciales: enviar solo `fechaInicio` usaba `undefined` como `fechaFin` y saltaba el chequeo. Ahora usa `fechaFin ?? existing.fechaFin` para comparar contra el valor actual |
+| **N+1 fix** | `app/api/historias/[id]/route.ts` | Elimina double-query (access check + fetch): `getHistoriaIfAllowed()` hace una sola `findUnique` con `include: { casos }` y valida `grupoId` sobre el resultado — ahorra 1 query por GET/PUT |
+| **Validators** | `lib/backend/validators/auth.validator.ts` | Añade `.max()` a todos los campos de texto: `email` ≤254 (RFC 5321), `password` ≤128, `nombre` ≤200 en `createUserSchema` y `updateUserSchema` |
+| **try/catch** | `app/api/config/route.ts` | Ambos GET y PUT envueltos en try/catch → devuelven 500 con `{ error }` en vez de crashear silenciosamente |
+| **Refactor** | `app/api/notificaciones/[id]/route.ts` | Extrae `resolveNotif()` helper que encapsula la lógica de autorización (buscar notificación + verificar `grupoId` + verificar `destinatario`) — elimina duplicación entre PATCH y DELETE |
+| **Refactor** | `app/api/sprints/[id]/route.ts` | Extrae `getSprintIfAllowed()` helper que hace access check + fetch en una sola query — reutilizado por GET y PUT |
+| **Tests** | `tests/v257-features.test.ts` | 45 nuevos tests cubriendo todas las funcionalidades anteriores |
+| **Tests** | `tests/api-sprints.test.ts` | Actualiza fixtures (`grupoId`, fechas como `Date`) y añade mocks de `getSprintById` a los tests de PUT que requieren el sprint existente |
+| **Tests** | `tests/api-historias.test.ts` | Actualiza tests GET de `historias/[id]` para mockear `prisma.historiaUsuario.findUnique` en lugar de `getHistoriaById` (la ruta ya no delega en el service para el GET) |
+
+#### Decisiones de diseño documentadas
+
+- **Rate limit por usuario en `/api/auth/password`**: usar solo la IP bloquearía a todos los usuarios de una empresa con NAT compartido. La clave `ip:ruta:userId` aísla el límite por cuenta — alguien intentando adivinar la contraseña de otro usuario solo se bloquea a sí mismo.
+- **`Retry-After` en todos los 429**: sin este header el cliente no sabe cuánto esperar y puede hacer polling agresivo (thundering herd). El valor es `ceil((resetAt - now) / 1000)` calculado en el momento de la respuesta, no un valor fijo.
+- **`getHistoriaIfAllowed` vs. mantener double-query**: la query de acceso (`select { grupoId }`) era un subconjunto de la query completa. Al fusionar en `findUnique({ include: { casos } })` el acceso y los datos se obtienen en un único roundtrip. El único caso donde se hace la query selectiva (sin include) es DELETE, donde los datos completos no se necesitan.
+- **Bug de fechas parciales**: el `if (fechaInicio && fechaFin && ...)` original validaba solo si ambas fechas estaban presentes en el request. Enviar solo `fechaInicio: "2030-01-01"` no disparaba el check y el sprint quedaba con `fechaInicio > fechaFin`. La corrección usa los valores actuales como fallback antes de comparar.
+
+**611 tests · 45 suites · 0 fallos**
+
+---
+
+### v2.56 — Seguridad y calidad: rate limiter por endpoint, límites en sync, tipos Prisma y cobertura de sync
+
+#### Cambios
+
+| Área | Archivo | Cambio |
+|---|---|---|
+| **Rate limiter** | `lib/backend/middleware/rate-limit.ts` | Nueva función `rlKey(ip, route)` que devuelve `"ip:ruta"`. Todos los callers usan `rlKey` → cada endpoint tiene contador independiente. Un usuario no puede agotar el límite de `/api/export` haciendo peticiones a `/api/historias/sync` |
+| **Rate limiter** | `lib/backend/middleware/rate-limit.ts` | `cleanup()` renombrado a `maybeCleanup()` y solo se ejecuta cuando `store.size >= 500` — elimina el O(N) en el hot path de cada request |
+| **Sync limits** | `app/api/historias/sync/route.ts` | Schema Zod añade `.max(500)` en el array de historias → HTTP 400 si se superan 500 items en una sola llamada de sync |
+| **Sync limits** | `app/api/casos/sync/route.ts` | Schema Zod añade `.max(1000)` en el array de casos |
+| **Sync limits** | `app/api/tareas/sync/route.ts` | Schema Zod añade `.max(2000)` en el array de tareas |
+| **Tipos Prisma** | `app/api/historias/sync/route.ts` | Elimina todos los `as any[]` — usa `Prisma.HistoriaUsuarioUncheckedCreateInput[]` y `Prisma.HistoriaUsuarioUncheckedUpdateInput` |
+| **Tipos Prisma** | `app/api/casos/sync/route.ts` | Usa `Prisma.CasoPruebaUncheckedCreateInput[]` y `Prisma.CasoPruebaUncheckedUpdateInput` |
+| **Tipos Prisma** | `app/api/tareas/sync/route.ts` | Usa `Prisma.TareaUncheckedCreateInput[]` y `Prisma.TareaUncheckedUpdateInput` |
+| **DB index** | `prisma/schema.prisma` | `Notificacion @@index([destinatario, leida])` — acelera la query más frecuente de notificaciones no leídas |
+| **Build** | `next.config.mjs` | Elimina `typescript: { ignoreBuildErrors: true }` — los errores de tipos ahora bloquean el build de producción |
+| **Tests** | `tests/v256-features.test.ts` | 24 nuevos tests cubriendo todas las funcionalidades anteriores |
+
+#### Decisiones de diseño documentadas
+
+- **Clave `ip:route` en el rate limiter**: la clave anterior era solo la IP, lo que significa que un usuario podía hacer 30 syncs + 20 exports en el mismo minuto sin que ninguno lo bloqueara. Con `ip:route` cada endpoint tiene su propio bucket. El costo es memoria adicional (tantas entradas por IP como endpoints rate-limitados), pero el store se limpia automáticamente al superar 500 entradas.
+- **Umbral 500 para cleanup**: con 5 endpoints rate-limitados y tráfico típico de una organización pequeña, el store raramente supera 500 entradas. El umbral evita que cada request sea O(N) sin necesitar un `setInterval` (que en serverless no sobrevive entre invocaciones).
+- **Límites de sync asimétricos (500/1000/2000)**: histórias son el objeto más pesado (JSON con bloqueos, historial, comentarios); casos son más livianos; tareas son los más numerosos. Los límites reflejan la relación típica 1 HU → 2-4 casos → 4-8 tareas.
+- **Eliminar `ignoreBuildErrors`**: este flag existía para unblock el despliegue durante el desarrollo. Con el backend completamente conectado y los tipos Prisma usados correctamente en los services y sync routes, mantenerlo solo ocultaría regresiones de tipos en producción.
+
+**566 tests · 44 suites · 0 fallos** *(antes de v2.57)*
+
+---
+
+### v2.55 — Rendimiento y robustez: índices DB, límites de payload, paginación completa, N+1 y hooks
+
+#### Cambios
+
+| Área | Archivo | Cambio |
+|---|---|---|
+| **DB indexes** | `prisma/schema.prisma` | `User @@index([grupoId])` y `@@index([rol])` para acelerar las queries de listing y workspace scoping |
+| **Validator limits** | `lib/backend/validators/historia.validator.ts` | Añade `.max()` en todos los campos de texto y arrays: `titulo` ≤500, `codigo` ≤50, `descripcion` ≤10000, `criteriosAceptacion` ≤5000, `casosIds` ≤500, `bloqueos` ≤100, `comentarios` ≤200, `historial` ≤1000 |
+| **Validator limits** | `lib/backend/validators/caso.validator.ts` | `titulo` ≤500, `descripcion` ≤10000, `archivosAnalizados` ≤100 items, arrays de bloqueos/comentarios/resultados/tareas acotados |
+| **Validator limits** | `lib/backend/validators/tarea.validator.ts` | `titulo` ≤500, `descripcion` ≤5000, `horasEstimadas` ≤9999, `bloqueos` ≤100 |
+| **Validator fix** | `lib/backend/validators/auth.validator.ts` | `loginSchema.password` cambia de `min(1)` a `min(8)` — coherente con `createUserSchema` y los mensajes de error ya existentes |
+| **Batch limit** | `app/api/casos/batch/route.ts` | Schema Zod añade `.max(1000)` en `ids` — previene procesar más de 1000 casos en una sola petición → 400 si se supera |
+| **Export limit** | `app/api/export/route.ts` | Nuevo parámetro `?limit=N` (máx. 5000, default 5000) añadido al `findMany` de historias y casos — evita dumps completos sin paginación |
+| **N+1 fix** | `lib/backend/services/grupo.service.ts` | `getMetricasGlobales`: reemplaza el bucle `for…of` secuencial por `Promise.all(grupos.map(g => getMetricasGrupo(g.id)))` — N grupos ahora generan N×7 queries concurrentes en vez de N×7 secuenciales |
+| **Paginación** | `GET /api/notificaciones` | Acepta `?page=N&limit=N` (máx. 200, default 50); devuelve `{ notificaciones, total, page, limit, pages }` |
+| **Paginación** | `GET /api/sprints` | Acepta `?page=N&limit=N` (máx. 200, default 50); devuelve `{ sprints, total, page, limit, pages }` |
+| **Paginación** | `GET /api/grupos` | Acepta `?page=N&limit=N` (máx. 100, default 50); devuelve `{ grupos, total, page, limit, pages }` |
+| **Paginación** | `GET /api/users` | Acepta `?page=N&limit=N` (máx. 200, default 50); devuelve `{ users, total, page, limit, pages }` |
+| **Hooks — AbortController** | `lib/hooks/useApiMirroredState.ts` | La firma del `fetcher` pasa a `(signal?: AbortSignal) => Promise<T>`; el efecto de carga inicial crea un `AbortController` y cancela el fetch al desmontar el componente |
+| **Hooks — AbortController** | `lib/hooks/useNotificaciones.ts` | Añade `AbortController` al efecto de carga inicial; comprueba `controller.signal.aborted` antes de actualizar estado |
+| **Hooks — AbortController** | `lib/hooks/useConfig.ts` | Añade `AbortController` a los efectos de carga de sprints y config; expone `syncError` para surfacear errores de sincronización |
+| **Tests** | `tests/v255-features.test.ts` | 34 nuevos tests cubriendo todas las funcionalidades anteriores |
+
+#### Decisiones de diseño documentadas
+
+- **Índices en `User`**: `grupoId` y `rol` son los campos más frecuentes en las cláusulas `where` del listing de usuarios (workspace scoping + filtrado por admin/qa). Costo de escritura mínimo vs. ganancia en reads.
+- **Límites de payload con 400 vs. 422**: errores de tamaño (`.max()` en Joi/Zod) devuelven 400 (Bad Request) porque el cliente envió datos fuera del contrato de la API — diferente al 422 de cross-entity validation donde el payload es válido pero la entidad referenciada no existe.
+- **Export con `limit` en vez de paginación**: la ruta de export genera un CSV en memoria de una sola pasada; añadir un `limit` fijo (5000) es suficiente para protegerla sin cambiar el contrato de descarga-de-archivo-completo que esperan los clientes.
+- **`Promise.all` en `getMetricasGlobales`**: las métricas de cada grupo son independientes entre sí — no hay ningún efecto de borde entre grupos. Ejecutarlas en paralelo es seguro y reduce la latencia percibida de O(N) a O(1) relativo al DB connection pool.
+- **`AbortController` en hooks**: evita el warning `Can't perform a React state update on an unmounted component` y, más importante, previene que una respuesta tardía sobreescriba estado de una instancia nueva del componente.
+
+**542 tests · 43 suites · 0 fallos** *(antes de v2.56)*
+
+---
+
+### v2.54 — Robustez backend: caché selectiva, filtros de lista, validación cruzada y rate limiting
+
+#### Cambios
+
+| Área | Archivo | Cambio |
+|---|---|---|
+| **Caché** | `lib/backend/metricas-cache.ts` | `invalidateMetricasCache(grupoId?)`: cuando se pasa `grupoId` solo elimina esa partición; sin argumento limpia todo el `Map`. Las escrituras ya no invalidan métricas de otros workspaces |
+| **Filtros API** | `GET /api/historias` | Nuevos query params `?sprint=` y `?responsable=` pasados como `filters` al servicio; el service los aplica en el `where` de Prisma |
+| **Paginación** | `lib/backend/services/caso.service.ts` | `getCasosByHU(huId, page, limit)` ahora devuelve `{ casos, total, page, limit, pages }` en vez de un array sin paginar |
+| **Paginación** | `lib/backend/services/tarea.service.ts` | `getTareasByCaso` y `getTareasByHU` devuelven resultado paginado (default `limit=200`) |
+| **Validación** | `POST /api/casos` | Cross-entity: verifica que `huId` exista en DB y pertenezca al workspace antes de crear → 422 si no |
+| **Validación** | `POST /api/tareas` | Cross-entity: verifica que `casoPruebaId` exista, pertenezca al workspace y coincida con `huId` → 422 si no |
+| **Rate limiting** | `GET /api/export`, `POST /api/*/sync`, `PATCH /api/casos/batch` | Añade `checkRateLimit` (30 req/min sync, 20 req/min export/batch) → HTTP 429 si se supera |
+| **Logging** | Todos los catch en rutas CRUD | `console.error("[ROUTE] acción:", e)` en cada bloque catch antes de construir el mensaje de error |
+| **Tests** | `tests/v254-features.test.ts` | 23 nuevos tests cubriendo todas las funcionalidades anteriores |
+
+#### Decisiones de diseño documentadas
+
+- **Caché por partición vs. invalidación global**: invalidar solo el workspace afectado evita que escrituras de un grupo pongan stale el caché de otros grupos. El Owner (sin `grupoId`) usa la clave `"__owner__"` y solo se invalida si se llama sin argumento.
+- **Rate limiting en rutas de alto tráfico**: las rutas de sync, export y batch son las más propensas a uso abusivo (pueden generar queries pesadas). Las rutas CRUD regulares no se limitan para no degradar la UX.
+- **Cross-entity validation con 422**: se usa 422 (Unprocessable Entity) en vez de 400 porque el payload es sintácticamente correcto pero semánticamente inválido (referencia a entidad inexistente). El mensaje distingue "no existe" de "no pertenece a tu workspace".
+
+**508 tests · 42 suites · 0 fallos** *(antes de v2.55)*
+
+---
+
+### v2.53 — Calidad de código: tipado seguro, paginación, nuevos endpoints y seed completo
+
+#### Cambios
+
+| Área | Archivo | Cambio |
+|---|---|---|
+| **Tipado** | `lib/backend/services/historia.service.ts` | `createHistoria`/`updateHistoria` usan `Prisma.HistoriaUsuarioUncheckedCreateInput` en vez de `as any` |
+| **Tipado** | `lib/backend/services/caso.service.ts` | `createCaso`/`updateCaso` usan `Prisma.CasoPruebaUncheckedCreateInput` |
+| **Tipado** | `lib/backend/services/tarea.service.ts` | `createTarea`/`updateTarea` usan `Prisma.TareaUncheckedCreateInput` |
+| **Tipos** | `lib/types/index.ts` | Exporta `User`, `Grupo`, `Config`, `PaginatedResult<T>` |
+| **Paginación** | `GET /api/historias` | Acepta `?page=N&limit=N` (máx 200), devuelve `{ historias, total, page, limit, pages }` |
+| **Paginación** | `GET /api/casos` | Ídem; rutas filtradas por `huId` mantienen comportamiento sin paginar |
+| **Paginación** | `GET /api/tareas` | Ídem + nuevo `?asignado=nombre` para filtrar por responsable |
+| **Error handling** | Todas las rutas CRUD | Todos los handlers tienen `try/catch` que devuelve `{ error }` con 500 en vez de lanzar |
+| **Nuevo endpoint** | `DELETE /api/notificaciones/[id]` | Elimina notificación propia (mismo control de workspace/destinatario que PATCH) |
+| **Nuevo endpoint** | `PATCH /api/casos/batch` | Aprueba o rechaza múltiples casos (`{ ids, accion, motivo? }`); aplica aislamiento de workspace; solo actualiza casos en estado `pendiente_aprobacion` |
+| **Seed** | `prisma/seed.ts` | Config inicial completa: etapas web/api/mobile, 4 resultados base, 5 tipos de aplicación, 5 ambientes, 7 tipos de prueba, 4 aplicaciones de ejemplo. Re-ejecutable: `update` refresca la config |
+| **Seed** | `prisma/seed.ts` | Crea Sprint 1 y Sprint 2 de ejemplo en el grupo predeterminado |
+| **Workspace** | `GET /api/users` | Owner ya no se ve a sí mismo en el listado (`NOT: { id: payload.sub }`) |
+| **Tests** | 4 nuevos archivos | +42 tests: paginación de rutas, paginación de servicios, DELETE notif, batch approval |
+
+#### Decisiones de diseño documentadas
+
+- **`responsable` y `asignado` como strings de nombre (no FKs)**: intencional. Los campos de auditoría almacenan el nombre en el momento del evento para preservar el historial aunque el usuario sea eliminado. El indicador `UserX` (v2.52) cubre la visibilidad del estado actual sin romper el historial.
+- **Joi + Zod coexisten**: los validators de dominio (historias, casos, tareas, auth) usan Joi; las rutas más nuevas (sprints, grupos, sync, batch) usan Zod inline. Migración completa postergada — el costo de romper el comportamiento existente supera el beneficio de uniformidad.
+- **`Tarea.huId` sin FK explícita**: campo denormalizado para evitar el JOIN Tarea→CasoPrueba→HistoriaUsuario en queries frecuentes. Mantenido en sincronía por la lógica de creación.
+
+**485 tests · 41 suites · 0 fallos** *(antes de v2.54)*
+
+---
+
+### v2.52 — Mejora UX: conteo de asignaciones e indicador de responsable sin workspace
+
+#### Motivación
+
+Cuando el Owner quita a un usuario del workspace, sus HUs y tareas asignadas no se reasignan automáticamente (los campos `responsable` y `asignado` son strings de nombre sin FK). Esto podía dejar responsables "fantasma" sin que los demás miembros del equipo lo supieran.
+
+#### Cambios
+
+| Archivo | Cambio |
+|---|---|
+| `app/api/users/[id]/asignaciones/route.ts` | Nuevo endpoint `GET /api/users/:id/asignaciones` — devuelve `{ historias: N, tareas: N }` para el usuario indicado. Solo accesible para Admin y Owner |
+| `lib/utils/asignaciones.ts` | Nueva utilidad `isResponsableActivo(nombre, users)` — devuelve `true` si el nombre corresponde a un usuario activo en la lista del workspace |
+| `components/dashboard/usuarios/user-management.tsx` | El diálogo "Quitar del workspace" llama al nuevo endpoint al abrirse y muestra el conteo de HUs y tareas pendientes de reasignar antes de confirmar la acción |
+| `components/dashboard/historias/historias-kanban.tsx` | Muestra ícono `UserX` naranja junto al responsable si ya no está activo en el workspace |
+| `components/dashboard/historias/historias-table.tsx` | Muestra ícono `UserX` naranja en la celda de responsable si ya no está activo |
+| `components/dashboard/historias/historia-usuario-detail.tsx` | Muestra ícono `UserX` naranja en el encabezado del detalle si el responsable ya no está activo |
+| `components/dashboard/casos/caso-prueba-card.tsx` | Muestra ícono `UserX` naranja junto al asignado de cada tarea si ya no está activo en el workspace |
+| `tests/api-users-asignaciones.test.ts` | 8 nuevos tests: auth, permisos, usuario sin workspace, usuario inexistente, conteos correctos, filtros Prisma correctos |
+| `tests/asignaciones-utils.test.ts` | 7 nuevos tests: activo, inactivo, desconocido, vacío, array vacío, case-sensitive, múltiples activos |
+
+#### Comportamiento
+
+- **Diálogo "Quitar del workspace"**: al abrir el diálogo se hace fetch a `/api/users/:id/asignaciones`. Si el usuario tiene asignaciones, se muestra un aviso naranja con el conteo exacto de HUs y tareas que quedarán sin responsable activo. Si no tiene ninguna, se muestra un mensaje confirmando que no hay asignaciones pendientes.
+- **Ícono `UserX` naranja**: aparece en las 4 ubicaciones donde se muestra un responsable/asignado (kanban de HUs, tabla de HUs, encabezado del detalle de HU, tarjeta de tarea dentro del caso). Se basa en la lista `users` del contexto de autenticación — si el nombre no corresponde a ningún usuario activo del workspace, se renderiza el ícono con tooltip "Responsable sin workspace activo" / "Usuario sin workspace activo".
+
+**443 tests · 37 suites · 0 fallos**
+
+---
+
+### v2.51 — Fix: seguridad SIN_WORKSPACE — usuarios sin workspace ya no pueden acceder al sistema
+
+#### Problema corregido
+
+**Agujero de seguridad: usuario sin workspace veía datos de todos los workspaces**
+
+Cuando el Owner quitaba a un usuario de su workspace (`grupoId → null`), el usuario podía seguir iniciando sesión y recibía un JWT sin campo `grupoId`. Como los endpoints de API aplican el filtro de workspace solo `if (payload.grupoId)`, un JWT sin `grupoId` omitía el filtro y el usuario veía los datos de **todos** los workspaces del sistema.
+
+#### Cambios
+
+| Archivo | Cambio |
+|---|---|
+| `lib/backend/services/auth.service.ts` | `loginService` rechaza con 403 `SIN_WORKSPACE` a cualquier usuario con `rol !== "owner"` y `grupoId === null`, impidiendo que obtenga un token |
+| `lib/backend/middleware/auth.middleware.ts` | `requireAuth` devuelve 403 `SIN_WORKSPACE` para tokens sin `grupoId` de usuarios no-owner en rutas de negocio (excluye `/api/auth/*`); esto invalida sesiones activas cuando el workspace es retirado mientras el usuario está logueado |
+| `components/dashboard/usuarios/user-management.tsx` | El diálogo "Quitar del workspace" ahora advierte explícitamente que el usuario perderá acceso inmediato al sistema |
+
+#### Flujo resultante
+
+1. **Usuario quitado del workspace mientras está logueado**: en la próxima verificación de sesión (o llamada de API), el backend devuelve 403 → el frontend dispara `setSessionExpired(true)` → el usuario es redirigido a login.
+2. **Usuario intenta hacer login de nuevo**: `loginService` detecta `grupoId === null` y devuelve `{ error: "Tu cuenta no tiene workspace asignado. Contacta al administrador.", code: "SIN_WORKSPACE" }` → el usuario ve el mensaje de error en la pantalla de login.
+3. **Cuando el Owner le asigna un nuevo workspace**: el usuario puede volver a iniciar sesión normalmente.
+
+---
+
+### v2.50 — Fix: notificaciones y bloqueos correctamente segmentados por workspace
+
+#### Problemas corregidos
+
+**1. Notificaciones del flujo de aprobación no incluían `grupoId`**
+
+Todos los `addNotificacion(...)` en `casoHandlers.ts` enviaban la notificación al backend sin `grupoId`. El backend infería el grupoId del JWT para usuarios normales, pero para el Owner (que tiene `grupoId = null`) la petición fallaba con 400. Además, si algún usuario enviaba una notificación sin grupoId, era rechazada o quedaba sin workspace en DB.
+
+**2. Los bloqueos (HU, caso, tarea) no generaban ninguna notificación**
+
+`bloqueoHandlers.ts` no tenía `addNotificacion` en su destructuring de `DomainCtx`. Al bloquear o resolver un bloqueo, solo se actualizaba el estado local y se emitía un toast — ningún admin/qa_lead recibía notificación.
+
+**3. Tipos frontend desincronizados con el backend**
+
+`TipoNotificacion` en `lib/types/index.ts` no incluía `"bloqueo_reportado"` ni `"bloqueo_resuelto"`, aunque el backend (schema Zod) ya los aceptaba. La interfaz `Notificacion` tampoco tenía el campo `grupoId`.
+
+#### Cambios
+
+| Archivo | Cambio |
+|---|---|
+| `lib/types/index.ts` | Añadidos `"bloqueo_reportado"` y `"bloqueo_resuelto"` a `TipoNotificacion`; añadido `grupoId?: string` a la interfaz `Notificacion` |
+| `lib/hooks/domain/types.ts` | `AddNotificacionFn.extra` ahora incluye `grupoId` en el `Pick<Notificacion, ...>` |
+| `lib/hooks/useDomainData.ts` | Firma local de `addNotificacion` actualizada con `grupoId` en `extra` |
+| `lib/hooks/useNotificaciones.ts` | Firma de `addNotificacion` actualizada; `grupoId` se pasa al body del POST a `/api/notificaciones` |
+| `lib/hooks/domain/casoHandlers.ts` | Los 5 `addNotificacion(...)` ahora pasan `grupoId: user?.grupoId ?? undefined` en el `extra` |
+| `lib/hooks/domain/bloqueoHandlers.ts` | Añadido `addNotificacion` al destructuring; los 4 handlers ahora emiten notificaciones: `handleAddBloqueo` → `bloqueo_reportado` → `"admin"`; los 3 resolve handlers → `bloqueo_resuelto` → `"qa"` |
+| `tests/bloqueoHandlers.test.ts` | +2 tests: verifica que `handleResolverBloqueoTarea` emite `bloqueo_resuelto` con `grupoId`; verifica que `handleAddBloqueo` emite `bloqueo_reportado` hacia `"admin"` con `grupoId` |
+
+#### Flujo resultante
+
+| Acción | Notificación | Destinatario | Con grupoId |
+|---|---|---|---|
+| QA envía caso(s) a aprobación | `aprobacion_enviada` | admin | ✅ |
+| Admin aprueba casos | `caso_aprobado` | qa | ✅ |
+| Admin rechaza casos | `caso_rechazado` | qa | ✅ |
+| QA solicita modificación de caso | `modificacion_solicitada` | admin | ✅ |
+| Admin habilita modificación | `modificacion_habilitada` | qa | ✅ |
+| Usuario reporta bloqueo en HU | `bloqueo_reportado` | admin | ✅ |
+| Usuario resuelve bloqueo de HU | `bloqueo_resuelto` | qa | ✅ |
+| Usuario resuelve bloqueo de caso | `bloqueo_resuelto` | qa | ✅ |
+| Usuario resuelve bloqueo de tarea | `bloqueo_resuelto` | qa | ✅ |
+
+**428 tests · 35 suites · 0 fallos**
+
+---
+
+### v2.49 — Fix: sesión activa no se cerraba al desactivar cuenta o grupo
+
+#### Problema
+
+El verificador periódico de sesión (`/api/auth/me` cada 5 min) y el restaurador de sesión al recargar solo manejaban `status 401` (JWT expirado). Desde v2.48, `requireAuth` devuelve **403** con códigos `CUENTA_INACTIVA` y `GRUPO_INACTIVO` cuando la cuenta o el grupo se desactivan. Esto causaba que:
+
+- Un usuario con sesión activa cuya cuenta fuera desactivada continuara "logueado" hasta que el JWT expirara (máx. 8 h)
+- Al recargar la página con la cookie aún válida pero la cuenta desactivada, la app quedaba en estado de carga indefinido
+
+#### Cambios
+
+| Archivo | Cambio |
+|---|---|
+| `lib/contexts/auth-context.tsx` | Verificador periódico: añadido bloque `else if (status === 403)` — desconecta y activa `sessionExpired` igual que un 401 |
+| `lib/contexts/auth-context.tsx` | Restaurador de sesión (al recargar): el `catch` silencioso ahora detecta 403 y activa `sessionExpired` antes de finalizar la carga |
+
+#### Comportamiento resultante
+
+- Si un admin desactiva una cuenta, el usuario afectado es desconectado en el siguiente ciclo de verificación (≤ 5 min)
+- Si el owner desactiva un grupo, todos los miembros activos de ese grupo son desconectados en ≤ 5 min
+- Al recargar la página con una cookie válida pero cuenta/grupo desactivado, se muestra el banner de sesión expirada inmediatamente en lugar de quedar en carga
+
+---
+
+### v2.48 — Auditoría de seguridad: 5 fixes de autenticación y aislamiento
+
+#### Problemas corregidos
+
+| # | Archivo | Problema | Fix |
+|---|---|---|---|
+| 1 | `auth.middleware.ts` | `requireAuth` no verificaba si la cuenta del usuario estaba activa — solo verificaba el grupo | Añadida query `user.findUnique({ activo })` antes de la comprobación de grupo. Devuelve 403 con `code: "CUENTA_INACTIVA"` |
+| 2 | `casos/sync/route.ts` | Al crear casos nuevos en sync, no se validaba que las HUs padre pertenecieran al workspace del caller | Pre-validación de `huId` contra `historiaUsuario.grupoId` antes del `createMany`. Lanza 500 con "Acceso denegado" si hay violación |
+| 3 | `notificaciones/route.ts` | POST usaba `"grupo-default"` como fallback cuando el caller era Owner sin `grupoId` en JWT — las notificaciones iban al grupo equivocado | Eliminado fallback. Owner debe proveer `grupoId` en el body. Devuelve 400 si falta |
+| 4 | `sprints/route.ts` | El Owner no podía crear sprints porque `grupoId` no estaba en el schema de Zod | Añadido `grupoId: z.string().optional()` al schema. Owner lo provee en el body |
+| 5 | `grupo.service.ts` | `deleteGrupo` no comprobaba sprints antes de eliminar → error de integridad referencial en Prisma. Tampoco eliminaba notificaciones en la transacción | Añadida comprobación de `sprint.count` con mensaje de error. Transacción ampliada para eliminar notificaciones + config + grupo |
+
+#### Tests añadidos / actualizados
+
+- `tests/grupo-activo.test.ts` — añadido `user.findUnique.mockResolvedValue({ activo: true })` en `beforeEach` para reflejar la nueva comprobación de cuenta activa en `requireAuth`
+- `tests/grupos.test.ts` — añadidos mocks de `sprint.count` y `notificacion.deleteMany`; nuevo test "rechaza eliminar si tiene sprints"
+- Todos los demás test files de API (`api-historias`, `api-casos`, `api-tareas`, `api-sprints`, `api-notificaciones`, `api-historial`, `api-export`, `api-auth-endpoints`, `api-users`, `metricas-cache`) — actualizados con `user.findUnique.mockResolvedValue({ activo: true })` para el nuevo check de `requireAuth`
+
+**426 tests · 35 suites · 0 fallos**
+
+---
+
+### v2.47 — Fix crítico: caché de métricas particionado por workspace
+
+#### Problema
+
+El caché en memoria de `/api/metricas` era una variable global sin distinción de workspace. Con el caché activo, la primera petición (ej. grupo-A) almacenaba sus métricas globalmente. La siguiente petición de cualquier otro usuario (ej. grupo-B) servía los datos de grupo-A desde caché, ignorando el aislamiento de workspace.
+
+#### Causa raíz
+
+`metricas-cache.ts` usaba una sola entrada `let cache = null`. La función `getMetricasCache()` no recibía `grupoId` y devolvía la única entrada independientemente del caller.
+
+#### Cambios
+
+| Archivo | Cambio |
+|---|---|
+| `lib/backend/metricas-cache.ts` | Cache reemplazado de variable única → `Map<string, entry>` particionado por `grupoId`. Clave `"__owner__"` para el Owner. `getMetricasCache(grupoId?)` y `setMetricasCache(data, grupoId?)` reciben el workspace. `invalidateMetricasCache()` limpia todo el Map. |
+| `app/api/metricas/route.ts` | Pasa `payload.grupoId` a `getMetricasCache()` y `setMetricasCache()` |
+| `tests/metricas-cache.test.ts` | +5 tests: particiones independientes grupo-A/B, invalidación total de todas las particiones, aislamiento en hit/miss por workspace; prisma mock añadido para `requireAuth` con grupoId |
+
+#### Auditoría completa de endpoints (todo correcto antes de esta versión)
+
+| Endpoint | Aislamiento |
+|---|---|
+| `GET /api/metricas` | `getMetricas(payload.grupoId)` — servicio filtra todas las queries |
+| `GET /api/grupos/[id]/metricas` | Solo accesible por `rol === "owner"` |
+| `GET/PUT/DELETE /api/historias/[id]` | `checkHistoriaAccess()` — valida `grupoId` de la HU |
+| `GET/PUT/DELETE /api/casos/[id]` | `checkCasoAccess()` — valida vía `caso → hu → grupoId` |
+| `GET/PUT/DELETE /api/tareas/[id]` | `checkTareaAccess()` — valida vía `tarea → caso → hu → grupoId` |
+| `GET /api/historias/[id]/historial` | Verifica `grupoId` de la HU antes de devolver historial |
+| `GET /api/export` | `grupoId` en `where` de historias; `hu.grupoId` en `where` de casos |
+
+---
+
+### v2.46 — Aislamiento de workspace completo en todos los endpoints API
+
+#### Problema
+
+Cinco endpoints carecían de validación de workspace para usuarios no-owner, permitiendo que un usuario de un grupo accediera a recursos de otro grupo si conocía el ID del recurso.
+
+#### Endpoints corregidos
+
+| Endpoint | Tipo de acceso faltante | Fix aplicado |
+|---|---|---|
+| `GET /api/historias/[id]/historial` | Historial de HU de otro workspace | Verifica `grupoId` de la HU antes de devolver historial |
+| `GET /api/casos?huId=X` | Casos de prueba de HU ajena | Verifica `grupoId` de la HU antes de listar casos |
+| `GET /api/tareas?casoPruebaId=X` | Tareas de caso de prueba ajeno | Verifica `grupoId` vía `caso.hu.grupoId` antes de listar tareas |
+| `GET /api/tareas?huId=X` | Tareas de HU ajena | Verifica `grupoId` de la HU antes de listar tareas |
+| `POST /api/tareas/sync` | Sync de tareas de otro workspace | Filtra `existing` por workspace; valida nuevas tareas contra `casoPrueba.hu.grupoId` |
+| `GET /api/export` | Exportación CSV sin filtro de grupo | Añade `grupoId` al `where` de historias; añade `hu: { grupoId }` al `where` de casos |
+
+#### Patrón de aislamiento
+
+```
+Owner (grupoId = undefined) → accede a todo sin restricción
+No-owner (grupoId definido) → el recurso solicitado debe pertenecer al mismo grupoId
+                             → mismatch o recurso no encontrado → 404 / array vacío
+```
+
+#### Tests añadidos
+
+| Archivo | Tests nuevos | Qué verifican |
+|---|---|---|
+| `tests/api-historial.test.ts` | +4 | 404 para historia de otro grupo; 404 si no existe; 200 para historia propia; owner sin restricción |
+| `tests/api-casos.test.ts` | +4 | Array vacío para HU de otro grupo; HU inexistente; casos propios OK; owner sin restricción |
+| `tests/api-tareas.test.ts` | +8 | Workspace isolation en `?casoPruebaId` (3 casos) + `?huId` (3 casos) + sync denegado (1) |
+| `tests/api-export.test.ts` | +4 | `grupoId` en `where` de historias; sin `grupoId` para owner; `hu.grupoId` en `where` de casos; sin filtro para owner |
+
+---
+
+### v2.45 — Owner Panel: layout más ancho y responsive
+
+#### Cambios
+
+| Archivo | Cambio |
+|---|---|
+| `components/dashboard/owner/owner-panel.tsx` | Eliminado `max-w-6xl` del contenedor → el panel usa el ancho completo del `container` de la página |
+| `components/dashboard/owner/owner-panel.tsx` | Layout principal cambiado de `flex` fijo a `flex-col md:flex-row`: en mobile el sidebar se convierte en una fila horizontal con scroll, en desktop mantiene la columna lateral |
+| `components/dashboard/owner/owner-panel.tsx` | Sidebar ampliado de `w-52` a `md:w-60` en desktop |
+| `components/dashboard/owner/owner-panel.tsx` | Skeleton de carga también adaptado a `flex-col md:flex-row` + items del skeleton horizontales en mobile |
+| `components/dashboard/owner/owner-panel.tsx` | KPIs en skeleton: `grid-cols-4` → `grid-cols-2 sm:grid-cols-4` para mobile |
+
+#### Comportamiento responsive
+
+| Vista | Sidebar | Panel detalle |
+|---|---|---|
+| Mobile (< md) | Fila horizontal scrollable en la parte superior | Ocupa todo el ancho debajo |
+| Desktop (≥ md) | Columna vertical fija `w-60` a la izquierda | Ocupa el ancho restante |
+
+---
+
+### v2.44 — Fix: skeleton de carga + color de pestaña Grupos
+
+#### Cambios
+
+| Archivo | Cambio |
+|---|---|
+| `app/page.tsx` — `DashboardSkeleton` | Rediseñado para parecerse a la pantalla de login (card centrada con campos simulados) en vez de mostrar tarjetas de dashboard que confundían al usuario |
+| `app/page.tsx` — tab "grupos" | Color activo cambiado de `bg-yellow-500` (#eab308 — demasiado brillante) a `bg-amber-600` (#d97706) que funciona bien en modo oscuro y claro |
+
+**Skeleton antes**: 4 tarjetas + 2 rectángulos grandes → parecía el dashboard cargando.
+**Skeleton ahora**: ícono + título + card centrada con campos → coherente con la pantalla de login que aparece a continuación.
+
+**Pestaña Grupos antes**: `yellow-500` se veía saturado en modo claro y poco legible en oscuro.
+**Pestaña Grupos ahora**: `amber-600` es un dorado más oscuro y equilibrado en ambos modos.
+
+---
+
+### v2.43 — Fix: pantalla negra al cambiar de usuario entre sesiones
+
+#### Problema
+
+Al iniciar sesión con un usuario no-owner (admin, qa, viewer) después de haber usado una sesión de owner en la pestaña "grupos" (o "admin" para roles sin `canManageUsers`), la pantalla se mostraba completamente negra y solo se veía la barra de pestañas.
+
+#### Causa raíz
+
+`tabActiva` es un estado de `useState("inicio")` dentro de `useHUModals`. El componente `DashboardPage` **nunca se desmonta** entre sesiones (logout → login ocurre dentro del mismo componente). Al hacer logout, `tabActiva` quedaba con el valor de la pestaña anterior ("grupos", "admin", etc.). Al iniciar sesión como un nuevo usuario que no tiene acceso a esa pestaña, el `TabsContent` correspondiente no se renderizaba (`{isOwner && ...}`, `{canManageUsers && ...}`), dejando el área de contenido vacía sobre el fondo oscuro del tema.
+
+#### Cambios
+
+| Archivo | Cambio |
+|---|---|
+| `app/page.tsx` | Añadido `useRef` + `useEffect` que detecta cambio de `user?.id` y resetea `tabActiva` a `"inicio"` cuando cambia el usuario activo |
+
+**Antes**: `tabActiva = "grupos"` persistía entre logout/login causando pantalla negra para no-owners.
+**Ahora**: Al cambiar de usuario, `tabActiva` se resetea a `"inicio"` garantizando contenido visible siempre.
+
+---
+
+### v2.42 — Filtro de workspace para Owner
+
+El Owner ahora puede filtrar todas las vistas del dashboard (Inicio, Historias, Casos, Analytics, Carga, Bloqueos) por workspace específico, además de conservar la vista global.
+
+#### Cambios
+
+| Archivo | Cambio |
+|---|---|
+| `lib/types/index.ts` | Agregado `grupoId?: string \| null` a `HistoriaUsuario` — Prisma ya retornaba el campo, faltaba en la interfaz TypeScript |
+| `app/page.tsx` | Nuevo estado `filtroGrupoOwner` + `gruposDisponibles`; `useEffect` que carga `/api/grupos` al montar (solo owner); `historiasFiltradas` derivado con `useMemo`; selector de workspace en la UI |
+| `app/page.tsx` | `useHistoriasVisibles` ahora recibe `historiasFiltradas` en lugar de `domain.historias`, lo que cascadea el filtro a `casosVisibles` y `tareasVisibles` automáticamente |
+
+#### Comportamiento del filtro
+
+- Selector visible **solo para Owner**, arriba de las tabs, con ícono Globe
+- Opciones: **"Todos los workspaces"** (ver todo) + un ítem por cada grupo existente
+- Al seleccionar un workspace, se muestra un badge amarillo con el nombre del workspace activo
+- El filtro afecta en cascada: HUs → Casos → Tareas → Analytics → Carga → Bloqueos
+- Sin selección = comportamiento anterior (ve todo)
+- No requiere cambios en el backend — el filtrado es client-side sobre los datos ya cargados
+
+### v2.41 — Admin puede quitar usuarios de su workspace + fix carga inicial de usuarios
+
+#### Cambios
+
+| Archivo | Cambio |
+|---|---|
+| `components/dashboard/usuarios/user-management.tsx` | La opción **"Quitar del workspace"** en el dropdown ahora también aparece para Admin (no solo para Owner). Condición cambiada de `isOwner && ...` a `(isOwner \|\| isAdmin) && ... && !isOwnerUser(u)`. Admin no puede quitar usuarios Owner del workspace. |
+| `components/dashboard/usuarios/user-management.tsx` | Añadido `useEffect(() => { refreshUsers() }, [])` al montar el componente para garantizar que `users` venga de la API (con `grupoId` real) y no de localStorage (donde los datos pueden estar desactualizados). |
+
+#### Comportamiento
+
+| Acción | Owner | Admin |
+|---|---|---|
+| Quitar usuario del workspace | ✅ cualquier no-owner | ✅ cualquier no-owner en su workspace |
+| Eliminar usuario (permanente) | ✅ cualquier no-owner | ✅ usuarios en su workspace |
+
+**Backend**: el endpoint `PUT /api/users/[id]` ya soportaba `{ grupoId: null }` para admin con `checkWorkspaceAccess(..., allowNullGrupo: true)`. Solo faltaba exponer la acción en el frontend.
+
+---
+
+### v2.40 — Fix: eliminar usuarios desde el frontend ahora llama a la API
+
+#### Cambio
+
+| Archivo | Cambio |
+|---|---|
+| `components/dashboard/usuarios/user-management.tsx` | `handleDelete` era síncrono y solo llamaba a `deleteUser` del contexto (modificación de estado local/localStorage únicamente). Ahora llama a `DELETE /api/users/[id]` y hace `refreshUsers()` al confirmar. El backend ya soportaba el endpoint correctamente con aislamiento de workspace. |
+
+**Antes**: el usuario desaparecía de la UI momentáneamente pero volvía al hacer cualquier `refreshUsers()` porque nunca se eliminaba de la BD.
+**Ahora**: DELETE real en BD → `refreshUsers()` sincroniza el estado con la fuente de verdad.
+
+---
+
+### v2.39 — Workspace isolation completo en todos los endpoints
+
+#### Cambios
+
+| Archivo | Cambio |
+|---|---|
+| `app/api/historias/[id]/route.ts` | GET ahora verifica workspace con `checkHistoriaAccess` antes de devolver el recurso. |
+| `app/api/casos/[id]/route.ts` | GET ahora verifica workspace con `checkCasoAccess` (vía `hu.grupoId`). |
+| `app/api/tareas/[id]/route.ts` | GET ahora verifica workspace con `checkTareaAccess` (vía `caso.hu.grupoId`). |
+| `app/api/sprints/[id]/route.ts` | GET, PUT y DELETE ahora verifican workspace con `checkSprintAccess`. Usuario de otro grupo recibe 404. |
+| `app/api/notificaciones/[id]/route.ts` | PATCH verifica que la notificación pertenezca al `grupoId` y `destinatario` del llamante antes de marcarla como leída. |
+
+#### Gaps cerrados
+
+- Todos los endpoints de recursos individuales (HU, caso, tarea, sprint, notificación) ahora aplican la misma regla: **Owner siempre tiene acceso; cualquier otro rol solo puede acceder a recursos de su propio workspace**.
+- `historialConexiones`: ya estaba implementado en `loginService` (push de entrada) y `logoutService` (registro de salida). El único gap era que el `select` de `GET /api/users` no lo incluía — corregido en v2.38.
+- Config (`/api/config`): ya estaba aislado por workspace a nivel de servicio. Sin cambios necesarios.
+- Notificaciones listado y marcar-todas: ya filtraban por `grupoId`. Solo el PATCH individual necesitaba el check.
+
+---
+
+### v2.38 — Historial conexiones fix + asignación workspace con confirmación + selector de workspace para Owner
+
+#### Cambios
+
+| Archivo | Cambio |
+|---|---|
+| `app/api/users/route.ts` | GET incluye `historialConexiones` en el select — el panel de actividad de conexiones del Owner volvía vacío porque el campo no se retornaba desde la API. |
+| `components/dashboard/usuarios/user-management.tsx` | **Asignación con confirmación**: el botón "Asignar" abre un Dialog antes de ejecutar. **Owner**: el diálogo muestra un selector de workspace (usando el `gruposMap` ya cargado) y el botón dice "Asignar a workspace...". **Admin**: el diálogo pide confirmación mostrando el nombre de su workspace. **Fix**: `handleAsignarWorkspace` ya no hace early return para el Owner (antes retornaba por `!currentUser?.grupoId`). |
+
+---
+
+### v2.37 — Workspace isolation completo en recursos + role escalation fix + Quitar del workspace
+
+#### Cambios
+
+| Archivo | Cambio |
+|---|---|
+| `lib/backend/services/tarea.service.ts` | `getAllTareas` acepta `grupoId` y filtra tareas vía `caso → hu → grupoId`. |
+| `app/api/tareas/route.ts` | GET pasa `payload.grupoId` a `getAllTareas`; usuarios sin workspace ya no ven tareas ajenas. |
+| `app/api/historias/[id]/route.ts` | PUT/DELETE verifican que la historia pertenezca al workspace del llamante. Owner siempre tiene acceso. |
+| `app/api/casos/[id]/route.ts` | PUT/DELETE verifican workspace vía `hu.grupoId`. |
+| `app/api/tareas/[id]/route.ts` | PUT/DELETE verifican workspace vía `caso.hu.grupoId`. |
+| `app/api/users/[id]/route.ts` | PUT bloquea a nivel backend que un admin eleve un rol a `admin` u `owner` (whitelist `ROLES_ADMIN_PUEDE_ASIGNAR`). |
+| `components/dashboard/usuarios/user-management.tsx` | Owner ve nueva opción "Quitar del workspace" en el menú de acciones de cada usuario. Llama PUT con `grupoId: null`, dejando al usuario disponible para que un admin lo reclame. Incluye diálogo de confirmación. **Fix**: sección "Usuarios Disponibles" ahora visible también para Owner (antes solo Admin la veía por condición `!isOwner && isAdmin`). `workspaceUsers` del Owner excluye usuarios sin workspace para evitar duplicados. |
+
+#### Comportamiento de "Quitar del workspace" (Owner)
+
+- El Owner puede quitar a cualquier usuario de su workspace sin eliminarlo de la BD.
+- El usuario queda con `grupoId = null` y aparece en la sección **Usuarios Disponibles** del Admin.
+- Si se quita a un **Admin**, ese admin queda sin workspace. Su cuenta sigue activa pero sin acceso efectivo hasta que sea re-asignado.
+- Esta acción es reversible: cualquier Admin puede reclamarlo o el Owner puede re-asignarlo.
+
+---
+
+### v2.36 — Workspaces: aislamiento completo + visibilidad role-based + sin equipoIds
+
+#### Motivación
+
+El sistema anterior usaba `equipoIds` (lista manual de usuarios asignados por cada admin/lead) para controlar la visibilidad. Esto era frágil, incorrecto y no escalable. La nueva arquitectura usa roles y workspaces de forma nativa: el workspace filtra en la API y el rol define qué se ve dentro del workspace.
+
+#### Cambios
+
+| Archivo | Cambio |
+|---|---|
+| `app/api/users/route.ts` | **GET**: admin solo recibe usuarios de su workspace (`grupoId`) + usuarios sin workspace (`null`) para poder reclamarlos. **POST**: admin solo puede crear roles `qa_lead`, `qa`, `viewer` — bloquea la creación de `admin`/`owner` a nivel backend. |
+| `app/api/users/[id]/route.ts` | **PUT**: admin puede editar usuarios de su workspace y usuarios sin workspace (para asignarlos). **DELETE**: admin solo puede eliminar usuarios de su propio workspace (no sin-workspace). Refactorizado con `checkWorkspaceAccess` helper. |
+| `lib/contexts/auth-context.tsx` | Elimina `equipoIds` de la interfaz `User`. |
+| `lib/hooks/useHistoriasVisibles.ts` | Reescrito con lógica role-based pura. Elimina `equipoIds`. Admin ve todo el workspace. Lead ve sus HUs + las de todos los usuarios `qa` del workspace. QA ve solo las propias. Viewer ve todo. `filtroNombresCarga` actualizado acorde. |
+| `components/dashboard/usuarios/user-form-modal.tsx` | Elimina el selector de "Miembros del equipo" (equipoIds). Simplifica el body del PUT (sin equipoIds). |
+| `components/dashboard/usuarios/user-management.tsx` | Elimina `esRolConEquipo`, badges de equipo y lógica `equipoIds`. Separa usuarios en `workspaceUsers` y `sinWorkspaceUsers`. Agrega sección "Usuarios Disponibles" con botón "Asignar a mi workspace" para admin. |
+| `tests/useHistoriasVisibles.test.ts` | Reescritos para la nueva lógica: admin ve todo, lead ve qa, sin `equipoIds`. |
+| `tests/api-users.test.ts` | Añade tests de workspace filter en GET, role restriction en POST, workspace isolation en PUT/DELETE. |
+| `tests/user-form-modal.test.tsx` | Actualizado: sin `equipoIds` en tests, añade test que confirma que no se renderiza selector de equipo. |
+
+#### Reglas de visibilidad (nueva implementación)
+
+| Rol | HUs visibles | Carga ocupacional |
+|---|---|---|
+| Owner | Todo el sistema | Todos los workspaces |
+| Admin | Todo el workspace | Todos los miembros del workspace |
+| QA Lead | Sus HUs + HUs de todos los usuarios `qa` del workspace | Lead + todos los qa |
+| QA (verSoloPropios) | Solo las propias | Solo las propias |
+| Viewer | Todo el workspace (solo lectura) | Todos los miembros del workspace |
+
+#### Flujo "Usuarios sin Workspace"
+
+1. Owner crea un usuario → `grupoId = null`
+2. `GET /api/users` para cualquier admin incluye usuarios con `grupoId = null`
+3. En `UserManagement`, admin ve sección "Usuarios Disponibles" con botón "Asignar a mi workspace"
+4. Al asignar: `PUT /api/users/[id]` con `{ grupoId: admin.grupoId }` → `refreshUsers()`
+
+---
+
+### v2.35 — Fix: tabla de usuarios no se actualizaba + cambio de contraseña primer login
+
+#### Causa raíz
+
+**Tabla sin actualizar tras crear usuario:** `UserManagement` lee `users` del estado en localStorage (`usePersistedState`). Al crear un usuario via `POST /api/users`, el modal llamaba a `addUser()` del contexto — una función localStorage-only que generaba IDs falsos y tenía guards de permisos que podían fallar silenciosamente. El Owner Panel sí veía al nuevo usuario porque hace fetch directo a la API. El estado local nunca se refrescaba.
+
+**Cambio de contraseña no funcionaba en primer login:** `cambiarPassword` era sincrónica y buscaba al usuario en el estado local (`users.find(u => u.id === user.id)`). Los usuarios creados por API existen en la BD pero no en localStorage → `"Usuario no encontrado"` → la pantalla de cambio nunca avanzaba. La API `PUT /api/auth/password` existía pero nunca se usaba.
+
+#### Cambios
+
+| Archivo | Cambio |
+|---|---|
+| `lib/contexts/auth-context.tsx` | Añade `refreshUsers()`: función async que llama a `GET /api/users` y reemplaza el estado local con los datos reales de la BD. Cambia `cambiarPassword` de síncrona a `async`, llama a `PUT /api/auth/password` en lugar de comparar localmente. Expone `refreshUsers` en el contexto. |
+| `components/dashboard/usuarios/user-form-modal.tsx` | Reemplaza `addUser()` / `updateUser()` por `await refreshUsers()` tras crear o editar correctamente. |
+| `components/auth/login-screen.tsx` | `await cambiarPassword(...)` — flujo primer login ahora espera la respuesta de la API. |
+| `components/dashboard/usuarios/perfil-dialog.tsx` | `await cambiarPassword(...)` — cambio de contraseña desde perfil también usa la API. |
+| `tests/user-form-modal.test.tsx` | Actualiza mocks y assertions: `mockAddUser`/`mockUpdateUser` → `mockRefreshUsers`. |
+
+---
+
+### v2.34 — Fix: visibilidad por rol corregida + error al crear usuario
+
+#### Cambios
+
+| Archivo | Cambio |
+|---|---|
+| `lib/hooks/useHistoriasVisibles.ts` | Admin **sin equipo** ahora ve solo sus **propias HUs** (antes veía todas). QA Lead **sin equipo** también ve solo sus propias HUs. `filtroNombresCarga` para admin sin equipo devuelve `[user.nombre]` en lugar de `undefined`. |
+| `tests/useHistoriasVisibles.test.ts` | Actualizados 3 tests para reflejar el nuevo comportamiento. |
+| `app/api/users/route.ts` | Añade `try/catch` alrededor de `createUserService` para que errores internos devuelvan JSON 500 en lugar de respuesta vacía. |
+| `components/dashboard/usuarios/user-form-modal.tsx` | Uso de `.catch(() => ({}))` al leer el body de error — evita `SyntaxError: Unexpected end of JSON input` cuando el servidor devuelve una respuesta sin cuerpo JSON. |
+
+#### Visibilidad correcta por rol
+
+| Rol | HUs visibles | Carga ocupacional |
+|---|---|---|
+| Owner | Todas | Todos |
+| Admin con equipo | Propias + equipo | Propios + equipo |
+| Admin sin equipo | Solo propias | Solo propias |
+| QA Lead con equipo | Propias + equipo | Propios + equipo |
+| QA Lead sin equipo | Solo propias | Solo propias |
+| QA / verSoloPropios | Solo propias | Solo propias |
+
+> El aislamiento por grupo ya funcionaba en la capa API (`grupoId` en JWT → filtro en la query). Este fix afina el filtrado frontend dentro del grupo.
+
+---
+
+### v2.33 — Fix: admin sin equipo no veía las HUs que creaba
+
+#### Causa raíz
+
+`useHistoriasVisibles` filtraba las HUs del admin sin equipo configurado (`equipoIds: []`) al solo mostrar aquellas donde `hu.responsable === user.nombre`. Dado que el nombre del admin no aparece en el selector "QA Responsable" del formulario de HU (ese selector solo muestra usuarios con permiso `canEdit`), todas las HUs quedaban ocultas para el admin aunque el owner las viera sin problema.
+
+#### Cambios
+
+| Archivo | Cambio |
+|---|---|
+| `lib/hooks/useHistoriasVisibles.ts` | Admin **sin equipo** ahora ve **todas** las HUs del grupo (igual que owner). Admin **con equipo** sigue viendo solo las de su equipo + las propias. `filtroNombresCarga` pasa a ser `undefined` cuando admin no tiene equipo → ve toda la carga ocupacional. |
+| `tests/useHistoriasVisibles.test.ts` | Actualizados 2 tests: "admin sin equipo ve todas las HUs del grupo" y "admin sin equipo tiene filtroNombresCarga undefined". |
+
+#### Visibilidad actualizada por rol
+
+| Rol | HUs visibles | Carga ocupacional |
+|---|---|---|
+| Owner | Todas | Todos |
+| Admin con equipo | Propias + equipo | Propios + equipo |
+| **Admin sin equipo** | **Todas del grupo** | **Todos del grupo** |
+| QA Lead con equipo | Propias + equipo | Propios + equipo |
+| QA Lead sin equipo | Todas | Todos |
+| QA / verSoloPropios | Solo propias | Solo propias |
+
+> Los dos bugs anteriores también incidían: el 500 en sync (v2.32) hacía que las HUs se perdieran al recargar la página porque nunca llegaban a guardarse en la base de datos.
+
+---
+
+### v2.32 — Fix: error 500 al crear HU / caso / tarea (sync routes)
+
+#### Causa raíz
+
+`POST /api/historias/sync` lanzaba un error 500 sin capturar al intentar crear una nueva Historia de Usuario en la base de datos. El campo `grupoId` es obligatorio (`String` no nullable) en el modelo Prisma `HistoriaUsuario`, pero la interfaz TypeScript `HistoriaUsuario` del frontend no lo incluye, por lo que nunca se enviaba en el payload.
+
+#### Cambios
+
+| Archivo | Cambio |
+|---|---|
+| `app/api/historias/sync/route.ts` | Inyecta `grupoId` desde el JWT del usuario al crear HUs nuevas. Añade guarda 403 si el usuario no tiene `grupoId`. Añade `try/catch` para devolver JSON con el mensaje de error en lugar de un 500 sin cuerpo. Usa `skipDuplicates: true` en `createMany`. |
+| `app/api/casos/sync/route.ts` | Añade `try/catch` para devolver error 500 como JSON. Usa `skipDuplicates: true` en `createMany` para tolerar condiciones de carrera con `historias/sync` (ambos se disparan casi simultáneamente al crear una HU). |
+| `app/api/tareas/sync/route.ts` | Mismo patrón que `casos/sync`: `try/catch` + `skipDuplicates`. |
+| `tests/api-historias.test.ts` | El test de sync ahora usa un token con `grupoId` para pasar la nueva guarda. Añade `prisma.grupo` al mock para soportar `requireAuth`. |
+
+---
+
+### v2.31 — Formulario de usuario conectado a la API + badge de grupo en tabla de usuarios
+
+#### `UserFormModal` — integración con API
+
+`components/dashboard/usuarios/user-form-modal.tsx` reescrito como formulario asíncrono:
+
+- **Crear usuario**: llama a `POST /api/users` sin enviar `grupoId` en el body — el servidor lo hereda automáticamente del JWT del admin.
+  Tras la respuesta exitosa, llama a `addUser({ nombre, email, rol, grupoId: newUser.grupoId })` para sincronizar el estado local (localStorage).
+- **Editar usuario**: llama a `PUT /api/users/[id]` con los datos modificados.
+  Tras la respuesta exitosa, llama a `updateUser(...)` para sincronizar el estado local.
+- **Errores inline**: si la API devuelve un error (ej. email duplicado → 409), se muestra debajo del formulario con icono `AlertCircle` sin cerrar el modal.
+- **Loading state**: los botones muestran "Creando..." / "Guardando..." durante la petición.
+
+#### Gestión de Usuarios — badge de grupo en tabla
+
+`components/dashboard/usuarios/user-management.tsx`:
+- Cada fila de usuario muestra un badge con el nombre del grupo al que pertenece (junto al rol).
+- **Owner**: obtiene todos los grupos vía `GET /api/grupos` al montar el componente y construye un mapa `grupoId → nombre` para mostrar el grupo correcto de cada usuario.
+- **Admin/Lead/QA**: obtiene solo su propio grupo vía `GET /api/grupos/[id]` y muestra ese nombre para los usuarios de su misma workspace.
+
+#### `addUser` — soporte de `grupoId`
+
+`lib/contexts/auth-context.tsx`: la función `addUser` ahora acepta `grupoId?: string | null` en su argumento, permitiendo que el frontend sincronice el `grupoId` real asignado por la base de datos.
+
+#### Nuevos tests (20 en 2 archivos)
+
+| Archivo | Tests añadidos | Qué cubre |
+|---|---|---|
+| `tests/user-form-modal.test.tsx` | 14 (nuevo) | POST/PUT vía API, body sin grupoId, grupoId del response, errores inline, cierre de modal, sincronización addUser/updateUser |
+| `tests/api-users.test.ts` | +5 | grupoId heredado del token (admin con/sin grupo, owner con/sin body), PUT parcial con grupoId, desasignación con grupoId null |
+
+---
+
+### v2.30 — Gestión de miembros por grupo desde el Panel del Owner
+
+#### Panel del Owner — rediseño completo (segunda iteración)
+
+`components/dashboard/owner/owner-panel.tsx` reescrito con un layout de dos columnas (sidebar + panel de detalle):
+
+- **Sidebar de grupos**: lista desplazable con indicador de estado (punto verde/gris), nombre, cantidad de miembros y resaltado del grupo seleccionado.
+- **Panel de detalle**: header del grupo con acciones (editar, activar/desactivar, eliminar), KPIs en grid 2×2, barra de progreso de HUs y tabla de miembros completa.
+- **Gestión de miembros desde el Owner**:
+  - "Añadir miembro" → crea un nuevo usuario asignado al grupo (`POST /api/users` con `grupoId`).
+  - "Asignar existente" → asigna un usuario sin grupo al workspace seleccionado (`PUT /api/users/[id]` con `grupoId`).
+  - "Editar datos" → edita nombre, email y rol de un miembro (`PUT /api/users/[id]`).
+  - "Remover del grupo" → desasigna al usuario del grupo (`PUT /api/users/[id]` con `grupoId: null`).
+
+#### Vista Admin — banner de workspace
+
+`components/dashboard/usuarios/user-management.tsx`:
+- Muestra un banner "Workspace actual: [Nombre Grupo]" al inicio de la sección de usuarios para cualquier usuario no-owner con `grupoId`, resolviendo el nombre vía `GET /api/grupos/[id]`.
+
+#### Backend — soporte de `grupoId` en usuarios
+
+| Archivo | Cambio |
+|---|---|
+| `lib/backend/validators/auth.validator.ts` | `grupoId` opcional añadido a `createUserSchema` y `updateUserSchema`; campos de update ahora opcionales |
+| `app/api/users/route.ts` | `grupoId` incluido en el `select` del GET |
+| `app/api/users/[id]/route.ts` | `grupoId` soportado en PUT con actualización parcial (solo los campos enviados se actualizan) |
+| `app/api/grupos/[id]/route.ts` | GET ahora accesible para cualquier usuario autenticado sobre su propio grupo (`payload.grupoId === id`) |
+
+---
+
+### v2.29 — Rediseño del Panel de Grupos (Owner)
+
+Reescritura completa de `components/dashboard/owner/owner-panel.tsx` para modernizar el diseño y mejorar la experiencia en dispositivos móviles:
+
+- **Tailwind CSS + shadcn/ui**: eliminados todos los estilos en línea (`style={{}}`); sustituidos por clases Tailwind y componentes `Card`, `Button`, `Badge`, `Dialog`, `Progress`, `Input`, `Textarea`, `Separator`.
+- **Responsive mobile-first**: grid de tarjetas con `grid-cols-1 sm:grid-cols-2 xl:grid-cols-3`; resumen global con `grid-cols-2 sm:grid-cols-4`.
+- **Tarjeta de grupo mejorada**: franja de color superior indicadora de estado, badge Activo/Inactivo con color semántico (verde/gris), botones de acción con `variant="ghost"` y colores de hover condicionales (ámbar para desactivar, verde para activar, rojo para eliminar).
+- **Skeleton de carga**: animación `animate-pulse` mientras se obtienen los datos de la API, consistente con el resto de la aplicación.
+- **Modales con Dialog**: `GrupoFormDialog` y `DeleteConfirmDialog` usan el componente `Dialog` de shadcn/ui con `DialogHeader`, `DialogFooter` y animaciones de apertura/cierre.
+- **Estado vacío mejorado**: diseño centrado con icono en contenedor `bg-muted` y botón de acción primario.
+- **Barra de progreso**: usa el componente `Progress` en lugar de un `div` manual.
+- **Fecha de creación**: se muestra en cada tarjeta.
+- **Error inline**: reemplaza el banner rojo con fondo destructivo por un `div` con `bg-destructive/10 border-destructive/30` más sutil.
+- Sin cambios en la lógica de negocio ni en los tests existentes.
+
+---
+
+### v2.28 — Seguridad: bloqueo real por grupo inactivo (login + sesiones en curso) + 12 nuevos tests
+
+Implementa los dos niveles de enforcement cuando el Owner desactiva un grupo:
+
+#### Nivel A — `lib/backend/services/auth.service.ts`
+`loginService` verifica `user.grupo.activo` tras las comprobaciones de cuenta (`activo`, `bloqueado`). Si el grupo está inactivo retorna `{ success: false, error: "Tu grupo de trabajo está desactivado. Contacta al Owner." }` sin llegar a verificar la contraseña ni actualizar intentos fallidos. El Owner (sin grupo) nunca es afectado.
+
+#### Nivel B — `lib/backend/middleware/auth.middleware.ts`
+`requireAuth` añade una consulta `prisma.grupo.findUnique` tras verificar el JWT. Si `payload.grupoId` existe y el grupo está inactivo (o fue eliminado), retorna `403` con `{ error: "...", code: "GRUPO_INACTIVO" }`. Esto invalida sesiones activas inmediatamente, sin esperar a que el token expire. El Owner no tiene `grupoId` en el token, por lo que nunca llega a consultar la DB.
+
+#### `prisma/seed.ts`
+Actualiza el seed para crear primero el grupo predeterminado "Equipo Principal", asignar los usuarios no-owner a ese grupo, y crear la `Config` vinculada al grupo (`grupoId`) en lugar del patrón singleton (`id: "singleton"`).
+
+#### `tests/grupo-activo.test.ts` (12 tests · node)
+
+#### Corrección de tests existentes (0 fallas en suite completa)
+
+Siete archivos de test tenían fallas introducidas por la migración de grupos de v2.27:
+
+| Archivo | Causa | Corrección |
+|---|---|---|
+| `tests/grupos.test.ts` | `mockPrisma` en TDZ al hoistear `vi.mock` | Migrado a `vi.hoisted()` + `beforeEach(() => vi.clearAllMocks())` |
+| `tests/auth-login.test.ts` | El efecto `/api/auth/me` al montar sobreescribía el user con `undefined` post-login | Fetch mock devuelve 401 para `/api/auth/me`, el catch de auth-context lo ignora |
+| `tests/api-sprints.test.ts` | Token de test sin `grupoId`; POST sprint lo requiere | `grupoId: "grupo-default"` añadido al `signToken` de `beforeAll` |
+| `app/api/notificaciones/route.ts` | `"bloqueo_reportado"` no estaba en el enum Zod | Añadidos `"bloqueo_reportado"` y `"bloqueo_resuelto"` al enum |
+| `tests/useConfig-sprints.test.ts` | `useConfig()` sin `isAuthenticated:true`; el efecto de carga de sprints nunca ejecuta | 5 `renderHook` actualizados a `useConfig({ isAuthenticated: true })` |
+| `tests/csv-import-casos.test.tsx` | `getByText("1 caso válido")` fallaba porque el componente renderiza `"1 caso válido · 0 con errores"` como texto combinado | Todos los selectores de conteo cambiados a regex `/X casos? válido/` |
+| `tests/resultados-config.test.tsx` | `getByPlaceholderText(/Nombre del estado/i)` encontraba múltiples inputs (los existentes + el de agregar) | Cambiado a `getByPlaceholderText(/ej: Incompleto/i)` que es único |
+
+---
 
 ### v2.27 — Multi-equipo: Grupos (workspaces) + Panel del Owner + 46 nuevos tests
 
@@ -1078,6 +2055,10 @@ pnpm test:ui       # Interfaz visual de Vitest
 pnpm db:migrate    # Aplica migraciones Prisma a la DB
 pnpm db:seed       # Carga usuarios y config iniciales
 pnpm db:studio     # Abre Prisma Studio (explorador visual de la DB)
+
+# Datos demo
+pnpm demo:seed     # Pobla la app con HUs, casos, tareas y usuarios de ejemplo
+pnpm demo:clean    # Elimina todos los datos demo (marcados con [DEMO])
 ```
 
 ---

@@ -3,13 +3,15 @@
 //  TESTS — /api/export (CSV)
 // ═══════════════════════════════════════════════════════════
 
-import { describe, it, expect, vi, beforeAll } from "vitest"
+import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest"
 import { NextRequest } from "next/server"
 import { signToken } from "@/lib/backend/middleware/auth.middleware"
 
 // ── Mock Prisma ──────────────────────────────────────────
 vi.mock("@/lib/backend/prisma", () => ({
   prisma: {
+    user:            { findUnique: vi.fn().mockResolvedValue({ activo: true, grupo: { activo: true } }) },
+    grupo:           { findUnique: vi.fn().mockResolvedValue({ activo: true, grupo: { activo: true } }) },
     historiaUsuario: { findMany: vi.fn() },
     casoPrueba:      { findMany: vi.fn() },
   },
@@ -45,9 +47,20 @@ const casoBase = {
 }
 
 let token: string
+let tokenGrupoA: string
+let ownerToken: string
 
 beforeAll(async () => {
-  token = await signToken({ sub: "u-1", email: "admin@empresa.com", nombre: "Admin", rol: "admin" })
+  token       = await signToken({ sub: "u-1", email: "admin@empresa.com", nombre: "Admin", rol: "admin", grupoId: "grupo-test" })
+  tokenGrupoA = await signToken({ sub: "u-2", email: "member@empresa.com", nombre: "Member", rol: "admin", grupoId: "grupo-A" })
+  ownerToken  = await signToken({ sub: "u-0", email: "owner@empresa.com",  nombre: "Owner", rol: "owner" })
+})
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  vi.mocked(prisma.user.findUnique).mockResolvedValue({ activo: true, grupo: { activo: true } } as never)
+  ;(prisma as unknown as { grupo: { findUnique: ReturnType<typeof vi.fn> } }).grupo.findUnique
+    .mockResolvedValue({ activo: true, grupo: { activo: true } })
 })
 
 // ── Tests ────────────────────────────────────────────────
@@ -152,4 +165,52 @@ describe("GET /api/export", () => {
     expect(lines).toHaveLength(1)
     expect(lines[0]).toContain("codigo")
   })
+})
+
+// ── Workspace isolation ──────────────────────────────────
+
+describe("GET /api/export — aislamiento de workspace", () => {
+
+  it("usuario con grupoId exporta historias filtradas por su grupo", async () => {
+    vi.mocked(prisma.historiaUsuario.findMany).mockResolvedValueOnce([historiaBase] as never)
+
+    const res = await GET(makeReq("tipo=historias", tokenGrupoA))
+    expect(res.status).toBe(200)
+
+    expect(vi.mocked(prisma.historiaUsuario.findMany)).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ grupoId: "grupo-A" }) })
+    )
+  })
+
+  it("owner (sin grupoId) exporta historias sin filtro de grupo", async () => {
+    vi.mocked(prisma.historiaUsuario.findMany).mockResolvedValueOnce([historiaBase] as never)
+
+    const res = await GET(makeReq("tipo=historias", ownerToken))
+    expect(res.status).toBe(200)
+
+    const callArg = vi.mocked(prisma.historiaUsuario.findMany).mock.calls.at(-1)?.[0] as { where: Record<string, unknown> }
+    expect(callArg?.where).not.toHaveProperty("grupoId")
+  })
+
+  it("usuario con grupoId exporta casos filtrados por su grupo (via hu.grupoId)", async () => {
+    vi.mocked(prisma.casoPrueba.findMany).mockResolvedValueOnce([casoBase] as never)
+
+    const res = await GET(makeReq("tipo=casos", tokenGrupoA))
+    expect(res.status).toBe(200)
+
+    expect(vi.mocked(prisma.casoPrueba.findMany)).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ hu: { grupoId: "grupo-A" } }) })
+    )
+  })
+
+  it("owner (sin grupoId) exporta casos sin filtro de grupo", async () => {
+    vi.mocked(prisma.casoPrueba.findMany).mockResolvedValueOnce([casoBase] as never)
+
+    const res = await GET(makeReq("tipo=casos", ownerToken))
+    expect(res.status).toBe(200)
+
+    const callArg = vi.mocked(prisma.casoPrueba.findMany).mock.calls.at(-1)?.[0] as { where: Record<string, unknown> }
+    expect(callArg?.where).not.toHaveProperty("hu")
+  })
+
 })

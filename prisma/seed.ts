@@ -41,9 +41,24 @@ async function main() {
   }
   console.log(`✓ ${rolesIniciales.length} roles creados/actualizados`)
 
+  // ── Grupo predeterminado ─────────────────────────────────
+  const grupoDefault = await prisma.grupo.upsert({
+    where:  { nombre: "Equipo Principal" },
+    update: {},
+    create: {
+      id:          "grupo-default",
+      nombre:      "Equipo Principal",
+      descripcion: "Grupo predeterminado del sistema",
+      activo:      true,
+    },
+  })
+  console.log("✓ Grupo predeterminado inicializado")
+
   // ── Usuarios ─────────────────────────────────────────────
   for (const u of usuariosIniciales) {
     const hash = await bcrypt.hash(u.password, SALT)
+    // El owner no pertenece a ningún grupo (grupoId null)
+    const grupoId = u.rol === "owner" ? undefined : grupoDefault.id
     await prisma.user.upsert({
       where:  { email: u.email },
       update: {},  // no sobreescribir si ya existe (preservar password cambiado)
@@ -56,26 +71,95 @@ async function main() {
         activo:              "activo" in u ? u.activo as boolean : true,
         debeCambiarPassword: u.debeCambiarPassword,
         fechaCreacion:       new Date(),
+        grupoId,
       },
     })
   }
   console.log(`✓ ${usuariosIniciales.length} usuarios creados/actualizados`)
 
-  // ── Config predeterminada ────────────────────────────────
-  await prisma.config.upsert({
-    where:  { id: "singleton" },
-    update: {},
-    create: {
-      id:              "singleton",
-      etapas:          {},
-      resultados:      [],
-      tiposAplicacion: [],
-      ambientes:       [],
-      tiposPrueba:     [],
-      aplicaciones:    [],
+  // ── Config predeterminada (vinculada al grupo) ───────────
+  const configInicial = {
+    etapas: {
+      web: [
+        { id: "analisis",    label: "Análisis",     cls: "bg-blue-500/20 text-blue-500" },
+        { id: "desarrollo",  label: "Desarrollo",   cls: "bg-purple-500/20 text-purple-500" },
+        { id: "testing",     label: "Testing",      cls: "bg-chart-1/20 text-chart-1" },
+        { id: "despliegue",  label: "Despliegue",   cls: "bg-chart-4/20 text-chart-4" },
+      ],
+      api: [
+        { id: "analisis",    label: "Análisis",     cls: "bg-blue-500/20 text-blue-500" },
+        { id: "desarrollo",  label: "Desarrollo",   cls: "bg-purple-500/20 text-purple-500" },
+        { id: "testing",     label: "Testing",      cls: "bg-chart-1/20 text-chart-1" },
+      ],
+      mobile: [
+        { id: "analisis",      label: "Análisis",      cls: "bg-blue-500/20 text-blue-500" },
+        { id: "testing",       label: "Testing",       cls: "bg-chart-1/20 text-chart-1" },
+        { id: "certificacion", label: "Certificación", cls: "bg-chart-4/20 text-chart-4" },
+      ],
     },
+    resultados: [
+      { id: "exitoso",   label: "Exitoso",   esAceptado: true,  esBase: true, cls: "bg-green-500/20 text-green-600", icono: "✓" },
+      { id: "fallido",   label: "Fallido",   esAceptado: false, esBase: true, cls: "bg-red-500/20 text-red-600",    icono: "✗", maxRetesteos: 3 },
+      { id: "bloqueado", label: "Bloqueado", esAceptado: false, esBase: true, cls: "bg-chart-4/20 text-chart-4",   icono: "🔒" },
+      { id: "omitido",   label: "Omitido",   esAceptado: false, esBase: true, cls: "bg-gray-500/20 text-gray-500", icono: "–" },
+    ],
+    tiposAplicacion: [
+      { id: "web",     label: "Web" },
+      { id: "api",     label: "API / Microservicio" },
+      { id: "mobile",  label: "Mobile" },
+      { id: "desktop", label: "Desktop" },
+      { id: "batch",   label: "Proceso Batch" },
+    ],
+    ambientes: [
+      { id: "local",      label: "Local" },
+      { id: "dev",        label: "Desarrollo" },
+      { id: "test",       label: "Testing" },
+      { id: "staging",    label: "Staging / UAT" },
+      { id: "produccion", label: "Producción" },
+    ],
+    tiposPrueba: [
+      { id: "funcional",   label: "Funcional" },
+      { id: "regresion",   label: "Regresión" },
+      { id: "smoke",       label: "Smoke" },
+      { id: "integracion", label: "Integración" },
+      { id: "rendimiento", label: "Rendimiento" },
+      { id: "seguridad",   label: "Seguridad" },
+      { id: "usabilidad",  label: "Usabilidad" },
+    ],
+    aplicaciones: ["Portal Web", "API Core", "App Mobile", "Backoffice"],
+  }
+
+  await prisma.config.upsert({
+    where:  { grupoId: grupoDefault.id },
+    update: configInicial,
+    create: { grupoId: grupoDefault.id, ...configInicial },
   })
   console.log("✓ Config inicializada")
+
+  // ── Sprints iniciales ────────────────────────────────────
+  await prisma.sprint.upsert({
+    where:  { nombre_grupoId: { nombre: "Sprint 1", grupoId: grupoDefault.id } },
+    update: {},
+    create: {
+      nombre:      "Sprint 1",
+      grupoId:     grupoDefault.id,
+      fechaInicio: new Date("2026-01-01"),
+      fechaFin:    new Date("2026-01-14"),
+      objetivo:    "Setup inicial y casos base",
+    },
+  })
+  await prisma.sprint.upsert({
+    where:  { nombre_grupoId: { nombre: "Sprint 2", grupoId: grupoDefault.id } },
+    update: {},
+    create: {
+      nombre:      "Sprint 2",
+      grupoId:     grupoDefault.id,
+      fechaInicio: new Date("2026-01-15"),
+      fechaFin:    new Date("2026-01-28"),
+      objetivo:    "Flujos principales y regresión",
+    },
+  })
+  console.log("✓ Sprints iniciales creados")
 
   console.log("\nSeed completado exitosamente.")
 }

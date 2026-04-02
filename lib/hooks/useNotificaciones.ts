@@ -18,15 +18,18 @@ export function useNotificaciones() {
   )
   const [isLoading, setIsLoading] = useState(true)
 
-  // ── Carga inicial desde la API ────────────────────────────
+  // ── Carga inicial desde la API — cancelable al desmontar ──
   useEffect(() => {
+    const controller = new AbortController()
     api.get<{ notificaciones: Notificacion[] }>("/api/notificaciones")
       .then(r => {
+        if (controller.signal.aborted) return
         setNotificaciones(r.notificaciones)
         guardarEnStorage(STORAGE_KEYS.notificaciones, r.notificaciones)
       })
       .catch(() => { /* API no disponible — usar localStorage */ })
-      .finally(() => setIsLoading(false))
+      .finally(() => { if (!controller.signal.aborted) setIsLoading(false) })
+    return () => controller.abort()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const refetch = () => {
@@ -44,7 +47,7 @@ export function useNotificaciones() {
     titulo: string,
     descripcion: string,
     destinatario: RolDestinatario,
-    extra?: Pick<Notificacion, "casoId" | "huId" | "huTitulo" | "casoTitulo">
+    extra?: Pick<Notificacion, "casoId" | "huId" | "huTitulo" | "casoTitulo" | "grupoId">
   ) => {
     // Actualización optimista inmediata con id temporal
     const tempId = `notif-${Date.now()}-${++_nc.current}`

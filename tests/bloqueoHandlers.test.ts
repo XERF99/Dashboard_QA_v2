@@ -194,4 +194,44 @@ describe("handleResolverBloqueoTarea", () => {
       expect.objectContaining({ type: "success", title: "Bloqueo resuelto" })
     )
   })
+
+  it("emite notificación bloqueo_resuelto hacia 'qa' con grupoId del usuario", () => {
+    const bl = makeBloqueo(false)
+    const tarea = makeTarea({ id: "t1", huId: "hu-1", bloqueos: [bl] })
+    const { ctx } = makeCtx([tarea])
+    ;(ctx.user as { grupoId?: string }).grupoId = "grupo-abc"
+
+    createBloqueoHandlers(ctx).handleResolverBloqueoTarea("t1", bl.id, "Resuelto")
+
+    expect(ctx.addNotificacion).toHaveBeenCalledWith(
+      "bloqueo_resuelto",
+      expect.any(String),
+      expect.any(String),
+      "qa",
+      expect.objectContaining({ huId: "hu-1", grupoId: "grupo-abc" })
+    )
+  })
+})
+
+// ════════════════════════════════════════════════════════════
+// handleAddBloqueo
+// ════════════════════════════════════════════════════════════
+
+describe("handleAddBloqueo", () => {
+  it("registra bloqueo en la HU y emite notificación bloqueo_reportado hacia 'admin'", () => {
+    const bl = makeBloqueo(false)
+    const { ctx, getHistorias } = makeCtx([], [makeHU()])
+    ;(ctx.user as { grupoId?: string }).grupoId = "grupo-abc"
+
+    createBloqueoHandlers(ctx).handleAddBloqueo("hu-1", bl)
+
+    expect(getHistorias()[0].bloqueos).toHaveLength(1)
+    expect(ctx.addNotificacion).toHaveBeenCalledWith(
+      "bloqueo_reportado",
+      expect.any(String),
+      expect.any(String),
+      "admin",
+      expect.objectContaining({ huId: "hu-1", grupoId: "grupo-abc" })
+    )
+  })
 })

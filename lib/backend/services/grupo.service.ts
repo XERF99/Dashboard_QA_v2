@@ -8,8 +8,17 @@ import { prisma } from "@/lib/backend/prisma"
 
 // ── CRUD ──────────────────────────────────────────────────
 
-export async function getAllGrupos() {
-  return prisma.grupo.findMany({ orderBy: { createdAt: "asc" } })
+export async function getAllGrupos(page = 1, limit = 50) {
+  const skip = (page - 1) * limit
+  const [grupos, total] = await prisma.$transaction([
+    prisma.grupo.findMany({
+      orderBy: { createdAt: "asc" },
+      skip,
+      take: limit,
+    }),
+    prisma.grupo.count(),
+  ])
+  return { grupos, total, page, limit, pages: Math.ceil(total / limit) }
 }
 
 export async function getGrupoById(id: string) {
@@ -45,7 +54,17 @@ export async function deleteGrupo(id: string) {
     return { success: false as const, error: `No se puede eliminar: el grupo tiene ${historias} historia${historias !== 1 ? "s" : ""} de usuario` }
   }
 
-  await prisma.grupo.delete({ where: { id } })
+  const sprints = await prisma.sprint.count({ where: { grupoId: id } })
+  if (sprints > 0) {
+    return { success: false as const, error: `No se puede eliminar: el grupo tiene ${sprints} sprint${sprints !== 1 ? "s" : ""}` }
+  }
+
+  // Eliminar en transacción: notificaciones y config (onDelete: Restrict), luego el grupo
+  await prisma.$transaction([
+    prisma.notificacion.deleteMany({ where: { grupoId: id } }),
+    prisma.config.deleteMany({ where: { grupoId: id } }),
+    prisma.grupo.delete({ where: { id } }),
+  ])
   return { success: true as const }
 }
 
@@ -107,13 +126,7 @@ export async function getMetricasGrupo(grupoId: string) {
 
 export async function getMetricasGlobales() {
   const grupos = await prisma.grupo.findMany({ orderBy: { createdAt: "asc" } })
-
-  const resumen = await Promise.all(
-    grupos.map(async (g) => {
-      const metricas = await getMetricasGrupo(g.id)
-      return { grupo: g, metricas }
-    })
-  )
-
-  return resumen
+  // All N group metric queries run fully in parallel (N×7 concurrent DB queries)
+  const metricas = await Promise.all(grupos.map(g => getMetricasGrupo(g.id)))
+  return grupos.map((g, i) => ({ grupo: g, metricas: metricas[i] }))
 }

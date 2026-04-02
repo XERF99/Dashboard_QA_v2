@@ -2,13 +2,15 @@
 
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
-import { AlertTriangle, Clock, Edit, Layers, Trash2 } from "lucide-react"
+import { AlertTriangle, Clock, Edit, Layers, Trash2, UserX } from "lucide-react"
 import {
   PRIORIDAD_CFG,
   getEtapaHUCfg, ETAPAS_PREDETERMINADAS,
   type HistoriaUsuario, type CasoPrueba, type EstadoHU,
   type ConfigEtapas, type TipoAplicacionDef, type AmbienteDef,
 } from "@/lib/types"
+import { useAuth } from "@/lib/contexts/auth-context"
+import { isResponsableActivo } from "@/lib/utils/asignaciones"
 
 const PRIORIDAD_ORDER: Record<string, number> = { critica: 0, alta: 1, media: 2, baja: 3 }
 
@@ -62,6 +64,7 @@ interface Props {
 export function HistoriasKanban({
   historias, casos, configEtapas, canEdit, onVerDetalle, onEditar, onEliminar,
 }: Props) {
+  const { users } = useAuth()
   return (
     <div className="overflow-x-auto -mx-1 px-1">
     <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10, alignItems:"start", minWidth: 700 }}>
@@ -165,8 +168,11 @@ export function HistoriasKanban({
                   {/* Fila 5: responsable + acciones */}
                   <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginTop:2 }}
                     onClick={e => e.stopPropagation()}>
-                    <p style={{ fontSize:10, color:"var(--muted-foreground)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1, minWidth:0 }}>
+                    <p style={{ fontSize:10, color:"var(--muted-foreground)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1, minWidth:0, display:"flex", alignItems:"center", gap:3 }}>
                       {hu.responsable}
+                      {!isResponsableActivo(hu.responsable, users) && (
+                        <UserX size={9} style={{ color:"var(--chart-4)", flexShrink:0 }} title="Responsable sin workspace activo" />
+                      )}
                     </p>
                     <div style={{ display:"flex", gap:2, flexShrink:0 }}>
                       {canEdit && <>

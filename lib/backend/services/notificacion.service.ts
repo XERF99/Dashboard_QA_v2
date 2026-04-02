@@ -9,14 +9,27 @@ export function rolToDestinatario(rol: string): "admin" | "qa" {
   return ["owner", "admin"].includes(rol) ? "admin" : "qa"
 }
 
-export async function getNotificacionesByDestinatario(destinatario: string, grupoId?: string) {
-  return prisma.notificacion.findMany({
-    where: {
-      destinatario,
-      ...(grupoId ? { grupoId } : {}),
-    },
-    orderBy: { fecha: "desc" },
-  })
+export async function getNotificacionesByDestinatario(
+  destinatario: string,
+  grupoId?: string,
+  page = 1,
+  limit = 50
+) {
+  const skip  = (page - 1) * limit
+  const where = {
+    destinatario,
+    ...(grupoId ? { grupoId } : {}),
+  }
+  const [notificaciones, total] = await prisma.$transaction([
+    prisma.notificacion.findMany({
+      where,
+      orderBy: { fecha: "desc" },
+      skip,
+      take: limit,
+    }),
+    prisma.notificacion.count({ where }),
+  ])
+  return { notificaciones, total, page, limit, pages: Math.ceil(total / limit) }
 }
 
 export async function createNotificacion(data: {

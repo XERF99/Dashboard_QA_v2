@@ -3,7 +3,7 @@
 //  TESTS — /api/notificaciones
 // ═══════════════════════════════════════════════════════════
 
-import { describe, it, expect, vi, beforeAll } from "vitest"
+import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest"
 import { NextRequest } from "next/server"
 import { signToken } from "@/lib/backend/middleware/auth.middleware"
 
@@ -18,12 +18,21 @@ vi.mock("@/lib/backend/services/notificacion.service", () => ({
   ),
 }))
 
+vi.mock("@/lib/backend/prisma", () => ({
+  prisma: {
+    user:         { findUnique: vi.fn().mockResolvedValue({ activo: true, grupo: { activo: true } }) },
+    grupo:        { findUnique: vi.fn().mockResolvedValue({ activo: true, grupo: { activo: true } }) },
+    notificacion: { findUnique: vi.fn() },
+  },
+}))
+
 import {
   getNotificacionesByDestinatario,
   createNotificacion,
   marcarLeida,
   marcarTodasLeidas,
 } from "@/lib/backend/services/notificacion.service"
+import { prisma } from "@/lib/backend/prisma"
 
 import { GET, POST }           from "@/app/api/notificaciones/route"
 import { PATCH }               from "@/app/api/notificaciones/[id]/route"
@@ -59,8 +68,15 @@ let adminToken: string
 let qaToken:    string
 
 beforeAll(async () => {
-  adminToken = await signToken({ sub: "u-1", email: "admin@empresa.com", nombre: "Admin", rol: "admin" })
-  qaToken    = await signToken({ sub: "u-2", email: "qa@empresa.com",    nombre: "QA",    rol: "qa"    })
+  adminToken = await signToken({ sub: "u-1", email: "admin@empresa.com", nombre: "Admin", rol: "admin", grupoId: "grupo-test" })
+  qaToken    = await signToken({ sub: "u-2", email: "qa@empresa.com",    nombre: "QA",    rol: "qa",    grupoId: "grupo-test" })
+})
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  vi.mocked(prisma.user.findUnique).mockResolvedValue({ activo: true, grupo: { activo: true } } as never)
+  ;(prisma as unknown as { grupo: { findUnique: ReturnType<typeof vi.fn> } }).grupo.findUnique
+    .mockResolvedValue({ activo: true, grupo: { activo: true } })
 })
 
 // ── GET /api/notificaciones ──────────────────────────────
@@ -72,7 +88,9 @@ describe("GET /api/notificaciones", () => {
   })
 
   it("admin recibe notificaciones destinadas a 'admin' → 200", async () => {
-    vi.mocked(getNotificacionesByDestinatario).mockResolvedValueOnce([notifBase] as never)
+    vi.mocked(getNotificacionesByDestinatario).mockResolvedValueOnce(
+      { notificaciones: [notifBase], total: 1, page: 1, limit: 50, pages: 1 } as never
+    )
 
     const res  = await GET(makeReq("GET", "/api/notificaciones", undefined, adminToken))
     const data = await res.json()
@@ -84,7 +102,9 @@ describe("GET /api/notificaciones", () => {
 
   it("qa recibe notificaciones destinadas a 'qa' → 200", async () => {
     const qaNotif = { ...notifBase, id: "notif-2", destinatario: "qa" }
-    vi.mocked(getNotificacionesByDestinatario).mockResolvedValueOnce([qaNotif] as never)
+    vi.mocked(getNotificacionesByDestinatario).mockResolvedValueOnce(
+      { notificaciones: [qaNotif], total: 1, page: 1, limit: 50, pages: 1 } as never
+    )
 
     const res  = await GET(makeReq("GET", "/api/notificaciones", undefined, qaToken))
     const data = await res.json()
@@ -94,7 +114,9 @@ describe("GET /api/notificaciones", () => {
   })
 
   it("devuelve array vacío si no hay notificaciones", async () => {
-    vi.mocked(getNotificacionesByDestinatario).mockResolvedValueOnce([])
+    vi.mocked(getNotificacionesByDestinatario).mockResolvedValueOnce(
+      { notificaciones: [], total: 0, page: 1, limit: 50, pages: 0 } as never
+    )
 
     const res  = await GET(makeReq("GET", "/api/notificaciones", undefined, adminToken))
     const data = await res.json()
@@ -123,6 +145,7 @@ describe("POST /api/notificaciones", () => {
     const res  = await POST(makeReq("POST", "/api/notificaciones", {
       tipo: notifBase.tipo, titulo: notifBase.titulo,
       descripcion: notifBase.descripcion, destinatario: notifBase.destinatario,
+      grupoId: "grupo-test",
     }, adminToken))
     const data = await res.json()
 
@@ -143,6 +166,9 @@ describe("PATCH /api/notificaciones/[id]", () => {
   })
 
   it("marca notificación como leída → 200", async () => {
+    vi.mocked(prisma.notificacion.findUnique).mockResolvedValueOnce(
+      { grupoId: "grupo-test", destinatario: "admin" } as never
+    )
     vi.mocked(marcarLeida).mockResolvedValueOnce({ ...notifBase, leida: true } as never)
 
     const res  = await PATCH(

@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Eye, Edit, Trash2, Plus, BookOpen, AlertTriangle, Layers, Clock, Filter, X, ArrowUpDown, ArrowUp, ArrowDown, LayoutList, LayoutGrid, FileSpreadsheet, ChevronDown, Upload } from "lucide-react"
+import { Eye, Edit, Trash2, Plus, BookOpen, AlertTriangle, Layers, Clock, Filter, X, ArrowUpDown, ArrowUp, ArrowDown, LayoutList, LayoutGrid, FileSpreadsheet, ChevronDown, Upload, UserX } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import {
   ESTADO_HU_CFG, PRIORIDAD_CFG,
@@ -20,6 +20,8 @@ import { HistoriasKanban } from "./historias-kanban"
 import { useHistoriasFilters, type SortCampo } from "@/lib/hooks/useHistoriasFilters"
 import { SprintPanel } from "../shared/sprint-panel"
 import { Paginador } from "@/components/ui/paginator"
+import { useAuth } from "@/lib/contexts/auth-context"
+import { isResponsableActivo } from "@/lib/utils/asignaciones"
 
 interface Props {
   historias: HistoriaUsuario[]
@@ -107,6 +109,8 @@ function BulkActionSelect({ label, options, onSelect }: {
 }
 
 export function HistoriasTable({ historias, casos, onVerDetalle, onEditar, onEliminar, onNueva, canEdit=true, configEtapas = ETAPAS_PREDETERMINADAS, tiposAplicacion, ambientes, tiposPrueba, qaUsers, onBulkEliminar, onBulkCambiarEstado, onBulkCambiarResponsable, onImportCSV, sprintEntidades = [] }: Props) {
+  const { users } = useAuth()
+
   // ── Vista activa ──
   const [vistaKanban, setVistaKanban] = useState(false)
 
@@ -560,8 +564,11 @@ export function HistoriasTable({ historias, casos, onVerDetalle, onEditar, onEli
 
             {/* Responsable */}
             <div className="hidden sm:block shrink-0" style={{ minWidth:90, overflow:"hidden" }}>
-              <p style={{ fontSize:12, color:"var(--muted-foreground)", textOverflow:"ellipsis", whiteSpace:"nowrap", overflow:"hidden" }}>
+              <p style={{ fontSize:12, color:"var(--muted-foreground)", textOverflow:"ellipsis", whiteSpace:"nowrap", overflow:"hidden", display:"flex", alignItems:"center", gap:4 }}>
                 {hu.responsable}
+                {!isResponsableActivo(hu.responsable, users) && (
+                  <UserX size={11} style={{ color:"var(--chart-4)", flexShrink:0 }} title="Responsable sin workspace activo" />
+                )}
               </p>
             </div>
 

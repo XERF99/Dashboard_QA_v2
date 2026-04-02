@@ -142,6 +142,8 @@ export type TipoNotificacion =
   | "caso_rechazado"
   | "modificacion_habilitada"
   | "cuenta_bloqueada"
+  | "bloqueo_reportado"
+  | "bloqueo_resuelto"
 
 export type RolDestinatario = "admin" | "qa"
 
@@ -153,6 +155,7 @@ export interface Notificacion {
   fecha: Date
   leida: boolean
   destinatario: RolDestinatario
+  grupoId?: string
   casoId?: string
   huId?: string
   huTitulo?: string
@@ -255,4 +258,46 @@ export interface HistoriaUsuario {
   permitirCasosAdicionales: boolean
   motivoCasosAdicionales?: string
   comentarios: Comentario[]
+  grupoId?: string | null
+}
+
+// ── Entidades de API (respuestas del servidor) ────────────────
+export interface User {
+  id: string
+  nombre: string
+  email: string
+  rol: string
+  grupoId: string | null
+  activo: boolean
+  debeCambiarPassword: boolean
+  bloqueado: boolean
+  fechaCreacion: Date
+  historialConexiones: unknown[]
+}
+
+export interface Grupo {
+  id: string
+  nombre: string
+  descripcion: string
+  activo: boolean
+  createdAt: Date
+}
+
+export interface Config {
+  id: string
+  grupoId: string
+  etapas: ConfigEtapas
+  resultados: ResultadoDef[]
+  tiposAplicacion: TipoAplicacionDef[]
+  ambientes: AmbienteDef[]
+  tiposPrueba: TipoPruebaDef[]
+  aplicaciones: string[]
+}
+
+export interface PaginatedResult<T> {
+  total: number
+  page: number
+  limit: number
+  pages: number
+  data?: T[]
 }

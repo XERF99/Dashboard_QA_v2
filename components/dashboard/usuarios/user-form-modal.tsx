@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useAuth, PASSWORD_GENERICA, type User } from "@/lib/contexts/auth-context"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import { Input }  from "@/components/ui/input"
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog"
@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/select"
 import { FieldGroup, Field, FieldLabel } from "@/components/ui/field"
 import {
-  Users, Shield, Eye, FlaskConical, Crown, Star, BarChart2, UserCheck,
+  Users, Shield, Eye, FlaskConical, Crown, Star, BarChart2, AlertCircle,
 } from "lucide-react"
 
 interface UserFormModalProps {
@@ -23,71 +23,85 @@ interface UserFormModalProps {
 
 function getRoleIcon(rolId: string) {
   switch (rolId) {
-    case "owner":   return <Star className="h-3.5 w-3.5" />
-    case "admin":   return <Shield className="h-3.5 w-3.5" />
-    case "qa_lead": return <Crown className="h-3.5 w-3.5" />
+    case "owner":   return <Star        className="h-3.5 w-3.5" />
+    case "admin":   return <Shield      className="h-3.5 w-3.5" />
+    case "qa_lead": return <Crown       className="h-3.5 w-3.5" />
     case "qa":      return <FlaskConical className="h-3.5 w-3.5" />
-    case "viewer":  return <Eye className="h-3.5 w-3.5" />
-    default:        return <Users className="h-3.5 w-3.5" />
+    case "viewer":  return <Eye         className="h-3.5 w-3.5" />
+    default:        return <Users       className="h-3.5 w-3.5" />
   }
 }
 
 export function UserFormModal({ open, userToEdit, onClose }: UserFormModalProps) {
-  const { users, roles, isOwner, addUser, updateUser } = useAuth()
-  const [nombre, setNombre] = useState("")
-  const [email, setEmail]   = useState("")
-  const [rol, setRol]       = useState("viewer")
-  const [equipoIds, setEquipoIds] = useState<string[]>([])
+  const { roles, isOwner, refreshUsers } = useAuth()
+
+  const [nombre,   setNombre]   = useState("")
+  const [email,    setEmail]    = useState("")
+  const [rol,      setRol]      = useState("viewer")
+  const [loading,  setLoading]  = useState(false)
+  const [apiError, setApiError] = useState<string | null>(null)
 
   const getRoleDef = (rolId: string) => roles.find(r => r.id === rolId)
 
-  const esRolLider = (rolId: string) => {
-    const def = getRoleDef(rolId)
-    if (!def) return false
-    return def.permisos.includes("canCreateHU") &&
-           def.permisos.includes("canApproveCases") &&
-           !def.permisos.includes("canManageUsers")
-  }
-
-  const esRolConEquipo = (rolId: string) => {
-    const def = getRoleDef(rolId)
-    if (!def) return false
-    if (def.permisos.includes("isSuperAdmin")) return false
-    return def.permisos.includes("canManageUsers") ||
-           (def.permisos.includes("canCreateHU") && def.permisos.includes("canApproveCases"))
-  }
-
-  const ownerYaExiste = users.some(u =>
-    roles.find(r => r.id === u.rol)?.permisos.includes("isSuperAdmin") && u.id !== userToEdit?.id
-  )
-
-  // Sync form state when the target user or open state changes
+  // Sync form state when target user or open state changes
   useEffect(() => {
     if (userToEdit) {
       setNombre(userToEdit.nombre)
       setEmail(userToEdit.email)
       setRol(userToEdit.rol)
-      setEquipoIds(userToEdit.equipoIds ?? [])
     } else {
       setNombre("")
       setEmail("")
       setRol("viewer")
-      setEquipoIds([])
     }
+    setApiError(null)
+    setLoading(false)
   }, [userToEdit, open])
 
-  const toggleEquipoMember = (id: string) =>
-    setEquipoIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
-
-  const handleSubmit = (e: React.SyntheticEvent) => {
+  const handleSubmit = async (e: React.SyntheticEvent) => {
     e.preventDefault()
-    if (userToEdit) {
-      updateUser({ ...userToEdit, nombre, email, rol, equipoIds: esRolConEquipo(rol) ? equipoIds : [] })
-    } else {
-      addUser({ nombre, email, rol })
+    setLoading(true)
+    setApiError(null)
+
+    try {
+      if (userToEdit) {
+        // ── Editar ────────────────────────────────────────────
+        const res = await fetch(`/api/users/${userToEdit.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: userToEdit.id, nombre, email, rol }),
+        })
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}))
+          setApiError((j as { error?: string }).error ?? "Error al actualizar el usuario")
+          return
+        }
+      } else {
+        // ── Crear: la API asigna grupoId automáticamente desde el JWT ──
+        const res = await fetch("/api/users", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ nombre, email, rol }),
+        })
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}))
+          setApiError((j as { error?: string }).error ?? "Error al crear el usuario")
+          return
+        }
+      }
+      await refreshUsers()
+      onClose()
+    } finally {
+      setLoading(false)
     }
-    onClose()
   }
+
+  // Roles visibles según quién está creando
+  const rolesVisibles = roles.filter(r => {
+    if (r.permisos.includes("isSuperAdmin")) return false  // nunca mostrar owner
+    if (!isOwner && r.permisos.includes("canManageUsers")) return false  // admin solo lo crea el owner
+    return true
+  })
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -135,21 +149,14 @@ export function UserFormModal({ open, userToEdit, onClose }: UserFormModalProps)
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {roles
-                    .filter(r => {
-                      if (!isOwner && (r.permisos.includes("canManageUsers") || r.permisos.includes("isSuperAdmin"))) return false
-                      if (r.permisos.includes("isSuperAdmin") && ownerYaExiste) return false
-                      return true
-                    })
-                    .map(r => (
-                      <SelectItem key={r.id} value={r.id}>
-                        <div className="flex items-center gap-2">
-                          {getRoleIcon(r.id)}
-                          {r.label}
-                        </div>
-                      </SelectItem>
-                    ))
-                  }
+                  {rolesVisibles.map(r => (
+                    <SelectItem key={r.id} value={r.id}>
+                      <div className="flex items-center gap-2">
+                        {getRoleIcon(r.id)}
+                        {r.label}
+                      </div>
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground mt-1">
@@ -160,17 +167,17 @@ export function UserFormModal({ open, userToEdit, onClose }: UserFormModalProps)
                 if (!def) return null
                 const isOwnerRole = def.permisos.includes("isSuperAdmin")
                 const isAdminRole = def.permisos.includes("canManageUsers") && !isOwnerRole
-                const isLeadRole  = esRolLider(rol)
+                const isLeadRole  = def.permisos.includes("canCreateHU") && def.permisos.includes("canApproveCases") && !def.permisos.includes("canManageUsers")
                 const isQARole    = def.permisos.includes("verSoloPropios")
                 const msg = isOwnerRole
                   ? "Ve la carga de todos los usuarios"
                   : isAdminRole
-                  ? "Ve su propia carga y la de su equipo asignado (solo la propia si no tiene equipo)"
+                  ? "Ve la carga de todo el workspace"
                   : isLeadRole
-                  ? "Ve su propia carga y la de su equipo asignado"
+                  ? "Ve su propia carga y la de todos los usuarios (qa) del workspace"
                   : isQARole
                   ? "Ve únicamente su propia carga"
-                  : "Ve la carga de todos los usuarios (solo lectura)"
+                  : "Ve la carga de todos los usuarios del workspace (solo lectura)"
                 return (
                   <div style={{
                     display: "flex", alignItems: "center", gap: 6, marginTop: 6,
@@ -187,60 +194,23 @@ export function UserFormModal({ open, userToEdit, onClose }: UserFormModalProps)
               })()}
             </Field>
 
-            {userToEdit && esRolConEquipo(rol) && (
-              <Field>
-                <FieldLabel>
-                  <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <UserCheck size={13} style={{ color: "var(--primary)" }} />
-                    Miembros del equipo
-                    {equipoIds.length > 0 && (
-                      <span style={{
-                        fontSize: 10, fontWeight: 700,
-                        background: "color-mix(in oklch,var(--primary) 14%,transparent)",
-                        color: "var(--primary)", borderRadius: 8, padding: "1px 6px",
-                      }}>
-                        {equipoIds.length}
-                      </span>
-                    )}
-                  </span>
-                </FieldLabel>
-                <div style={{
-                  display: "flex", flexDirection: "column", gap: 2,
-                  maxHeight: 180, overflowY: "auto", padding: "6px 8px",
-                  borderRadius: 8, border: "1px solid var(--border)", background: "var(--secondary)",
-                }}>
-                  {users.filter(u => u.activo && u.id !== userToEdit.id && !getRoleDef(u.rol)?.permisos.includes("isSuperAdmin")).length === 0 ? (
-                    <p style={{ fontSize: 12, color: "var(--muted-foreground)", textAlign: "center", padding: 8 }}>
-                      No hay otros usuarios activos
-                    </p>
-                  ) : users.filter(u => u.activo && u.id !== userToEdit.id && !getRoleDef(u.rol)?.permisos.includes("isSuperAdmin")).map(u => (
-                    <label key={u.id} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "5px 6px", borderRadius: 6 }} className="hover:bg-card">
-                      <input
-                        type="checkbox"
-                        checked={equipoIds.includes(u.id)}
-                        onChange={() => toggleEquipoMember(u.id)}
-                        style={{ width: 14, height: 14, accentColor: "var(--primary)", cursor: "pointer", flexShrink: 0 }}
-                      />
-                      <span style={{ fontSize: 12, color: "var(--foreground)", flex: 1 }}>{u.nombre}</span>
-                      <span style={{ fontSize: 10, color: "var(--muted-foreground)" }}>
-                        {getRoleDef(u.rol)?.label ?? u.rol}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-                <p style={{ fontSize: 11, color: "var(--muted-foreground)", marginTop: 4 }}>
-                  Este usuario solo verá HUs y métricas de los usuarios seleccionados.
-                </p>
-              </Field>
+            {/* Error de la API */}
+            {apiError && (
+              <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                {apiError}
+              </div>
             )}
           </FieldGroup>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>
+            <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
               Cancelar
             </Button>
-            <Button type="submit" className="bg-primary hover:bg-primary/90">
-              {userToEdit ? "Guardar Cambios" : "Crear Usuario"}
+            <Button type="submit" className="bg-primary hover:bg-primary/90" disabled={loading}>
+              {loading
+                ? (userToEdit ? "Guardando..." : "Creando...")
+                : (userToEdit ? "Guardar Cambios" : "Crear Usuario")}
             </Button>
           </DialogFooter>
         </form>

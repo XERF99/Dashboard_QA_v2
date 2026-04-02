@@ -9,11 +9,19 @@ function grupoFilter(grupoId?: string) {
   return grupoId ? { grupoId } : {}
 }
 
-export async function getAllSprints(grupoId?: string) {
-  return prisma.sprint.findMany({
-    where: grupoFilter(grupoId),
-    orderBy: { fechaInicio: "desc" },
-  })
+export async function getAllSprints(grupoId?: string, page = 1, limit = 50) {
+  const skip  = (page - 1) * limit
+  const where = grupoFilter(grupoId)
+  const [sprints, total] = await prisma.$transaction([
+    prisma.sprint.findMany({
+      where,
+      orderBy: { fechaInicio: "desc" },
+      skip,
+      take: limit,
+    }),
+    prisma.sprint.count({ where }),
+  ])
+  return { sprints, total, page, limit, pages: Math.ceil(total / limit) }
 }
 
 export async function getSprintById(id: string) {

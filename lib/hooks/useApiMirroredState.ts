@@ -10,6 +10,7 @@
 //  3. En cada cambio posterior: sincroniza a localStorage Y a la API
 //
 //  Si la API no está disponible, funciona solo con localStorage.
+//  Cancela el fetch de carga inicial al desmontar con AbortController.
 // ═══════════════════════════════════════════════════════════
 
 import { useState, useEffect, useRef } from "react"
@@ -20,37 +21,61 @@ import type { Dispatch, SetStateAction } from "react"
 // Evita lanzar una petición por cada carácter al editar campos de texto.
 const SYNC_DEBOUNCE_MS = 600
 
+// Reintentos con backoff exponencial: 1s → 2s → 4s
+const RETRY_DELAYS_MS = [1_000, 2_000, 4_000]
+
+async function syncWithRetry<T>(syncer: (data: T) => Promise<void>, data: T): Promise<void> {
+  let lastErr: unknown
+  for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
+    try {
+      await syncer(data)
+      return
+    } catch (err) {
+      lastErr = err
+      if (attempt < RETRY_DELAYS_MS.length) {
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAYS_MS[attempt]))
+      }
+    }
+  }
+  throw lastErr
+}
+
 export function useApiMirroredState<T>(
   storageKey: string,
   fallback: T,
-  fetcher: () => Promise<T>,
+  fetcher: (signal?: AbortSignal) => Promise<T>,
   syncer:  (data: T) => Promise<void>
-): [T, Dispatch<SetStateAction<T>>, boolean, string | null] {
+): [T, Dispatch<SetStateAction<T>>, boolean, string | null, string | null] {
   // Inicializar desde localStorage para render instantáneo
-  const [state, setState]   = useState<T>(() => cargarDeStorage(storageKey, fallback))
-  const [loaded, setLoaded] = useState(false)
-  const [error, setError]   = useState<string | null>(null)
-  const isFirstSync         = useRef(true)
-  const debounceTimer       = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [state, setState]       = useState<T>(() => cargarDeStorage(storageKey, fallback))
+  const [loaded, setLoaded]     = useState(false)
+  const [error, setError]       = useState<string | null>(null)
+  const [syncError, setSyncError] = useState<string | null>(null)
+  const isFirstSync             = useRef(true)
+  const debounceTimer           = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Paso 1: Carga inicial desde la API
+  // Paso 1: Carga inicial desde la API — cancelable al desmontar
   useEffect(() => {
-    fetcher()
+    const controller = new AbortController()
+    fetcher(controller.signal)
       .then(data => {
+        if (controller.signal.aborted) return
         setState(data)
         guardarEnStorage(storageKey, data)
         setLoaded(true)
       })
       .catch((err: unknown) => {
+        if (controller.signal.aborted) return
         // API no disponible — usar localStorage como fallback
         setError(err instanceof Error ? err.message : "Error al cargar datos")
         setLoaded(true)
       })
+    return () => controller.abort()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Paso 2: Sincronizar a localStorage + API en cada cambio (después de la carga inicial).
-  // localStorage se actualiza de inmediato; el sync a la API usa debounce para evitar
-  // disparar un POST por cada carácter al editar texto.
+  // localStorage se actualiza de inmediato; el sync a la API usa debounce + 3 reintentos
+  // con backoff exponencial. Si todos fallan, se expone syncError para notificar al usuario.
   useEffect(() => {
     if (!loaded) return
     if (isFirstSync.current) {
@@ -64,8 +89,11 @@ export function useApiMirroredState<T>(
     // Cancelar el timer anterior y arrancar uno nuevo
     if (debounceTimer.current) clearTimeout(debounceTimer.current)
     debounceTimer.current = setTimeout(() => {
-      syncer(state).catch(err => {
-        console.warn(`[ApiMirror] Error sincronizando ${storageKey}:`, err)
+      setSyncError(null)
+      syncWithRetry(syncer, state).catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : "Error al sincronizar"
+        setSyncError(msg)
+        console.warn(`[ApiMirror] Sync fallido tras reintentos (${storageKey}):`, msg)
       })
     }, SYNC_DEBOUNCE_MS)
 
@@ -74,5 +102,5 @@ export function useApiMirroredState<T>(
     }
   }, [state]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  return [state, setState, loaded, error]
+  return [state, setState, loaded, error, syncError]
 }

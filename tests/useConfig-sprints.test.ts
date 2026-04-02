@@ -66,7 +66,7 @@ describe("carga inicial desde API", () => {
       return Promise.resolve(EMPTY_CONFIG)
     })
 
-    const { result } = renderHook(() => useConfig())
+    const { result } = renderHook(() => useConfig({ isAuthenticated: true }))
 
     await waitFor(() => {
       expect(result.current.sprints).toHaveLength(1)
@@ -97,7 +97,7 @@ describe("addSprint", () => {
       return Promise.resolve(EMPTY_CONFIG)
     })
 
-    const { result } = renderHook(() => useConfig())
+    const { result } = renderHook(() => useConfig({ isAuthenticated: true }))
 
     // Esperar a que la carga inicial termine antes de probar el duplicado
     await waitFor(() => expect(result.current.sprints).toHaveLength(1))
@@ -139,7 +139,7 @@ describe("addSprint", () => {
     const serverSprint = { ...sprintA, id: "cuid-real-123", nombre: "Sprint Nuevo" }
     vi.mocked(api.post).mockResolvedValue({ sprint: serverSprint })
 
-    const { result } = renderHook(() => useConfig())
+    const { result } = renderHook(() => useConfig({ isAuthenticated: true }))
 
     // Esperar a que la carga inicial resuelva para que no pise el estado optimista
     await waitFor(() => expect(vi.mocked(api.get)).toHaveBeenCalledWith("/api/sprints"))
@@ -184,7 +184,7 @@ describe("updateSprint", () => {
       return Promise.resolve(EMPTY_CONFIG)
     })
 
-    const { result } = renderHook(() => useConfig())
+    const { result } = renderHook(() => useConfig({ isAuthenticated: true }))
 
     await waitFor(() => expect(result.current.sprints).toHaveLength(2))
 
@@ -223,7 +223,7 @@ describe("deleteSprint", () => {
       return Promise.resolve(EMPTY_CONFIG)
     })
 
-    const { result } = renderHook(() => useConfig())
+    const { result } = renderHook(() => useConfig({ isAuthenticated: true }))
 
     await waitFor(() => expect(result.current.sprints).toHaveLength(2))
 

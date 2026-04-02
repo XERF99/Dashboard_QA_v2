@@ -17,6 +17,14 @@ vi.mock("@/lib/backend/services/sprint.service", () => ({
   deleteSprint:   vi.fn(),
 }))
 
+vi.mock("@/lib/backend/prisma", () => ({
+  prisma: {
+    user:   { findUnique: vi.fn().mockResolvedValue({ activo: true, grupo: { activo: true } }) },
+    grupo:  { findUnique: vi.fn().mockResolvedValue({ activo: true, grupo: { activo: true } }) },
+    sprint: { findUnique: vi.fn().mockResolvedValue({ grupoId: "grupo-default" }) },
+  },
+}))
+
 import {
   getAllSprints, getSprintActivo, getSprintById,
   createSprint, updateSprint, deleteSprint,
@@ -40,8 +48,9 @@ function makeReq(method: string, path: string, body?: unknown, token?: string, s
 const sprintBase = {
   id: "sp-1",
   nombre: "Sprint 3",
-  fechaInicio: new Date("2026-03-01").toISOString(),
-  fechaFin:    new Date("2026-03-14").toISOString(),
+  grupoId:     "grupo-default",
+  fechaInicio: new Date("2026-03-01"),
+  fechaFin:    new Date("2026-03-14"),
   objetivo:    "Completar módulo auth",
   createdAt:   new Date().toISOString(),
   updatedAt:   new Date().toISOString(),
@@ -57,7 +66,7 @@ const sprintBody = {
 let token: string
 
 beforeAll(async () => {
-  token = await signToken({ sub: "usr-001", email: "admin@empresa.com", nombre: "Admin", rol: "admin" })
+  token = await signToken({ sub: "usr-001", email: "admin@empresa.com", nombre: "Admin", rol: "admin", grupoId: "grupo-default" })
 })
 
 // ── GET /api/sprints ─────────────────────────────────────
@@ -69,7 +78,9 @@ describe("GET /api/sprints", () => {
   })
 
   it("lista todos los sprints → 200", async () => {
-    vi.mocked(getAllSprints).mockResolvedValueOnce([sprintBase] as never)
+    vi.mocked(getAllSprints).mockResolvedValueOnce(
+      { sprints: [sprintBase], total: 1, page: 1, limit: 50, pages: 1 } as never
+    )
 
     const res  = await GET(makeReq("GET", "/api/sprints", undefined, token))
     const data = await res.json()
@@ -175,6 +186,7 @@ describe("GET /api/sprints/[id]", () => {
 
 describe("PUT /api/sprints/[id]", () => {
   it("fechas inválidas → 400", async () => {
+    vi.mocked(getSprintById).mockResolvedValueOnce(sprintBase as never)
     const res = await PUT(
       makeReq("PUT", "/api/sprints/sp-1", { fechaInicio: "2026-03-14", fechaFin: "2026-03-01" }, token),
       { params: Promise.resolve({ id: "sp-1" }) }
@@ -183,6 +195,7 @@ describe("PUT /api/sprints/[id]", () => {
   })
 
   it("nombre vacío → 400", async () => {
+    vi.mocked(getSprintById).mockResolvedValueOnce(sprintBase as never)
     const res = await PUT(
       makeReq("PUT", "/api/sprints/sp-1", { nombre: "" }, token),
       { params: Promise.resolve({ id: "sp-1" }) }
@@ -191,6 +204,7 @@ describe("PUT /api/sprints/[id]", () => {
   })
 
   it("actualiza sprint → 200", async () => {
+    vi.mocked(getSprintById).mockResolvedValueOnce(sprintBase as never)
     vi.mocked(updateSprint).mockResolvedValueOnce({ ...sprintBase, nombre: "Sprint 3 (rev)" } as never)
 
     const res  = await PUT(

@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react"
 import { usePersistedState, STORAGE_KEYS } from "@/lib/storage"
 import { api, ApiError } from "@/lib/services/api/client"
+import { PASSWORD_GENERICA } from "@/lib/constants"
 
 // ── Permisos disponibles ──────────────────────────────────
 export type PermisoId =
@@ -91,7 +92,6 @@ export interface User {
   activo: boolean
   fechaCreacion: Date
   debeCambiarPassword: boolean  // true = debe cambiar en próximo login
-  equipoIds?: string[]          // IDs de usuarios asignados a este líder
   historialConexiones?: { entrada: Date; salida?: Date }[]  // últimas 50 sesiones
   intentosFallidos?: number     // contador de intentos de login incorrectos consecutivos
   bloqueado?: boolean           // true = bloqueado por exceder intentos (requiere desbloqueo admin)
@@ -99,8 +99,8 @@ export interface User {
 
 export type UserSafe = Omit<User, "password">
 
-// ── Contraseña genérica para nuevos usuarios ─────────────
-export const PASSWORD_GENERICA = "Qatesting1"
+// ── Contraseña genérica para nuevos usuarios (re-export para consumers) ──
+export { PASSWORD_GENERICA }
 
 // ── Usuarios iniciales ───────────────────────────────────
 export const usuariosIniciales: User[] = [
@@ -168,9 +168,10 @@ interface AuthContextType {
   clearBlockEvents: () => void
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string; debeCambiar?: boolean }>
   logout: () => void
-  cambiarPassword: (actual: string, nueva: string) => { success: boolean; error?: string }
+  cambiarPassword: (actual: string, nueva: string) => Promise<{ success: boolean; error?: string }>
   updateProfile: (nombre: string) => { success: boolean; error?: string }
-  addUser: (data: { nombre: string; email: string; rol: string }) => { success: boolean; error?: string }
+  refreshUsers: () => Promise<void>
+  addUser: (data: { nombre: string; email: string; rol: string; grupoId?: string | null }) => { success: boolean; error?: string }
   updateUser: (user: User) => { success: boolean; error?: string }
   deleteUser: (id: string) => { success: boolean; error?: string }
   toggleUserActive: (id: string) => void
@@ -221,7 +222,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     api.get<{ user: UserSafe }>("/api/auth/me")
       .then(data => setUser(data.user))
-      .catch(() => {})
+      .catch((err: unknown) => {
+        // 403 = cuenta o grupo desactivado; tratar igual que sesión expirada
+        if (err instanceof ApiError && err.status === 403) {
+          setSessionExpired(true)
+        }
+      })
       .finally(() => setSessionLoading(false))
   }, [])
 
@@ -233,6 +239,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await api.get<{ user: UserSafe }>("/api/auth/me")
       } catch (err: unknown) {
         if (err instanceof ApiError && err.status === 401) {
+          // JWT expirado o inválido
+          setUser(null)
+          setPendientePassword(false)
+          setSessionExpired(true)
+        } else if (err instanceof ApiError && err.status === 403) {
+          // Cuenta o grupo desactivado mientras la sesión estaba activa
           setUser(null)
           setPendientePassword(false)
           setSessionExpired(true)
@@ -277,23 +289,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setPendientePassword(false)
   }, [])
 
-  const cambiarPassword = useCallback((actual: string, nueva: string) => {
+  const cambiarPassword = useCallback(async (actual: string, nueva: string) => {
     if (!user) return { success: false, error: "No hay sesión activa" }
-    const found = users.find(u => u.id === user.id)
-    if (!found) return { success: false, error: "Usuario no encontrado" }
-    if (found.password !== actual) return { success: false, error: "Contraseña actual incorrecta" }
-    if (nueva.length < 6) return { success: false, error: "La contraseña debe tener al menos 6 caracteres" }
-    if (nueva === actual) return { success: false, error: "La nueva contraseña debe ser diferente a la actual" }
+    try {
+      const res = await fetch("/api/auth/password", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ actual, nueva }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) return { success: false, error: (data as { error?: string }).error ?? "Error al cambiar contraseña" }
+      setUser(prev => prev ? { ...prev, debeCambiarPassword: false } : prev)
+      setUsers(prev => prev.map(u =>
+        u.id === user.id ? { ...u, password: nueva, debeCambiarPassword: false } : u
+      ))
+      setPendientePassword(false)
+      return { success: true }
+    } catch {
+      return { success: false, error: "Error de conexión con el servidor" }
+    }
+  }, [user])
 
-    setUsers(prev => prev.map(u =>
-      u.id === user.id ? { ...u, password: nueva, debeCambiarPassword: false } : u
-    ))
-    setUser(prev => prev ? { ...prev, debeCambiarPassword: false } : prev)
-    setPendientePassword(false)
-    return { success: true }
-  }, [user, users])
+  const refreshUsers = useCallback(async () => {
+    try {
+      const res = await fetch("/api/users")
+      if (!res.ok) return
+      const data = await res.json()
+      if (data.users) setUsers(data.users)
+    } catch {
+      // silencioso — la lista sigue mostrando los datos cacheados
+    }
+  }, [])
 
-  const addUser = useCallback((data: { nombre: string; email: string; rol: string }) => {
+  const addUser = useCallback((data: { nombre: string; email: string; rol: string; grupoId?: string | null }) => {
     const emailExists = users.some(u => u.email.toLowerCase() === data.email.toLowerCase())
     if (emailExists) return { success: false, error: "Ya existe un usuario con este email" }
 
@@ -499,7 +527,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user, users, roles, isAuthenticated: user !== null, sessionLoading, sessionExpired,
       pendientePassword,
       pendingBlockEvents, clearBlockEvents,
-      login, logout, cambiarPassword, updateProfile,
+      login, logout, cambiarPassword, updateProfile, refreshUsers,
       addUser, updateUser, deleteUser, toggleUserActive, resetPassword, desbloquearUsuario,
       addRole, updateRole, deleteRole,
       canEdit, canManageUsers, canView, isAdmin, isQALead, isQA,

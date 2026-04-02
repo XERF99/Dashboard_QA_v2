@@ -6,34 +6,42 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
-// ── Mock de Prisma ────────────────────────────────────────
+// ── Mock de Prisma (hoisted para evitar TDZ con vi.mock) ──
 
-const mockGrupo = {
-  id: "g-1",
-  nombre: "Equipo Alpha",
-  descripcion: "Descripción de prueba",
-  activo: true,
-  createdAt: new Date("2026-01-01"),
-  updatedAt: new Date("2026-01-01"),
-}
+const { mockPrisma, mockGrupo } = vi.hoisted(() => {
+  const mockGrupo = {
+    id: "g-1",
+    nombre: "Equipo Alpha",
+    descripcion: "Descripción de prueba",
+    activo: true,
+    createdAt: new Date("2026-01-01"),
+    updatedAt: new Date("2026-01-01"),
+  }
 
-const mockPrisma = {
-  grupo: {
-    findMany:   vi.fn(),
-    findUnique: vi.fn(),
-    create:     vi.fn(),
-    update:     vi.fn(),
-    delete:     vi.fn(),
-  },
-  user:           { count: vi.fn() },
-  historiaUsuario: {
-    count: vi.fn(),
-    groupBy: vi.fn(),
-  },
-  casoPrueba: { count: vi.fn(), groupBy: vi.fn() },
-  tarea:      { count: vi.fn(), groupBy: vi.fn() },
-  config:     { create: vi.fn() },
-}
+  const mockPrisma = {
+    grupo: {
+      findMany:   vi.fn(),
+      findUnique: vi.fn(),
+      create:     vi.fn(),
+      update:     vi.fn(),
+      delete:     vi.fn(),
+      count:      vi.fn().mockResolvedValue(0),
+    },
+    user:           { count: vi.fn() },
+    historiaUsuario: {
+      count: vi.fn(),
+      groupBy: vi.fn(),
+    },
+    casoPrueba: { count: vi.fn(), groupBy: vi.fn() },
+    tarea:      { count: vi.fn(), groupBy: vi.fn() },
+    config:       { create: vi.fn(), deleteMany: vi.fn() },
+    sprint:       { count: vi.fn() },
+    notificacion: { deleteMany: vi.fn() },
+    $transaction: vi.fn((ops: unknown[]) => Promise.all(ops)),
+  }
+
+  return { mockPrisma, mockGrupo }
+})
 
 vi.mock("@/lib/backend/prisma", () => ({ prisma: mockPrisma }))
 
@@ -46,15 +54,22 @@ import {
   getMetricasGrupo,
 } from "@/lib/backend/services/grupo.service"
 
+// Limpia el historial de llamadas entre tests para evitar falsos positivos
+beforeEach(() => { vi.clearAllMocks() })
+
 // ── getAllGrupos ───────────────────────────────────────────
 
 describe("getAllGrupos", () => {
   it("devuelve los grupos ordenados por createdAt", async () => {
     mockPrisma.grupo.findMany.mockResolvedValue([mockGrupo])
+    mockPrisma.grupo.count.mockResolvedValue(1)
     const result = await getAllGrupos()
-    expect(result).toHaveLength(1)
-    expect(result[0].nombre).toBe("Equipo Alpha")
-    expect(mockPrisma.grupo.findMany).toHaveBeenCalledWith({ orderBy: { createdAt: "asc" } })
+    expect(result.grupos).toHaveLength(1)
+    expect(result.grupos[0].nombre).toBe("Equipo Alpha")
+    expect(result.total).toBe(1)
+    expect(mockPrisma.grupo.findMany).toHaveBeenCalledWith({
+      orderBy: { createdAt: "asc" }, skip: 0, take: 50,
+    })
   })
 })
 
@@ -131,11 +146,15 @@ describe("deleteGrupo", () => {
   it("elimina el grupo cuando está vacío", async () => {
     mockPrisma.user.count.mockResolvedValue(0)
     mockPrisma.historiaUsuario.count.mockResolvedValue(0)
+    mockPrisma.sprint.count.mockResolvedValue(0)
+    mockPrisma.notificacion.deleteMany.mockResolvedValue({ count: 0 })
     mockPrisma.grupo.delete.mockResolvedValue(mockGrupo)
+    mockPrisma.config.deleteMany.mockResolvedValue({ count: 0 })
 
     const result = await deleteGrupo("g-1")
     expect(result.success).toBe(true)
-    expect(mockPrisma.grupo.delete).toHaveBeenCalledWith({ where: { id: "g-1" } })
+    // Verifica que la transacción se ejecutó (elimina config + grupo)
+    expect(mockPrisma.$transaction).toHaveBeenCalled()
   })
 
   it("rechaza eliminar si tiene usuarios", async () => {
@@ -154,6 +173,17 @@ describe("deleteGrupo", () => {
     const result = await deleteGrupo("g-1")
     expect(result.success).toBe(false)
     if (!result.success) expect(result.error).toMatch(/histori/i)
+  })
+
+  it("rechaza eliminar si tiene sprints", async () => {
+    mockPrisma.user.count.mockResolvedValue(0)
+    mockPrisma.historiaUsuario.count.mockResolvedValue(0)
+    mockPrisma.sprint.count.mockResolvedValue(2)
+
+    const result = await deleteGrupo("g-1")
+    expect(result.success).toBe(false)
+    if (!result.success) expect(result.error).toMatch(/sprint/i)
+    expect(mockPrisma.grupo.delete).not.toHaveBeenCalled()
   })
 })
 

@@ -3,13 +3,18 @@ import type { Bloqueo } from "@/lib/types"
 import type { DomainCtx } from "./types"
 
 /** Handlers de gestión de Bloqueos: HU, casos y tareas. */
-export function createBloqueoHandlers({ tareas, setHistorias, setCasos, setTareas, user, addToast }: DomainCtx) {
+export function createBloqueoHandlers({ tareas, setHistorias, setCasos, setTareas, user, addToast, addNotificacion }: DomainCtx) {
+  const grupoId = user?.grupoId ?? undefined
+
   const handleAddBloqueo = (huId: string, b: Bloqueo) => {
     setHistorias(p => p.map(h => h.id !== huId ? h : {
       ...h, bloqueos: [...h.bloqueos, b],
       historial: [...h.historial, crearEvento("bloqueo_reportado", `Bloqueo: ${b.descripcion.slice(0, 80)}`, user?.nombre || "Sistema")],
     }))
     addToast({ type: "warning", title: "Bloqueo registrado", desc: b.descripcion.slice(0, 60) })
+    addNotificacion("bloqueo_reportado", "Bloqueo reportado en HU",
+      `${user?.nombre || "Sistema"} reportó un bloqueo: ${b.descripcion.slice(0, 80)}`,
+      "admin", { huId, grupoId })
   }
 
   const handleResolverBloqueo = (huId: string, bId: string, nota: string) => {
@@ -21,6 +26,9 @@ export function createBloqueoHandlers({ tareas, setHistorias, setCasos, setTarea
       historial: [...h.historial, crearEvento("bloqueo_resuelto", `Bloqueo resuelto: ${nota.slice(0, 80)}`, user?.nombre || "Sistema")],
     }))
     addToast({ type: "success", title: "Bloqueo resuelto", desc: nota.slice(0, 60) })
+    addNotificacion("bloqueo_resuelto", "Bloqueo de HU resuelto",
+      `${user?.nombre || "Sistema"} resolvió un bloqueo: ${nota.slice(0, 80)}`,
+      "qa", { huId, grupoId })
   }
 
   const handleResolverBloqueoCaso = (casoId: string, huId: string, bId: string, nota: string) => {
@@ -35,6 +43,9 @@ export function createBloqueoHandlers({ tareas, setHistorias, setCasos, setTarea
     const ev = crearEvento("bloqueo_resuelto", `Bloqueo de caso resuelto: ${nota.slice(0, 80)}`, user?.nombre || "Sistema")
     setHistorias(prev => prev.map(h => h.id === huId ? { ...h, historial: [...h.historial, ev] } : h))
     addToast({ type: "success", title: "Bloqueo resuelto", desc: nota.slice(0, 60) })
+    addNotificacion("bloqueo_resuelto", "Bloqueo de caso resuelto",
+      `${user?.nombre || "Sistema"} resolvió un bloqueo en caso de prueba: ${nota.slice(0, 80)}`,
+      "qa", { casoId, huId, grupoId })
   }
 
   const handleResolverBloqueoTarea = (tareaId: string, bId: string, nota: string) => {
@@ -52,6 +63,9 @@ export function createBloqueoHandlers({ tareas, setHistorias, setCasos, setTarea
     const ev = crearEvento("bloqueo_resuelto", `Bloqueo de tarea resuelto: ${nota.slice(0, 80)}`, user?.nombre || "Sistema")
     setHistorias(prev => prev.map(h => h.id === huId ? { ...h, historial: [...h.historial, ev] } : h))
     addToast({ type: "success", title: "Bloqueo resuelto", desc: nota.slice(0, 60) })
+    addNotificacion("bloqueo_resuelto", "Bloqueo de tarea resuelto",
+      `${user?.nombre || "Sistema"} resolvió un bloqueo de tarea: ${nota.slice(0, 80)}`,
+      "qa", { huId, grupoId })
   }
 
   return {

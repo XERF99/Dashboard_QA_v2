@@ -8,7 +8,7 @@ export type AddNotificacionFn = (
   titulo: string,
   descripcion: string,
   destinatario: RolDestinatario,
-  extra?: Pick<Notificacion, "casoId" | "huId" | "huTitulo" | "casoTitulo">
+  extra?: Pick<Notificacion, "casoId" | "huId" | "huTitulo" | "casoTitulo" | "grupoId">
 ) => void
 
 /**

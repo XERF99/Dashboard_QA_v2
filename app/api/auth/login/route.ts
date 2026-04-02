@@ -2,13 +2,13 @@
 import { NextRequest, NextResponse } from "next/server"
 import { loginSchema } from "@/lib/backend/validators/auth.validator"
 import { loginService } from "@/lib/backend/services/auth.service"
-import { checkRateLimit, getClientIp } from "@/lib/backend/middleware/rate-limit"
+import { checkRateLimit, getClientIp, rlKey } from "@/lib/backend/middleware/rate-limit"
 
 export async function POST(request: NextRequest) {
   try {
     // Rate limiting: máximo 10 intentos por IP cada 15 minutos
     const ip = getClientIp(request.headers)
-    const { allowed, resetAt } = checkRateLimit(ip, 10, 15 * 60 * 1000)
+    const { allowed, resetAt } = checkRateLimit(rlKey(ip, "/api/auth/login"), 10, 15 * 60 * 1000)
 
     if (!allowed) {
       const retryAfterSecs = Math.ceil((resetAt - Date.now()) / 1000)

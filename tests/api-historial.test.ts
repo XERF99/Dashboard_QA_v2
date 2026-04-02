@@ -3,7 +3,7 @@
 //  TESTS — GET /api/historias/[id]/historial
 // ═══════════════════════════════════════════════════════════
 
-import { describe, it, expect, vi, beforeAll } from "vitest"
+import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest"
 import { NextRequest } from "next/server"
 import { signToken } from "@/lib/backend/middleware/auth.middleware"
 
@@ -12,7 +12,16 @@ vi.mock("@/lib/backend/services/historia.service", () => ({
   getHistoriaById: vi.fn(),
 }))
 
+vi.mock("@/lib/backend/prisma", () => ({
+  prisma: {
+    user:            { findUnique: vi.fn().mockResolvedValue({ activo: true, grupo: { activo: true } }) },
+    grupo:           { findUnique: vi.fn().mockResolvedValue({ activo: true, grupo: { activo: true } }) },
+    historiaUsuario: { findUnique: vi.fn() },
+  },
+}))
+
 import { getHistoriaById } from "@/lib/backend/services/historia.service"
+import { prisma } from "@/lib/backend/prisma"
 import { GET } from "@/app/api/historias/[id]/historial/route"
 
 // ── Helper ───────────────────────────────────────────────
@@ -49,9 +58,22 @@ const historiaConHistorial = {
 }
 
 let token: string
+let tokenGrupoA: string
+let ownerToken: string
 
 beforeAll(async () => {
-  token = await signToken({ sub: "u-1", email: "admin@empresa.com", nombre: "Admin", rol: "admin" })
+  token       = await signToken({ sub: "u-1", email: "admin@empresa.com", nombre: "Admin", rol: "admin", grupoId: "grupo-test" })
+  tokenGrupoA = await signToken({ sub: "u-2", email: "member@empresa.com", nombre: "Member", rol: "admin", grupoId: "grupo-A" })
+  ownerToken  = await signToken({ sub: "u-0", email: "owner@empresa.com",  nombre: "Owner", rol: "owner" })
+})
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  vi.mocked(prisma.user.findUnique).mockResolvedValue({ activo: true, grupo: { activo: true } } as never)
+  ;(prisma as unknown as { grupo: { findUnique: ReturnType<typeof vi.fn> } }).grupo.findUnique
+    .mockResolvedValue({ activo: true, grupo: { activo: true } })
+  // Workspace isolation default: the HU belongs to the test workspace
+  vi.mocked(prisma.historiaUsuario.findUnique).mockResolvedValue({ grupoId: "grupo-test" } as never)
 })
 
 // ── Tests ────────────────────────────────────────────────
@@ -154,6 +176,51 @@ describe("GET /api/historias/[id]/historial", () => {
 
     expect(res.status).toBe(200)
     expect(data.historial).toHaveLength(0)
+    expect(data.total).toBe(5)
+  })
+
+})
+
+// ── Workspace isolation ──────────────────────────────────
+
+describe("GET /api/historias/[id]/historial — aislamiento de workspace", () => {
+
+  it("usuario en grupo-A no puede acceder al historial de historia de grupo-B → 404", async () => {
+    vi.mocked(prisma.historiaUsuario.findUnique).mockResolvedValueOnce({ grupoId: "grupo-B" } as never)
+
+    const res  = await GET(makeReq("hu-1", "", tokenGrupoA), params("hu-1"))
+    const data = await res.json()
+
+    expect(res.status).toBe(404)
+    expect(data.error).toMatch(/historia no encontrada/i)
+  })
+
+  it("historia no existente con grupoId → 404", async () => {
+    vi.mocked(prisma.historiaUsuario.findUnique).mockResolvedValueOnce(null)
+
+    const res = await GET(makeReq("hu-x", "", tokenGrupoA), params("hu-x"))
+    expect(res.status).toBe(404)
+  })
+
+  it("usuario en grupo-A puede acceder al historial de su propia historia", async () => {
+    vi.mocked(prisma.historiaUsuario.findUnique).mockResolvedValueOnce({ grupoId: "grupo-A" } as never)
+    vi.mocked(getHistoriaById).mockResolvedValueOnce(historiaConHistorial as never)
+
+    const res  = await GET(makeReq("hu-1", "", tokenGrupoA), params("hu-1"))
+    const data = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(data.total).toBe(5)
+  })
+
+  it("owner (sin grupoId) puede acceder al historial de cualquier historia", async () => {
+    // Owner token has no grupoId → workspace check is skipped
+    vi.mocked(getHistoriaById).mockResolvedValueOnce(historiaConHistorial as never)
+
+    const res  = await GET(makeReq("hu-1", "", ownerToken), params("hu-1"))
+    const data = await res.json()
+
+    expect(res.status).toBe(200)
     expect(data.total).toBe(5)
   })
 

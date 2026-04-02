@@ -8,6 +8,13 @@ import { NextRequest } from "next/server"
 import { signToken } from "@/lib/backend/middleware/auth.middleware"
 
 // ── Mocks ────────────────────────────────────────────────
+vi.mock("@/lib/backend/prisma", () => ({
+  prisma: {
+    user:  { findUnique: vi.fn().mockResolvedValue({ activo: true, grupo: { activo: true } }) },
+    grupo: { findUnique: vi.fn().mockResolvedValue({ activo: true, grupo: { activo: true } }) },
+  },
+}))
+
 vi.mock("@/lib/backend/services/metricas.service", () => ({
   getMetricas: vi.fn(),
 }))
@@ -36,7 +43,7 @@ const metricasMock = {
 let token: string
 
 beforeAll(async () => {
-  token = await signToken({ sub: "usr-001", email: "admin@empresa.com", nombre: "Admin", rol: "admin" })
+  token = await signToken({ sub: "usr-001", email: "admin@empresa.com", nombre: "Admin", rol: "admin", grupoId: "grupo-test" })
 })
 
 // ── Tests ────────────────────────────────────────────────

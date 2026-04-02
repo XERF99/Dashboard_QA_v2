@@ -12,7 +12,7 @@ import {
   AlertTriangle, Plus, CheckCircle2, ShieldAlert, Layers,
   User, Play, XCircle, Send, ThumbsUp, ThumbsDown,
   Lock, Unlock, FileText, ArrowRight,
-  Pencil, MessageSquare,
+  Pencil, MessageSquare, UserX,
 } from "lucide-react"
 import {
   ESTADO_HU_CFG, PRIORIDAD_CFG,
@@ -27,6 +27,8 @@ import {
 import { CommentThread } from "../shared/comment-thread"
 import { CasoPruebaCard } from "../casos/caso-prueba-card"
 import { useHUDetail } from "@/lib/contexts/hu-detail-context"
+import { useAuth } from "@/lib/contexts/auth-context"
+import { isResponsableActivo } from "@/lib/utils/asignaciones"
 
 // ── Props ──────────────────────────────────────────────────────
 // Los handlers, permisos y config se consumen desde HUDetailContext.
@@ -59,6 +61,7 @@ export function HistoriaUsuarioDetail({ open, onClose, hu, casos, tareas }: Prop
     onAprobarCasos, onRechazarCasos, onIniciarEjecucion,
     onPermitirCasosAdicionales, onAddComentarioHU,
   } = useHUDetail()
+  const { users } = useAuth()
 
   // Form visibility
   const [showCancelarForm, setShowCancelarForm] = useState(false)
@@ -122,7 +125,13 @@ export function HistoriaUsuarioDetail({ open, onClose, hu, casos, tareas }: Prop
             <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
               <Badge variant="outline" className={priCfg.cls}>Prioridad {priCfg.label}</Badge>
               <span style={{ display:"flex", alignItems:"center", gap:3, fontSize:12, color:"var(--muted-foreground)" }}><Star size={12}/>{hu.puntos} pts</span>
-              <span style={{ display:"flex", alignItems:"center", gap:3, fontSize:12, color:"var(--muted-foreground)" }}><User size={12}/>{hu.responsable}</span>
+              <span style={{ display:"flex", alignItems:"center", gap:3, fontSize:12, color:"var(--muted-foreground)" }}>
+                <User size={12}/>
+                {hu.responsable}
+                {!isResponsableActivo(hu.responsable, users) && (
+                  <UserX size={11} style={{ color:"var(--chart-4)" }} title="Responsable sin workspace activo" />
+                )}
+              </span>
               <Badge variant="outline" className="bg-muted text-muted-foreground border-border text-[10px]">{getTipoAplicacionLabel(hu.tipoAplicacion, tiposAplicacion)}</Badge>
               <Badge variant="outline" className="bg-muted text-muted-foreground border-border text-[10px]">{getAmbienteLabel(hu.ambiente, ambientes)}</Badge>
               <Badge variant="outline" className={`${getTipoPruebaColor(hu.tipoPrueba)} text-[10px]`}>{getTipoPruebaLabel(hu.tipoPrueba, tiposPrueba)}</Badge>

@@ -101,7 +101,7 @@ describe("ResultadosConfig — agregar estado personalizado", () => {
     render(<ResultadosConfig resultados={BASE} onChange={onChange} />)
 
     fireEvent.change(
-      screen.getByPlaceholderText(/Nombre del estado/i),
+      screen.getByPlaceholderText(/ej: Incompleto/i),
       { target: { value: "Incompleto" } }
     )
     fireEvent.click(screen.getByRole("button", { name: /agregar/i }))

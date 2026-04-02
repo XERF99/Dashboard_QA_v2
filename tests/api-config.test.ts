@@ -8,6 +8,13 @@ import { NextRequest } from "next/server"
 import { signToken } from "@/lib/backend/middleware/auth.middleware"
 
 // ── Mocks ────────────────────────────────────────────────
+vi.mock("@/lib/backend/prisma", () => ({
+  prisma: {
+    user:  { findUnique: vi.fn().mockResolvedValue({ activo: true, grupo: { activo: true } }) },
+    grupo: { findUnique: vi.fn().mockResolvedValue({ activo: true, grupo: { activo: true } }) },
+  },
+}))
+
 vi.mock("@/lib/backend/services/config.service", () => ({
   getConfig:    vi.fn(),
   updateConfig: vi.fn(),
@@ -42,8 +49,8 @@ let adminToken: string
 let qaToken:    string
 
 beforeAll(async () => {
-  adminToken = await signToken({ sub: "usr-001", email: "admin@empresa.com", nombre: "Admin", rol: "admin" })
-  qaToken    = await signToken({ sub: "usr-006", email: "maria@empresa.com", nombre: "Maria", rol: "qa" })
+  adminToken = await signToken({ sub: "usr-001", email: "admin@empresa.com", nombre: "Admin", rol: "admin", grupoId: "grupo-test" })
+  qaToken    = await signToken({ sub: "usr-006", email: "maria@empresa.com", nombre: "Maria", rol: "qa", grupoId: "grupo-test" })
 })
 
 // ── GET /api/config ──────────────────────────────────────

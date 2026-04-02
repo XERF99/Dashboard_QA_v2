@@ -8,6 +8,7 @@
 
 import { jwtVerify, SignJWT } from "jose"
 import { NextRequest, NextResponse } from "next/server"
+import { prisma } from "@/lib/backend/prisma"
 
 const rawSecret = process.env.JWT_SECRET
 
@@ -22,7 +23,7 @@ const JWT_SECRET = new TextEncoder().encode(
   rawSecret ?? "tcs-dashboard-dev-secret-only-for-local-dev"
 )
 
-export const JWT_EXPIRY = "8h"
+export const JWT_EXPIRY = "2h"
 
 export interface JWTPayload {
   sub: string      // user id
@@ -72,6 +73,32 @@ export async function requireAuth(
   if (!payload) {
     return NextResponse.json({ error: "Token inválido o expirado" }, { status: 401 })
   }
+
+  // Verifica usuario + grupo en una sola query usando include.
+  // (invalida sesiones cuando un admin desactiva la cuenta o el Owner desactiva el grupo)
+  const dbUser = await prisma.user.findUnique({
+    where:  { id: payload.sub },
+    select: { activo: true, grupo: { select: { activo: true } } },
+  })
+  if (!dbUser || !dbUser.activo) {
+    return NextResponse.json({ error: "Tu cuenta está desactivada. Contacta al administrador.", code: "CUENTA_INACTIVA" }, { status: 403 })
+  }
+
+  // Non-owner sin workspace: bloquear acceso a todos los endpoints de negocio.
+  // Las rutas de autenticación (/api/auth/*) quedan exentas para permitir logout
+  // y el check de sesión sin entrar en bucle infinito.
+  if (payload.rol !== "owner" && !payload.grupoId && !request.nextUrl.pathname.startsWith("/api/auth/")) {
+    return NextResponse.json(
+      { error: "Tu cuenta no tiene workspace asignado. Contacta al administrador.", code: "SIN_WORKSPACE" },
+      { status: 403 }
+    )
+  }
+
+  // Si el usuario pertenece a un grupo, verifica que siga activo usando el dato ya cargado
+  if (payload.grupoId && (!dbUser.grupo || !dbUser.grupo.activo)) {
+    return NextResponse.json({ error: "Tu grupo de trabajo está desactivado. Contacta al Owner.", code: "GRUPO_INACTIVO" }, { status: 403 })
+  }
+
   return payload
 }
 

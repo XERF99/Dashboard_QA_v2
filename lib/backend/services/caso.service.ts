@@ -4,34 +4,42 @@
 // ═══════════════════════════════════════════════════════════
 
 import { prisma } from "@/lib/backend/prisma"
+import { Prisma } from "@prisma/client"
 
 function grupoHUFilter(grupoId?: string) {
   return grupoId ? { hu: { grupoId } } : {}
 }
 
-export async function getAllCasos(grupoId?: string) {
-  return prisma.casoPrueba.findMany({
-    where: grupoHUFilter(grupoId),
-    orderBy: { fechaCreacion: "desc" },
-  })
+export async function getAllCasos(grupoId?: string, page = 1, limit = 50) {
+  const skip = (page - 1) * limit
+  const where = grupoHUFilter(grupoId)
+  const [casos, total] = await prisma.$transaction([
+    prisma.casoPrueba.findMany({ where, orderBy: { fechaCreacion: "desc" }, skip, take: limit }),
+    prisma.casoPrueba.count({ where }),
+  ])
+  return { casos, total, page, limit, pages: Math.ceil(total / limit) }
 }
 
 export async function getCasoById(id: string) {
   return prisma.casoPrueba.findUnique({ where: { id }, include: { tareas: true } })
 }
 
-export async function getCasosByHU(huId: string) {
-  return prisma.casoPrueba.findMany({ where: { huId }, orderBy: { fechaCreacion: "asc" } })
+export async function getCasosByHU(huId: string, page = 1, limit = 100) {
+  const skip = (page - 1) * limit
+  const where = { huId }
+  const [casos, total] = await prisma.$transaction([
+    prisma.casoPrueba.findMany({ where, orderBy: { fechaCreacion: "asc" }, skip, take: limit }),
+    prisma.casoPrueba.count({ where }),
+  ])
+  return { casos, total, page, limit, pages: Math.ceil(total / limit) }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function createCaso(data: Record<string, unknown>) {
-  return prisma.casoPrueba.create({ data: data as any })
+export async function createCaso(data: Prisma.CasoPruebaUncheckedCreateInput) {
+  return prisma.casoPrueba.create({ data })
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function updateCaso(id: string, data: Record<string, unknown>) {
-  return prisma.casoPrueba.update({ where: { id }, data: data as any })
+export async function updateCaso(id: string, data: Prisma.CasoPruebaUncheckedUpdateInput) {
+  return prisma.casoPrueba.update({ where: { id }, data })
 }
 
 export async function deleteCaso(id: string) {

@@ -119,7 +119,7 @@ describe("CSVImportCasosModal — parseo y preview", () => {
     await waitFor(() => {
       expect(screen.getByText("OK")).toBeInTheDocument()
     })
-    expect(screen.getByText("1 caso válido")).toBeInTheDocument()
+    expect(screen.getByText(/1 caso válido/)).toBeInTheDocument()
   })
 
   it("HU no encontrada genera error en la fila", async () => {
@@ -132,7 +132,7 @@ describe("CSVImportCasosModal — parseo y preview", () => {
     await waitFor(() => {
       expect(screen.getByText(/HU "HU-999" no encontrada/i)).toBeInTheDocument()
     })
-    expect(screen.getByText("0 casos válidos")).toBeInTheDocument()
+    expect(screen.getByText(/0 casos válidos/)).toBeInTheDocument()
   })
 
   it("fila con título vacío genera error", async () => {
@@ -171,7 +171,7 @@ describe("CSVImportCasosModal — parseo y preview", () => {
     cargarCSV(csv)
 
     await waitFor(() => {
-      expect(screen.getByText("2 casos válidos")).toBeInTheDocument()
+      expect(screen.getByText(/2 casos válidos/)).toBeInTheDocument()
     })
     expect(screen.getByText(/1 con errores/i)).toBeInTheDocument()
   })
@@ -191,7 +191,7 @@ describe("CSVImportCasosModal — importación", () => {
     ])
     cargarCSV(csv)
 
-    await waitFor(() => screen.getByText("2 casos válidos"))
+    await waitFor(() => screen.getByText(/2 casos válidos/))
     fireEvent.click(screen.getByRole("button", { name: /importar 2 casos/i }))
 
     await waitFor(() => expect(onImport).toHaveBeenCalledOnce())
@@ -213,7 +213,7 @@ describe("CSVImportCasosModal — importación", () => {
     const csv = makeCSV([["HU-999", "Huerfano", "", "", "", "", ""]])
     cargarCSV(csv)
 
-    await waitFor(() => screen.getByText("0 casos válidos"))
+    await waitFor(() => screen.getByText(/0 casos válidos/))
     expect(screen.queryByRole("button", { name: /importar/i })).toBeNull()
   })
 
@@ -241,7 +241,7 @@ describe("CSVImportCasosModal — importación", () => {
     ])
     cargarCSV(csv)
 
-    await waitFor(() => screen.getByText("2 casos válidos"))
+    await waitFor(() => screen.getByText(/2 casos válidos/))
     fireEvent.click(screen.getByRole("button", { name: /importar 2 casos/i }))
 
     await waitFor(() => expect(onImport).toHaveBeenCalledOnce())
@@ -260,7 +260,7 @@ describe("CSVImportCasosModal — valores por defecto", () => {
     )
     cargarCSV(makeCSV([["HU-001", "Caso default", "", "", "", "", ""]]))
 
-    await waitFor(() => screen.getByText("1 caso válido"))
+    await waitFor(() => screen.getByText(/1 caso válido/))
     fireEvent.click(screen.getByRole("button", { name: /importar 1 caso/i }))
 
     await waitFor(() => expect(onImport).toHaveBeenCalled())
@@ -274,7 +274,7 @@ describe("CSVImportCasosModal — valores por defecto", () => {
     )
     cargarCSV(makeCSV([["HU-001", "Caso entorno", "", "", "", "", ""]]))
 
-    await waitFor(() => screen.getByText("1 caso válido"))
+    await waitFor(() => screen.getByText(/1 caso válido/))
     fireEvent.click(screen.getByRole("button", { name: /importar 1 caso/i }))
 
     await waitFor(() => expect(onImport).toHaveBeenCalled())
@@ -288,7 +288,7 @@ describe("CSVImportCasosModal — valores por defecto", () => {
     )
     cargarCSV(makeCSV([["HU-001", "Caso horas", "", "", "", "", ""]]))
 
-    await waitFor(() => screen.getByText("1 caso válido"))
+    await waitFor(() => screen.getByText(/1 caso válido/))
     fireEvent.click(screen.getByRole("button", { name: /importar 1 caso/i }))
 
     await waitFor(() => expect(onImport).toHaveBeenCalled())
@@ -302,7 +302,7 @@ describe("CSVImportCasosModal — valores por defecto", () => {
     )
     cargarCSV(makeCSV([["HU-001", "Caso aprobacion", "", "", "", "", ""]]))
 
-    await waitFor(() => screen.getByText("1 caso válido"))
+    await waitFor(() => screen.getByText(/1 caso válido/))
     fireEvent.click(screen.getByRole("button", { name: /importar 1 caso/i }))
 
     await waitFor(() => expect(onImport).toHaveBeenCalled())

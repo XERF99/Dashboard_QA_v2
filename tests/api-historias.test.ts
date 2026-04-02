@@ -3,7 +3,7 @@
 //  TESTS — /api/historias  (CRUD + sync)
 // ═══════════════════════════════════════════════════════════
 
-import { describe, it, expect, vi, beforeAll } from "vitest"
+import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest"
 import { NextRequest } from "next/server"
 import { signToken } from "@/lib/backend/middleware/auth.middleware"
 
@@ -18,11 +18,16 @@ vi.mock("@/lib/backend/services/historia.service", () => ({
 
 vi.mock("@/lib/backend/prisma", () => ({
   prisma: {
+    user:            { findUnique: vi.fn().mockResolvedValue({ activo: true, grupo: { activo: true } }) },
     historiaUsuario: {
+      findUnique:  vi.fn(),
       deleteMany:  vi.fn(),
       findMany:    vi.fn(),
       createMany:  vi.fn(),
       update:      vi.fn(),
+    },
+    grupo: {
+      findUnique: vi.fn().mockResolvedValue({ activo: true, grupo: { activo: true } }),
     },
     $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) =>
       fn({
@@ -38,9 +43,10 @@ vi.mock("@/lib/backend/prisma", () => ({
 }))
 
 import {
-  getAllHistorias, createHistoria, getHistoriaById,
+  getAllHistorias, createHistoria,
   updateHistoria, deleteHistoria,
 } from "@/lib/backend/services/historia.service"
+import { prisma } from "@/lib/backend/prisma"
 import { GET, POST }         from "@/app/api/historias/route"
 import { GET as getById, PUT, DELETE } from "@/app/api/historias/[id]/route"
 import { POST as syncPOST }  from "@/app/api/historias/sync/route"
@@ -72,10 +78,22 @@ const huCreateBody = {
   tipoAplicacion: "web", creadoPor: "usr-001",
 }
 
-let token: string
+let token:      string
+let syncToken:  string
+let ownerToken: string
 
 beforeAll(async () => {
-  token = await signToken({ sub: "usr-001", email: "admin@empresa.com", nombre: "Admin", rol: "admin" })
+  token      = await signToken({ sub: "usr-001", email: "admin@empresa.com", nombre: "Admin", rol: "admin", grupoId: "grupo-test" })
+  syncToken  = await signToken({ sub: "usr-001", email: "admin@empresa.com", nombre: "Admin", rol: "admin", grupoId: "grupo-test" })
+  ownerToken = await signToken({ sub: "usr-000", email: "owner@empresa.com",  nombre: "Owner", rol: "owner" })
+})
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  vi.mocked(prisma.user.findUnique).mockResolvedValue({ activo: true, grupo: { activo: true } } as never)
+  ;(prisma as unknown as { grupo: { findUnique: ReturnType<typeof vi.fn> } }).grupo.findUnique
+    .mockResolvedValue({ activo: true, grupo: { activo: true } })
+  vi.mocked(prisma.historiaUsuario.findUnique).mockResolvedValue({ grupoId: "grupo-test" } as never)
 })
 
 // ── GET /api/historias ───────────────────────────────────
@@ -87,7 +105,9 @@ describe("GET /api/historias", () => {
   })
 
   it("lista todas las historias → 200", async () => {
-    vi.mocked(getAllHistorias).mockResolvedValueOnce([huBase] as never)
+    vi.mocked(getAllHistorias).mockResolvedValueOnce(
+      { historias: [huBase], total: 1, page: 1, limit: 50, pages: 1 } as never
+    )
 
     const res  = await GET(makeReq("GET", "/api/historias", undefined, token))
     const data = await res.json()
@@ -121,7 +141,7 @@ describe("POST /api/historias", () => {
 
 describe("GET /api/historias/[id]", () => {
   it("historia no encontrada → 404", async () => {
-    vi.mocked(getHistoriaById).mockResolvedValueOnce(null)
+    vi.mocked(prisma.historiaUsuario.findUnique).mockResolvedValueOnce(null)
 
     const res = await getById(
       makeReq("GET", "/api/historias/hu-x", undefined, token),
@@ -131,7 +151,7 @@ describe("GET /api/historias/[id]", () => {
   })
 
   it("historia encontrada → 200", async () => {
-    vi.mocked(getHistoriaById).mockResolvedValueOnce(huBase as never)
+    vi.mocked(prisma.historiaUsuario.findUnique).mockResolvedValueOnce({ ...huBase, grupoId: "grupo-test", casos: [] } as never)
 
     const res  = await getById(
       makeReq("GET", "/api/historias/hu-1", undefined, token),
@@ -188,7 +208,7 @@ describe("POST /api/historias/sync", () => {
 
   it("sincroniza array completo → 200 con count", async () => {
     const res  = await syncPOST(
-      makeReq("POST", "/api/historias/sync", { historias: [huBase, { ...huBase, id: "hu-2", codigo: "HU-002" }] }, token)
+      makeReq("POST", "/api/historias/sync", { historias: [huBase, { ...huBase, id: "hu-2", codigo: "HU-002" }] }, syncToken)
     )
     const data = await res.json()
 

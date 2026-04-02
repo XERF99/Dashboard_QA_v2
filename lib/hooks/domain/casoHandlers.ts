@@ -43,7 +43,7 @@ export function createCasoHandlers({ historias, casos, tareas, setHistorias, set
     const hu = historias.find(h => h.id === huId)
     addNotificacion("aprobacion_enviada", "Casos enviados a aprobación",
       `${user?.nombre || "QA"} envió todos los casos de la HU "${hu?.titulo || huId}" para aprobación`,
-      "admin", { huId, huTitulo: hu?.titulo })
+      "admin", { huId, huTitulo: hu?.titulo, grupoId: user?.grupoId ?? undefined })
   }
 
   const handleEnviarCasoAprobacion = (casoId: string, huId: string) => {
@@ -58,7 +58,7 @@ export function createCasoHandlers({ historias, casos, tareas, setHistorias, set
     addToast({ type: "info", title: "Caso enviado", desc: "Pendiente de aprobación" })
     addNotificacion("aprobacion_enviada", "Caso enviado a aprobación",
       `${user?.nombre || "QA"} envió el caso "${caso?.titulo || casoId}" de la HU "${hu?.titulo || huId}" para aprobación`,
-      "admin", { casoId, huId, casoTitulo: caso?.titulo, huTitulo: hu?.titulo })
+      "admin", { casoId, huId, casoTitulo: caso?.titulo, huTitulo: hu?.titulo, grupoId: user?.grupoId ?? undefined })
   }
 
   const handleAprobarCasos = (huId: string) => {
@@ -72,7 +72,7 @@ export function createCasoHandlers({ historias, casos, tareas, setHistorias, set
     const hu = historias.find(h => h.id === huId)
     addNotificacion("caso_aprobado", "Casos aprobados",
       `Admin aprobó todos los casos de la HU "${hu?.titulo || huId}"`,
-      "qa", { huId, huTitulo: hu?.titulo })
+      "qa", { huId, huTitulo: hu?.titulo, grupoId: user?.grupoId ?? undefined })
   }
 
   const handleRechazarCasos = (huId: string, motivo: string) => {
@@ -86,7 +86,7 @@ export function createCasoHandlers({ historias, casos, tareas, setHistorias, set
     const hu = historias.find(h => h.id === huId)
     addNotificacion("caso_rechazado", "Casos rechazados",
       `Admin rechazó los casos de la HU "${hu?.titulo || huId}": ${motivo.slice(0, 80)}`,
-      "qa", { huId, huTitulo: hu?.titulo })
+      "qa", { huId, huTitulo: hu?.titulo, grupoId: user?.grupoId ?? undefined })
   }
 
   const handleSolicitarModificacionCaso = (casoId: string, huId: string) => {
@@ -98,7 +98,7 @@ export function createCasoHandlers({ historias, casos, tareas, setHistorias, set
     addToast({ type: "info", title: "Modificación solicitada", desc: "El admin puede habilitar el cambio" })
     addNotificacion("modificacion_solicitada", "Solicitud de modificación",
       `${user?.nombre || "QA"} solicita modificar el caso aprobado "${caso?.titulo || casoId}" de la HU "${hu?.titulo || huId}"`,
-      "admin", { casoId, huId, casoTitulo: caso?.titulo, huTitulo: hu?.titulo })
+      "admin", { casoId, huId, casoTitulo: caso?.titulo, huTitulo: hu?.titulo, grupoId: user?.grupoId ?? undefined })
   }
 
   const handleHabilitarModificacionCaso = (casoId: string, huId: string) => {
@@ -112,7 +112,7 @@ export function createCasoHandlers({ historias, casos, tareas, setHistorias, set
     addToast({ type: "success", title: "Modificación habilitada", desc: "QA puede editar el caso" })
     addNotificacion("modificacion_habilitada", "Modificación habilitada",
       `Admin habilitó la modificación del caso "${caso?.titulo || casoId}" de la HU "${hu?.titulo || huId}"`,
-      "qa", { casoId, huId, casoTitulo: caso?.titulo, huTitulo: hu?.titulo })
+      "qa", { casoId, huId, casoTitulo: caso?.titulo, huTitulo: hu?.titulo, grupoId: user?.grupoId ?? undefined })
   }
 
   const handleIniciarEjecucion = (huId: string, etapa: EtapaEjecucion) => {

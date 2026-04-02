@@ -2,6 +2,7 @@
 
 import { Component, type ReactNode, type ErrorInfo } from "react"
 import { AlertTriangle, RefreshCw } from "lucide-react"
+import { clientError } from "@/lib/client-logger"
 
 interface Props {
   children: ReactNode
@@ -20,8 +21,10 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error("[ErrorBoundary] Error capturado:", error.message)
-    console.error("[ErrorBoundary] Árbol de componentes:", info.componentStack)
+    clientError("ErrorBoundary", error.message, {
+      ...error,
+      componentStack: info.componentStack ?? "",
+    })
   }
 
   private handleRetry = () => this.setState({ hasError: false, error: undefined })

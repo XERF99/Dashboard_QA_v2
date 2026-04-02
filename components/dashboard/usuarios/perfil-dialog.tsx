@@ -47,12 +47,12 @@ export function PerfilDialog({ open, onClose }: PerfilDialogProps) {
     }
   }
 
-  const handleCambiarPassword = (e: React.FormEvent) => {
+  const handleCambiarPassword = async (e: React.FormEvent) => {
     e.preventDefault()
     setPassMsg(null)
     if (!nuevaPass) { setPassMsg({ ok: false, text: "Ingresa la nueva contraseña" }); return }
     if (nuevaPass !== confirmarPass) { setPassMsg({ ok: false, text: "Las contraseñas no coinciden" }); return }
-    const result = cambiarPassword(actualPass, nuevaPass)
+    const result = await cambiarPassword(actualPass, nuevaPass)
     if (result.success) {
       setPassMsg({ ok: true, text: "Contraseña actualizada correctamente" })
       setActualPass(""); setNuevaPass(""); setConfirmarPass("")

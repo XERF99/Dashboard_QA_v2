@@ -7,7 +7,7 @@
 import bcrypt from "bcryptjs"
 import { prisma } from "@/lib/backend/prisma"
 import { signToken } from "@/lib/backend/middleware/auth.middleware"
-import { PASSWORD_GENERICA } from "@/lib/contexts/auth-context"
+import { PASSWORD_GENERICA } from "@/lib/constants"
 
 const MAX_INTENTOS = 5
 const SALT_ROUNDS  = 10
@@ -20,6 +20,8 @@ export async function loginService(email: string, password: string) {
   if (!user)        return { success: false, error: "Credenciales inválidas." } as const
   if (!user.activo) return { success: false, error: "Tu cuenta está desactivada. Contacta al administrador." } as const
   if (user.bloqueado) return { success: false, error: "Tu cuenta está bloqueada por demasiados intentos fallidos." } as const
+  if (user.grupo && !user.grupo.activo) return { success: false, error: "Tu grupo de trabajo está desactivado. Contacta al Owner." } as const
+  if (user.rol !== "owner" && !user.grupoId) return { success: false, error: "Tu cuenta no tiene workspace asignado. Contacta al administrador.", code: "SIN_WORKSPACE" } as const
 
   const valid = await bcrypt.compare(password, user.passwordHash)
 

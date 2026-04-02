@@ -55,6 +55,7 @@ function mockFetch(overrides: Record<string, unknown> = {}) {
   global.fetch = vi.fn(async (url: string | URL | Request) => {
     const u = url.toString()
     if (u === "/api/grupos")              return { ok: true, json: async () => ({ grupos: [grupoAlpha, gruposBeta] }) }
+    if (u === "/api/users")               return { ok: true, json: async () => ({ users: [] }) }
     if (u === `/api/grupos/g-1/metricas`) return { ok: true, json: async () => ({ metricas: metricasAlpha }) }
     if (u === `/api/grupos/g-2/metricas`) return { ok: true, json: async () => ({ metricas: metricasBeta }) }
     return { ok: true, json: async () => ({}) }
@@ -74,7 +75,8 @@ describe("OwnerPanel — renderizado inicial", () => {
 
   it("muestra la tarjeta del Equipo Alpha", async () => {
     render(<OwnerPanel />)
-    await waitFor(() => expect(screen.getByText("Equipo Alpha")).toBeInTheDocument())
+    // Alpha appears in both the sidebar button and the detail panel header (auto-selected)
+    await waitFor(() => expect(screen.getAllByText("Equipo Alpha").length).toBeGreaterThan(0))
   })
 
   it("muestra la tarjeta del Equipo Beta", async () => {
@@ -82,9 +84,12 @@ describe("OwnerPanel — renderizado inicial", () => {
     await waitFor(() => expect(screen.getByText("Equipo Beta")).toBeInTheDocument())
   })
 
-  it("muestra badge INACTIVO para grupos no activos", async () => {
+  it("muestra badge Inactivo para grupos no activos", async () => {
     render(<OwnerPanel />)
-    await waitFor(() => expect(screen.getByText("INACTIVO")).toBeInTheDocument())
+    // Click Beta in the sidebar to load its detail panel, which shows the "Inactivo" badge
+    await waitFor(() => screen.getByText("Equipo Beta"))
+    fireEvent.click(screen.getByText("Equipo Beta"))
+    await waitFor(() => expect(screen.getByText("Inactivo")).toBeInTheDocument())
   })
 
   it("muestra el botón Nuevo grupo", async () => {
@@ -109,16 +114,16 @@ describe("OwnerPanel — métricas", () => {
   it("muestra la barra de progreso de HUs para grupos con datos", async () => {
     render(<OwnerPanel />)
     await waitFor(() => {
-      expect(screen.getByText("Progreso HUs")).toBeInTheDocument()
+      expect(screen.getByText("Progreso de Historias")).toBeInTheDocument()
       expect(screen.getByText(/70%/)).toBeInTheDocument() // 7/10 exitosas
     })
   })
 
   it("no muestra barra de progreso para grupos sin HUs", async () => {
     render(<OwnerPanel />)
-    await waitFor(() => screen.getByText("Equipo Beta"))
-    // Solo Alpha tiene Progreso HUs
-    const progBarItems = screen.queryAllByText("Progreso HUs")
+    await waitFor(() => screen.getAllByText("Equipo Beta"))
+    // Alpha is auto-selected so its progress bar is visible; Beta has no HUs
+    const progBarItems = screen.queryAllByText("Progreso de Historias")
     expect(progBarItems).toHaveLength(1)
   })
 })
@@ -132,7 +137,8 @@ describe("OwnerPanel — formulario crear grupo", () => {
     render(<OwnerPanel />)
     await waitFor(() => screen.getByText("Nuevo grupo"))
     fireEvent.click(screen.getByText("Nuevo grupo"))
-    expect(screen.getByText("Nuevo grupo", { selector: "h3" })).toBeInTheDocument()
+    // Dialog opens — check that the name input appears
+    await waitFor(() => expect(screen.getByPlaceholderText(/Ej: Equipo/i)).toBeInTheDocument())
   })
 
   it("el botón Crear está deshabilitado con nombre vacío", async () => {
@@ -162,16 +168,19 @@ describe("OwnerPanel — formulario crear grupo", () => {
   it("llama POST /api/grupos al crear un grupo", async () => {
     global.fetch = vi.fn(async (url: string | URL | Request, options?: RequestInit) => {
       const u = url.toString()
-      if (u === "/api/grupos" && (!options || options.method === undefined || options.method === "GET"))
-        return { ok: true, json: async () => ({ grupos: [] }) }
       if (u === "/api/grupos" && options?.method === "POST")
         return { ok: true, json: async () => ({ grupo: grupoAlpha }) }
-      return { ok: true, json: async () => ({}) }
+      if (u === "/api/grupos/g-1/metricas") return { ok: true, json: async () => ({ metricas: metricasAlpha }) }
+      if (u === "/api/grupos/g-2/metricas") return { ok: true, json: async () => ({ metricas: metricasBeta }) }
+      if (u === "/api/users") return { ok: true, json: async () => ({ users: [] }) }
+      // Default GET /api/grupos: return both groups so sidebar shows "Nuevo grupo" button
+      return { ok: true, json: async () => ({ grupos: [grupoAlpha, gruposBeta] }) }
     }) as unknown as typeof fetch
 
     render(<OwnerPanel />)
-    await waitFor(() => screen.getByText("Nuevo grupo"))
-    fireEvent.click(screen.getByText("Nuevo grupo"))
+    // "Nuevo grupo" button is in the sidebar; click the first occurrence
+    await waitFor(() => screen.getAllByText("Nuevo grupo"))
+    fireEvent.click(screen.getAllByText("Nuevo grupo")[0])
     fireEvent.change(screen.getByPlaceholderText(/Ej: Equipo/i), { target: { value: "Equipo Gamma" } })
     fireEvent.click(screen.getByRole("button", { name: /crear grupo/i }))
 
@@ -179,7 +188,7 @@ describe("OwnerPanel — formulario crear grupo", () => {
       const calls = (global.fetch as ReturnType<typeof vi.fn>).mock.calls
       const postCall = calls.find((c: unknown[]) => {
         const opts = c[1] as RequestInit | undefined
-        return opts?.method === "POST"
+        return opts?.method === "POST" && (c[0] as string) === "/api/grupos"
       })
       expect(postCall).toBeTruthy()
     })
@@ -193,16 +202,18 @@ describe("OwnerPanel — eliminar grupo", () => {
 
   it("muestra confirmación al hacer clic en eliminar", async () => {
     render(<OwnerPanel />)
-    await waitFor(() => screen.getByText("Equipo Alpha"))
+    // Alpha appears in sidebar + detail panel; wait for either
+    await waitFor(() => screen.getAllByText("Equipo Alpha"))
     const deleteButtons = document.querySelectorAll("button[title='Eliminar grupo']")
     fireEvent.click(deleteButtons[0])
-    expect(screen.getByText("Eliminar grupo")).toBeInTheDocument()
+    // Dialog title + confirm button both say "Eliminar grupo"
+    expect(screen.getAllByText("Eliminar grupo").length).toBeGreaterThan(0)
     expect(screen.getByText(/Esta acción es irreversible/i)).toBeInTheDocument()
   })
 
   it("cancela la eliminación al hacer clic en Cancelar", async () => {
     render(<OwnerPanel />)
-    await waitFor(() => screen.getByText("Equipo Alpha"))
+    await waitFor(() => screen.getAllByText("Equipo Alpha"))
     const deleteButtons = document.querySelectorAll("button[title='Eliminar grupo']")
     fireEvent.click(deleteButtons[0])
     fireEvent.click(screen.getByRole("button", { name: /cancelar/i }))
@@ -223,7 +234,7 @@ describe("OwnerPanel — estado vacío", () => {
     await waitFor(() =>
       expect(screen.getByText("No hay grupos creados")).toBeInTheDocument()
     )
-    expect(screen.getByText(/Crea un grupo para que los administradores/i)).toBeInTheDocument()
+    expect(screen.getByText(/Crea el primer workspace/i)).toBeInTheDocument()
   })
 })
 
