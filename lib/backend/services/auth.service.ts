@@ -70,8 +70,8 @@ export async function logoutService(userId: string) {
   if (!user) return
 
   const historial = (user.historialConexiones as { entrada: string; salida?: string }[]) ?? []
-  if (historial.length > 0 && !historial[historial.length - 1].salida) {
-    historial[historial.length - 1].salida = new Date().toISOString()
+  if (historial.length > 0 && !historial[historial.length - 1]!.salida) {
+    historial[historial.length - 1]!.salida = new Date().toISOString()
   }
   await prisma.user.update({ where: { id: userId }, data: { historialConexiones: historial } })
 }

@@ -12,12 +12,10 @@ import { PRIORIDAD_CFG, fmtCorto } from "@/lib/types"
 import type { HistoriaUsuario, CasoPrueba, Tarea } from "@/lib/types"
 import { Paginador } from "@/components/ui/paginator"
 
-// ── Escape HTML para evitar XSS en exportaciones PDF ──────
 function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;")
 }
 
-// ── Tipos internos ───────────────────────────────────────────
 type NivelBloqueo  = "hu" | "caso" | "tarea"
 type FiltroEstado  = "activos" | "resueltos" | "todos"
 type FiltroNivel   = "todos" | "hu" | "caso" | "tarea"
@@ -32,7 +30,6 @@ interface BloqueoEnriquecido {
   fechaResolucion?: Date
   resueltoPor?: string
   notaResolucion?: string
-  // contexto
   nivel: NivelBloqueo
   huId: string
   huCodigo: string
@@ -56,14 +53,12 @@ interface BloqueoPanelProps {
   canEdit?: boolean
 }
 
-// ── Configuración visual por nivel ───────────────────────────
 const NIVEL_CFG: Record<NivelBloqueo, { label: string; color: string; bg: string; border: string; icon: React.ReactNode }> = {
   hu:    { label: "Historia de Usuario", color: "var(--primary)",  bg: "color-mix(in oklch, var(--primary) 10%, transparent)",  border: "var(--primary)",  icon: <BookOpen size={12}/> },
   caso:  { label: "Caso de Prueba",      color: "var(--chart-2)",  bg: "color-mix(in oklch, var(--chart-2) 10%, transparent)",  border: "var(--chart-2)",  icon: <FlaskConical size={12}/> },
   tarea: { label: "Tarea",               color: "var(--chart-3)",  bg: "color-mix(in oklch, var(--chart-3) 10%, transparent)",  border: "var(--chart-3)",  icon: <ListTodo size={12}/> },
 }
 
-// ── Fila de un bloqueo individual ────────────────────────────
 function BloqueoRow({
   item, onResolver, onVerHU, canEdit,
 }: {
@@ -85,83 +80,81 @@ function BloqueoRow({
   }
 
   return (
-    <div style={{
-      border: `1px solid ${activo ? "color-mix(in oklch, var(--chart-4) 40%, var(--border))" : "var(--border)"}`,
-      borderLeft: `3px solid ${activo ? "var(--chart-4)" : "var(--muted-foreground)"}`,
-      borderRadius: 10,
-      background: "var(--card)",
-      overflow: "hidden",
-      opacity: activo ? 1 : 0.65,
-    }}>
-      {/* Fila principal */}
-      <div style={{ padding: "12px 14px", display: "flex", gap: 12, alignItems: "flex-start" }}>
-
-        {/* Ícono de nivel */}
-        <div style={{
-          width: 34, height: 34, borderRadius: "50%", flexShrink: 0,
-          background: cfg.bg, color: cfg.color,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          border: `1px solid color-mix(in oklch, ${cfg.border} 40%, transparent)`,
-        }}>
+    <div
+      className={`rounded-[10px] bg-card overflow-hidden ${activo ? "opacity-100" : "opacity-65"}`}
+      style={{
+        border: `1px solid ${activo ? "color-mix(in oklch, var(--chart-4) 40%, var(--border))" : "var(--border)"}`,
+        borderLeft: `3px solid ${activo ? "var(--chart-4)" : "var(--muted-foreground)"}`,
+      }}
+    >
+      <div className="px-3.5 py-3 flex gap-3 items-start">
+        <div
+          className="w-8.5 h-8.5 rounded-full shrink-0 flex items-center justify-center"
+          style={{
+            background: cfg.bg,
+            color: cfg.color,
+            border: `1px solid color-mix(in oklch, ${cfg.border} 40%, transparent)`,
+          }}
+        >
           {cfg.icon}
         </div>
 
-        {/* Contenido */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          {/* Nivel + HU + prioridad */}
-          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 4 }}>
-            <Badge variant="outline" style={{ fontSize: 9, padding: "1px 6px", color: cfg.color, borderColor: `color-mix(in oklch, ${cfg.border} 50%, transparent)`, background: cfg.bg, flexShrink: 0 }}>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 flex-wrap mb-1">
+            <Badge
+              variant="outline"
+              className="text-[9px] px-1.5 py-px shrink-0"
+              style={{ color: cfg.color, borderColor: `color-mix(in oklch, ${cfg.border} 50%, transparent)`, background: cfg.bg }}
+            >
               {cfg.label}
             </Badge>
-            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--primary)", fontFamily: "monospace", flexShrink: 0 }}>
+            <span className="text-[11px] font-bold text-primary font-mono shrink-0">
               {item.huCodigo}
             </span>
-            <span style={{ fontSize: 12, fontWeight: 600, color: "var(--foreground)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <span className="text-xs font-semibold text-foreground overflow-hidden text-ellipsis whitespace-nowrap">
               {item.huTitulo}
             </span>
             {prioridadCfg && (
-              <Badge variant="outline" className={`${prioridadCfg.cls} text-[9px] shrink-0`} style={{ padding: "1px 6px" }}>
+              <Badge variant="outline" className={`${prioridadCfg.cls} text-[9px] shrink-0 px-1.5 py-px`}>
                 {prioridadCfg.label}
               </Badge>
             )}
           </div>
 
-          {/* Sub-contexto: caso / tarea */}
           {(item.casoTitulo || item.tareaTitulo) && (
-            <p style={{ fontSize: 11, color: "var(--muted-foreground)", marginBottom: 4 }}>
-              {item.casoTitulo && <><span style={{ fontWeight: 600 }}>Caso:</span> {item.casoTitulo}</>}
-              {item.tareaTitulo && <> · <span style={{ fontWeight: 600 }}>Tarea:</span> {item.tareaTitulo}</>}
+            <p className="text-[11px] text-muted-foreground mb-1">
+              {item.casoTitulo && <><span className="font-semibold">Caso:</span> {item.casoTitulo}</>}
+              {item.tareaTitulo && <> · <span className="font-semibold">Tarea:</span> {item.tareaTitulo}</>}
             </p>
           )}
 
-          {/* Descripción del bloqueo */}
-          <p style={{ fontSize: 13, fontWeight: 500, color: activo ? "var(--foreground)" : "var(--muted-foreground)", marginBottom: 6, lineHeight: 1.4 }}>
+          <p className={`text-[13px] font-medium mb-1.5 leading-[1.4] ${activo ? "text-foreground" : "text-muted-foreground"}`}>
             {item.descripcion}
           </p>
 
-          {/* Metadata */}
-          <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
-            <span style={{ fontSize: 11, color: "var(--muted-foreground)" }}>
-              Reportado por <span style={{ fontWeight: 600 }}>{item.reportadoPor}</span>
+          <div className="flex gap-3.5 flex-wrap">
+            <span className="text-[11px] text-muted-foreground">
+              Reportado por <span className="font-semibold">{item.reportadoPor}</span>
             </span>
-            <span style={{ fontSize: 11, color: "var(--muted-foreground)" }}>
+            <span className="text-[11px] text-muted-foreground">
               {fmtCorto(item.fecha)}
             </span>
-            <span style={{ fontSize: 11, color: "var(--muted-foreground)" }}>
-              Responsable HU: <span style={{ fontWeight: 600 }}>{item.huResponsable}</span>
+            <span className="text-[11px] text-muted-foreground">
+              Responsable HU: <span className="font-semibold">{item.huResponsable}</span>
             </span>
           </div>
 
-          {/* Nota de resolución */}
           {item.resuelto && (item.notaResolucion || item.resueltoPor) && (
-            <div style={{
-              marginTop: 8, padding: "6px 10px", borderRadius: 7,
-              background: "color-mix(in oklch, var(--chart-2) 8%, transparent)",
-              border: "1px solid color-mix(in oklch, var(--chart-2) 25%, transparent)",
-            }}>
-              <p style={{ fontSize: 11, color: "var(--chart-2)", lineHeight: 1.5 }}>
-                <CheckCircle2 size={11} style={{ display: "inline", marginRight: 4, verticalAlign: "middle" }}/>
-                {item.notaResolucion && <><span style={{ fontWeight: 600 }}>Resolución:</span> {item.notaResolucion}</>}
+            <div
+              className="mt-2 px-2.5 py-1.5 rounded-[7px]"
+              style={{
+                background: "color-mix(in oklch, var(--chart-2) 8%, transparent)",
+                border: "1px solid color-mix(in oklch, var(--chart-2) 25%, transparent)",
+              }}
+            >
+              <p className="text-[11px] text-chart-2 leading-normal">
+                <CheckCircle2 size={11} className="inline mr-1 align-middle"/>
+                {item.notaResolucion && <><span className="font-semibold">Resolución:</span> {item.notaResolucion}</>}
                 {item.resueltoPor && <> · Por {item.resueltoPor}</>}
                 {item.fechaResolucion && <> · {fmtCorto(item.fechaResolucion)}</>}
               </p>
@@ -169,10 +162,9 @@ function BloqueoRow({
           )}
         </div>
 
-        {/* Acciones */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 5, flexShrink: 0, alignItems: "flex-end" }}>
+        <div className="flex flex-col gap-1.5 shrink-0 items-end">
           {item.resuelto ? (
-            <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "var(--chart-2)", fontWeight: 600 }}>
+            <div className="flex items-center gap-1 text-[11px] text-chart-2 font-semibold">
               <CheckCircle2 size={12}/> Resuelto
             </div>
           ) : (
@@ -181,8 +173,7 @@ function BloqueoRow({
                 <button
                   onClick={onVerHU}
                   title="Ver Historia de Usuario"
-                  style={{ background: "none", border: "1px solid var(--border)", borderRadius: 6, cursor: "pointer", padding: "4px 8px", fontSize: 11, color: "var(--muted-foreground)", display: "flex", alignItems: "center", gap: 3 }}
-                  className="hover:bg-secondary hover:text-foreground"
+                  className="bg-transparent border border-border rounded-md cursor-pointer px-2 py-1 text-[11px] text-muted-foreground flex items-center gap-0.75 hover:bg-secondary hover:text-foreground"
                 >
                   <Eye size={11}/> Ver HU
                 </button>
@@ -190,8 +181,8 @@ function BloqueoRow({
               {canEdit && (
                 <button
                   onClick={() => setResolviendo(v => !v)}
-                  style={{ background: "none", border: "1px solid color-mix(in oklch, var(--chart-2) 50%, transparent)", borderRadius: 6, cursor: "pointer", padding: "4px 8px", fontSize: 11, color: "var(--chart-2)", fontWeight: 600, display: "flex", alignItems: "center", gap: 3 }}
-                  className="hover:bg-chart-2/10"
+                  className="bg-transparent rounded-md cursor-pointer px-2 py-1 text-[11px] text-chart-2 font-semibold flex items-center gap-0.75 hover:bg-chart-2/10"
+                  style={{ border: "1px solid color-mix(in oklch, var(--chart-2) 50%, transparent)" }}
                 >
                   <CheckCircle2 size={11}/> Resolver
                 </button>
@@ -201,25 +192,24 @@ function BloqueoRow({
         </div>
       </div>
 
-      {/* Formulario inline de resolución */}
       {resolviendo && (
-        <div style={{ padding: "0 14px 12px 14px", paddingTop: 10, borderTop: "1px solid var(--border)", background: "var(--background)" }}>
-          <p style={{ fontSize: 11, color: "var(--muted-foreground)", marginBottom: 6 }}>
-            Nota de resolución <span style={{ opacity: 0.6 }}>(opcional)</span>
+        <div className="px-3.5 pb-3 pt-2.5 border-t border-border bg-background">
+          <p className="text-[11px] text-muted-foreground mb-1.5">
+            Nota de resolución <span className="opacity-60">(opcional)</span>
           </p>
-          <div style={{ display: "flex", gap: 8 }}>
+          <div className="flex gap-2">
             <Input
               value={nota}
               onChange={e => setNota(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter") handleConfirmar() }}
               placeholder="Describe cómo se resolvió el bloqueo..."
-              style={{ height: 32, fontSize: 12, flex: 1 }}
+              className="h-8 text-xs flex-1"
               autoFocus
             />
-            <Button size="sm" onClick={handleConfirmar} style={{ height: 32, flexShrink: 0 }}>
+            <Button size="sm" onClick={handleConfirmar} className="h-8 shrink-0">
               Confirmar
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setResolviendo(false)} style={{ height: 32, flexShrink: 0 }}>
+            <Button variant="outline" size="sm" onClick={() => setResolviendo(false)} className="h-8 shrink-0">
               Cancelar
             </Button>
           </div>
@@ -231,7 +221,6 @@ function BloqueoRow({
 
 const PAGE_SIZE = 20
 
-// ── Componente principal ──────────────────────────────────────
 export function BloqueosPanel({
   historias, casos, tareas,
   onResolverBloqueoHU, onResolverBloqueoCaso, onResolverBloqueoTarea,
@@ -241,25 +230,22 @@ export function BloqueosPanel({
   const [filtroNivel,  setFiltroNivel]  = useState<FiltroNivel>("todos")
   const [pagina,       setPagina]       = useState(1)
 
-  // ── Construir lista plana de todos los bloqueos con contexto ──
   const todos: BloqueoEnriquecido[] = useMemo(() => {
     const result: BloqueoEnriquecido[] = []
 
-    // Nivel HU
     for (const hu of historias) {
       for (const b of hu.bloqueos) {
         result.push({
           key: `hu-${hu.id}-${b.id}`, id: b.id,
           descripcion: b.descripcion, reportadoPor: b.reportadoPor,
           fecha: b.fecha, resuelto: b.resuelto,
-          fechaResolucion: b.fechaResolucion, resueltoPor: b.resueltoPor, notaResolucion: b.notaResolucion,
+          fechaResolucion: b.resuelto ? b.fechaResolucion : undefined, resueltoPor: b.resuelto ? b.resueltoPor : undefined, notaResolucion: b.resuelto ? b.notaResolucion : undefined,
           nivel: "hu", huId: hu.id, huCodigo: hu.codigo,
           huTitulo: hu.titulo, huResponsable: hu.responsable, huPrioridad: hu.prioridad,
         })
       }
     }
 
-    // Nivel Caso de Prueba
     for (const c of casos) {
       const hu = historias.find(h => h.id === c.huId)
       if (!hu) continue
@@ -268,7 +254,7 @@ export function BloqueosPanel({
           key: `caso-${c.id}-${b.id}`, id: b.id,
           descripcion: b.descripcion, reportadoPor: b.reportadoPor,
           fecha: b.fecha, resuelto: b.resuelto,
-          fechaResolucion: b.fechaResolucion, resueltoPor: b.resueltoPor, notaResolucion: b.notaResolucion,
+          fechaResolucion: b.resuelto ? b.fechaResolucion : undefined, resueltoPor: b.resuelto ? b.resueltoPor : undefined, notaResolucion: b.resuelto ? b.notaResolucion : undefined,
           nivel: "caso", huId: hu.id, huCodigo: hu.codigo,
           huTitulo: hu.titulo, huResponsable: hu.responsable, huPrioridad: hu.prioridad,
           casoId: c.id, casoTitulo: c.titulo,
@@ -276,7 +262,6 @@ export function BloqueosPanel({
       }
     }
 
-    // Nivel Tarea
     for (const t of tareas) {
       const hu = historias.find(h => h.id === t.huId)
       if (!hu) continue
@@ -286,7 +271,7 @@ export function BloqueosPanel({
           key: `tarea-${t.id}-${b.id}`, id: b.id,
           descripcion: b.descripcion, reportadoPor: b.reportadoPor,
           fecha: b.fecha, resuelto: b.resuelto,
-          fechaResolucion: b.fechaResolucion, resueltoPor: b.resueltoPor, notaResolucion: b.notaResolucion,
+          fechaResolucion: b.resuelto ? b.fechaResolucion : undefined, resueltoPor: b.resuelto ? b.resueltoPor : undefined, notaResolucion: b.resuelto ? b.notaResolucion : undefined,
           nivel: "tarea", huId: hu.id, huCodigo: hu.codigo,
           huTitulo: hu.titulo, huResponsable: hu.responsable, huPrioridad: hu.prioridad,
           casoId: c?.id, casoTitulo: c?.titulo,
@@ -295,7 +280,6 @@ export function BloqueosPanel({
       }
     }
 
-    // Ordenar: activos primero, luego por fecha desc
     return result.sort((a, b) => {
       if (a.resuelto !== b.resuelto) return a.resuelto ? 1 : -1
       return b.fecha.getTime() - a.fecha.getTime()
@@ -309,7 +293,6 @@ export function BloqueosPanel({
     return true
   }), [todos, filtroEstado, filtroNivel])
 
-  // Resetear página al cambiar filtros
   useEffect(() => { setPagina(1) }, [filtroEstado, filtroNivel])
 
   const filtradosEnPagina = useMemo(
@@ -317,7 +300,6 @@ export function BloqueosPanel({
     [filtrados, pagina]
   )
 
-  // Stats (siempre sobre activos)
   const countActivos = todos.filter(i => !i.resuelto).length
   const countHU      = todos.filter(i => !i.resuelto && i.nivel === "hu").length
   const countCaso    = todos.filter(i => !i.resuelto && i.nivel === "caso").length
@@ -361,7 +343,7 @@ export function BloqueosPanel({
         <thead><tr><th>Nivel</th><th>Historia</th><th>Descripción</th><th>Reportado</th><th>Caso / Tarea</th><th>Estado</th></tr></thead>
         <tbody>${filas}</tbody>
       </table>
-      <script>window.onload=()=>{window.print();setTimeout(()=>window.close(),500)}<\/script>
+      <script>window.onload=()=>{window.print();setTimeout(()=>window.close(),500)}</script>
       </body></html>`
     const w = window.open("", "_blank", "width=1000,height=700")
     if (w) { w.document.write(html); w.document.close() }
@@ -411,9 +393,8 @@ export function BloqueosPanel({
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div className="flex flex-col gap-4">
 
-      {/* ── Tarjetas de resumen ── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
           { label: "Bloqueos activos", count: countActivos, color: "var(--chart-4)", bg: "color-mix(in oklch, var(--chart-4) 8%, var(--card))", icon: <AlertTriangle size={18}/> },
@@ -423,40 +404,36 @@ export function BloqueosPanel({
         ].map(stat => (
           <div
             key={stat.label}
-            style={{ padding: "14px 16px", borderRadius: 12, border: "1px solid var(--border)", background: stat.bg, display: "flex", alignItems: "center", gap: 12 }}
+            className="px-4 py-3.5 rounded-xl border border-border flex items-center gap-3"
+            style={{ background: stat.bg }}
           >
-            <div style={{ color: stat.color, flexShrink: 0 }}>{stat.icon}</div>
+            <div className="shrink-0" style={{ color: stat.color }}>{stat.icon}</div>
             <div>
-              <p style={{ fontSize: 24, fontWeight: 700, color: stat.color, lineHeight: 1 }}>{stat.count}</p>
-              <p style={{ fontSize: 11, color: "var(--muted-foreground)", marginTop: 2 }}>{stat.label}</p>
+              <p className="text-2xl font-bold leading-none" style={{ color: stat.color }}>{stat.count}</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">{stat.label}</p>
             </div>
           </div>
         ))}
       </div>
 
-      {/* ── Filtros ── */}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-        {/* Estado */}
-        <div style={{ display: "flex", borderRadius: 8, border: "1px solid var(--border)", overflow: "hidden", background: "var(--secondary)" }}>
+      <div className="flex gap-2 flex-wrap items-center">
+        <div className="flex rounded-lg border border-border overflow-hidden bg-secondary">
           {(["activos", "todos", "resueltos"] as FiltroEstado[]).map(f => (
             <button
               key={f}
               onClick={() => setFiltroEstado(f)}
-              style={{
-                padding: "5px 13px", border: "none", cursor: "pointer", fontSize: 12,
-                fontWeight: filtroEstado === f ? 700 : 400,
-                background: filtroEstado === f ? "var(--primary)" : "transparent",
-                color:      filtroEstado === f ? "var(--primary-foreground)" : "var(--muted-foreground)",
-                transition: "background 0.15s",
-              }}
+              className={`px-3 py-1 border-none cursor-pointer text-xs transition-colors ${
+                filtroEstado === f
+                  ? "font-bold bg-primary text-primary-foreground"
+                  : "font-normal bg-transparent text-muted-foreground"
+              }`}
             >
               {f === "activos" ? "Activos" : f === "todos" ? "Todos" : "Resueltos"}
             </button>
           ))}
         </div>
 
-        {/* Nivel */}
-        <div style={{ display: "flex", gap: 4 }}>
+        <div className="flex gap-1">
           {([
             { v: "todos", label: "Todos los niveles" },
             { v: "hu",    label: "HU" },
@@ -466,35 +443,28 @@ export function BloqueosPanel({
             <button
               key={opt.v}
               onClick={() => setFiltroNivel(opt.v)}
-              style={{
-                padding: "4px 11px", borderRadius: 7, fontSize: 11, fontWeight: 600,
-                cursor: "pointer",
-                border: `1px solid ${filtroNivel === opt.v ? "var(--border)" : "transparent"}`,
-                background: filtroNivel === opt.v ? "var(--card)" : "transparent",
-                color: filtroNivel === opt.v ? "var(--foreground)" : "var(--muted-foreground)",
-                boxShadow: filtroNivel === opt.v ? "0 1px 3px rgba(0,0,0,0.07)" : "none",
-              }}
+              className={`px-2.5 py-1 rounded-[7px] text-[11px] font-semibold cursor-pointer ${
+                filtroNivel === opt.v
+                  ? "border border-border bg-card text-foreground shadow-sm"
+                  : "border border-transparent bg-transparent text-muted-foreground"
+              }`}
             >
               {opt.label}
             </button>
           ))}
         </div>
 
-        <span style={{ fontSize: 12, color: "var(--muted-foreground)", marginLeft: "auto" }}>
+        <span className="text-xs text-muted-foreground ml-auto">
           {filtrados.length} resultado{filtrados.length !== 1 ? "s" : ""}
         </span>
-        <div style={{ display:"flex", gap:6 }}>
+        <div className="flex gap-1.5">
           <button
             onClick={exportarCSV}
             disabled={filtrados.length === 0}
             title="Exportar a CSV"
-            style={{
-              display:"flex", alignItems:"center", gap:6, height:32, padding:"0 12px",
-              borderRadius:7, border:"1px solid var(--border)", background:"var(--card)",
-              fontSize:12, color:"var(--foreground)", cursor: filtrados.length === 0 ? "default" : "pointer",
-              opacity: filtrados.length === 0 ? 0.4 : 1,
-            }}
-            className="hover:bg-secondary"
+            className={`flex items-center gap-1.5 h-8 px-3 rounded-[7px] border border-border bg-card text-xs text-foreground hover:bg-secondary ${
+              filtrados.length === 0 ? "opacity-40 cursor-default" : "cursor-pointer"
+            }`}
           >
             <Download size={13}/> CSV
           </button>
@@ -502,38 +472,33 @@ export function BloqueosPanel({
             onClick={exportarPDF}
             disabled={filtrados.length === 0}
             title="Exportar a PDF"
-            style={{
-              display:"flex", alignItems:"center", gap:6, height:32, padding:"0 12px",
-              borderRadius:7, border:"1px solid var(--border)", background:"var(--card)",
-              fontSize:12, color:"var(--foreground)", cursor: filtrados.length === 0 ? "default" : "pointer",
-              opacity: filtrados.length === 0 ? 0.4 : 1,
-            }}
-            className="hover:bg-secondary"
+            className={`flex items-center gap-1.5 h-8 px-3 rounded-[7px] border border-border bg-card text-xs text-foreground hover:bg-secondary ${
+              filtrados.length === 0 ? "opacity-40 cursor-default" : "cursor-pointer"
+            }`}
           >
             <FileText size={13}/> PDF
           </button>
         </div>
       </div>
 
-      {/* ── Lista ── */}
       {filtrados.length === 0 ? (
-        <div style={{ padding: 56, textAlign: "center" }}>
-          <ShieldCheck size={44} style={{ margin: "0 auto 12px", display: "block", color: "var(--chart-2)", opacity: 0.35 }}/>
-          <p style={{ fontSize: 14, fontWeight: 600, color: "var(--foreground)", marginBottom: 4 }}>
+        <div className="p-14 text-center">
+          <ShieldCheck size={44} className="mx-auto mb-3 block text-chart-2 opacity-35"/>
+          <p className="text-sm font-semibold text-foreground mb-1">
             {filtroEstado === "activos"
               ? "Sin bloqueos activos"
               : filtroEstado === "resueltos"
                 ? "Sin bloqueos resueltos"
                 : "Sin bloqueos registrados"}
           </p>
-          <p style={{ fontSize: 13, color: "var(--muted-foreground)" }}>
+          <p className="text-[13px] text-muted-foreground">
             {filtroEstado === "activos"
               ? "Todas las historias, casos y tareas funcionan sin impedimentos"
               : "Cambia los filtros para ver otros resultados"}
           </p>
         </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div className="flex flex-col gap-2">
           {filtradosEnPagina.map(item => (
             <BloqueoRow
               key={item.key}

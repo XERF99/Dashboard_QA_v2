@@ -3,9 +3,8 @@
 //    Query params: page (default 1), limit (default 20, máx 100)
 //    Orden: más reciente primero.
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth } from "@/lib/backend/middleware/auth.middleware"
+import { withAuth, checkHUAccess } from "@/lib/backend/middleware/with-auth"
 import { getHistoriaById } from "@/lib/backend/services/historia.service"
-import { prisma } from "@/lib/backend/prisma"
 
 interface EventoHistorial {
   id:          string
@@ -16,19 +15,13 @@ interface EventoHistorial {
   detalles?:   Record<string, string>
 }
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const payload = await requireAuth(request)
-  if (payload instanceof NextResponse) return payload
-
-  const { id } = await params
+export const GET = withAuth(async (request, payload, ctx) => {
+  const { id } = await ctx!.params
 
   // Verificar aislamiento de workspace
   if (payload.grupoId) {
-    const meta = await prisma.historiaUsuario.findUnique({ where: { id }, select: { grupoId: true } })
-    if (!meta || meta.grupoId !== payload.grupoId) {
+    const access = await checkHUAccess(id, payload.grupoId)
+    if (!access) {
       return NextResponse.json({ error: "Historia no encontrada" }, { status: 404 })
     }
   }
@@ -57,4 +50,4 @@ export async function GET(
     limit,
     pages,
   })
-}
+})

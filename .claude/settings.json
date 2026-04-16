@@ -12,7 +12,10 @@
       "Bash(pnpm test:run)",
       "Bash(pnpm audit:*)",
       "Bash(pnpm update:*)",
-      "Bash(node -e \"const p = require\\(''./node_modules/next/package.json''\\); console.log\\(p.version\\)\")"
+      "Bash(node -e \"const p = require\\(''./node_modules/next/package.json''\\); console.log\\(p.version\\)\")",
+      "Bash(grep -i \"duplication\\\\|repeat\\\\|pattern\\\\|similar\" \"d:/Documentos/TCS_Dashboard/dashboard_v22/lib/backend/services/\"*.ts)",
+      "Bash(wc -l \"d:/Documentos/TCS_Dashboard/dashboard_v22/components/dashboard/\"**/*.tsx)",
+      "Bash(npx vitest:*)"
     ]
   }
 }

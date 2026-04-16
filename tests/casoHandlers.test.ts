@@ -117,8 +117,8 @@ describe("handleEnviarAprobacion", () => {
     const { ctx, getCasos } = makeCtx(casos, [makeHU()])
     createCasoHandlers(ctx).handleEnviarAprobacion("hu-1")
 
-    expect(getCasos()[0].estadoAprobacion).toBe("pendiente_aprobacion")
-    expect(getCasos()[1].estadoAprobacion).toBe("pendiente_aprobacion")
+    expect(getCasos()[0]!.estadoAprobacion).toBe("pendiente_aprobacion")
+    expect(getCasos()[1]!.estadoAprobacion).toBe("pendiente_aprobacion")
   })
 
   it("no cambia casos ya aprobados", () => {
@@ -129,8 +129,8 @@ describe("handleEnviarAprobacion", () => {
     const { ctx, getCasos } = makeCtx(casos, [makeHU()])
     createCasoHandlers(ctx).handleEnviarAprobacion("hu-1")
 
-    expect(getCasos()[0].estadoAprobacion).toBe("aprobado")
-    expect(getCasos()[1].estadoAprobacion).toBe("pendiente_aprobacion")
+    expect(getCasos()[0]!.estadoAprobacion).toBe("aprobado")
+    expect(getCasos()[1]!.estadoAprobacion).toBe("pendiente_aprobacion")
   })
 
   it("no afecta casos de otras HUs", () => {
@@ -142,8 +142,8 @@ describe("handleEnviarAprobacion", () => {
     const { ctx, getCasos } = makeCtx(casos, historias)
     createCasoHandlers(ctx).handleEnviarAprobacion("hu-1")
 
-    expect(getCasos()[0].estadoAprobacion).toBe("pendiente_aprobacion")
-    expect(getCasos()[1].estadoAprobacion).toBe("borrador")
+    expect(getCasos()[0]!.estadoAprobacion).toBe("pendiente_aprobacion")
+    expect(getCasos()[1]!.estadoAprobacion).toBe("borrador")
   })
 
   it("emite notificación de tipo admin", () => {
@@ -169,13 +169,13 @@ describe("handleAprobarCasos", () => {
     const { ctx, getCasos } = makeCtx(casos, [makeHU()])
     createCasoHandlers(ctx).handleAprobarCasos("hu-1")
 
-    const aprobado = getCasos()[0]
+    const aprobado = getCasos()[0]!
     expect(aprobado.estadoAprobacion).toBe("aprobado")
     expect(aprobado.aprobadoPor).toBe("Admin")
     expect(aprobado.fechaAprobacion).toBeInstanceOf(Date)
 
     // El borrador no se toca
-    expect(getCasos()[1].estadoAprobacion).toBe("borrador")
+    expect(getCasos()[1]!.estadoAprobacion).toBe("borrador")
   })
 
   it("emite notificación de tipo qa", () => {
@@ -202,12 +202,12 @@ describe("handleRechazarCasos", () => {
     const { ctx, getCasos } = makeCtx(casos, [makeHU()])
     createCasoHandlers(ctx).handleRechazarCasos("hu-1", "Faltan pasos de reproducción")
 
-    const rechazado = getCasos()[0]
+    const rechazado = getCasos()[0]!
     expect(rechazado.estadoAprobacion).toBe("rechazado")
     expect(rechazado.motivoRechazo).toBe("Faltan pasos de reproducción")
 
     // El aprobado no se toca
-    expect(getCasos()[1].estadoAprobacion).toBe("aprobado")
+    expect(getCasos()[1]!.estadoAprobacion).toBe("aprobado")
   })
 
   it("emite notificación de tipo qa", () => {
@@ -236,8 +236,8 @@ describe("handleSolicitarModificacionCaso", () => {
     const { ctx, getCasos } = makeCtx(casos, [makeHU()])
     createCasoHandlers(ctx).handleSolicitarModificacionCaso("c1", "hu-1")
 
-    expect(getCasos()[0].modificacionSolicitada).toBe(true)
-    expect(getCasos()[1].modificacionSolicitada).toBe(false) // no afectado
+    expect(getCasos()[0]!.modificacionSolicitada).toBe(true)
+    expect(getCasos()[1]!.modificacionSolicitada).toBe(false) // no afectado
   })
 })
 
@@ -249,7 +249,7 @@ describe("handleHabilitarModificacionCaso", () => {
     const { ctx, getCasos } = makeCtx(casos, [makeHU()])
     createCasoHandlers(ctx).handleHabilitarModificacionCaso("c1", "hu-1")
 
-    const caso = getCasos()[0]
+    const caso = getCasos()[0]!
     expect(caso.modificacionHabilitada).toBe(true)
     expect(caso.modificacionSolicitada).toBe(false)
     expect(caso.estadoAprobacion).toBe("borrador")
@@ -283,7 +283,7 @@ describe("handleEliminarCaso", () => {
     createCasoHandlers(ctx).handleEliminarCaso("c1", "hu-1")
 
     expect(getCasos()).toHaveLength(1)
-    expect(getCasos()[0].id).toBe("c2")
+    expect(getCasos()[0]!.id).toBe("c2")
   })
 
   it("elimina el id del caso en historias.casosIds", () => {
@@ -294,7 +294,7 @@ describe("handleEliminarCaso", () => {
     )
     createCasoHandlers(ctx).handleEliminarCaso("c1", "hu-1")
 
-    expect(getHistorias()[0].casosIds).toEqual(["c2"])
+    expect(getHistorias()[0]!.casosIds).toEqual(["c2"])
   })
 })
 
@@ -307,9 +307,9 @@ describe("handleAddCaso", () => {
     createCasoHandlers(ctx).handleAddCaso(nuevoCaso)
 
     expect(getCasos()).toHaveLength(1)
-    expect(getCasos()[0].id).toBe("c-nuevo")
-    expect(getHistorias()[0].casosIds).toContain("c-nuevo")
-    expect(getHistorias()[0].historial).toHaveLength(1)
+    expect(getCasos()[0]!.id).toBe("c-nuevo")
+    expect(getHistorias()[0]!.casosIds).toContain("c-nuevo")
+    expect(getHistorias()[0]!.historial).toHaveLength(1)
   })
 })
 
@@ -327,10 +327,10 @@ describe("handleRetestearCaso", () => {
     const { ctx, getCasos } = makeCtx([caso], [makeHU()])
     createCasoHandlers(ctx).handleRetestearCaso("c1", "dev", "Se corrigió el bug #123")
 
-    const etapa = getCasos()[0].resultadosPorEtapa[0]
+    const etapa = getCasos()[0]!.resultadosPorEtapa[0]!
     expect(etapa.estado).toBe("en_ejecucion")
     expect(etapa.resultado).toBe("pendiente")
-    expect(etapa.intentos[0].comentarioCorreccion).toBe("Se corrigió el bug #123")
+    expect(etapa.intentos[0]!.comentarioCorreccion).toBe("Se corrigió el bug #123")
   })
 
   it("actualiza el historial de la HU síncronamente (sin mutación en updater)", () => {
@@ -345,8 +345,8 @@ describe("handleRetestearCaso", () => {
 
     createCasoHandlers(ctx).handleRetestearCaso("c1", "dev", "Corrección aplicada")
 
-    expect(getHistorias()[0].historial).toHaveLength(1)
-    expect(getHistorias()[0].historial[0].tipo).toBe("caso_retesteo_solicitado")
+    expect(getHistorias()[0]!.historial).toHaveLength(1)
+    expect(getHistorias()[0]!.historial[0]!.tipo).toBe("caso_retesteo_solicitado")
   })
 
   it("no hace nada si el caso no existe", () => {
@@ -381,7 +381,7 @@ describe("handleCompletarCasoEtapa", () => {
 
     createCasoHandlers(ctx).handleCompletarCasoEtapa("c1", "dev", "exitoso")
 
-    expect(getCasos()[0].resultadosPorEtapa[0].estado).toBe("en_ejecucion")
+    expect(getCasos()[0]!.resultadosPorEtapa[0]!.estado).toBe("en_ejecucion")
     expect(ctx.addToast).toHaveBeenCalledWith(expect.objectContaining({ type: "error" }))
   })
 
@@ -403,7 +403,7 @@ describe("handleCompletarCasoEtapa", () => {
 
     createCasoHandlers(ctx).handleCompletarCasoEtapa("c1", "dev", "exitoso")
 
-    expect(getHistorias()[0].historial).toHaveLength(1)
-    expect(getHistorias()[0].historial[0].tipo).toBe("caso_completado")
+    expect(getHistorias()[0]!.historial).toHaveLength(1)
+    expect(getHistorias()[0]!.historial[0]!.tipo).toBe("caso_completado")
   })
 })

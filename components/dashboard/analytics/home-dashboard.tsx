@@ -22,7 +22,6 @@ interface Props {
   onIrATab: (tab: string) => void
 }
 
-// ── Helpers ──────────────────────────────────────────────
 function formatRelativa(fecha: Date): string {
   const dif = Math.floor((Date.now() - fecha.getTime()) / 60000)
   if (dif < 1)  return "ahora"
@@ -33,17 +32,19 @@ function formatRelativa(fecha: Date): string {
 }
 
 function eventoIcon(tipo: string) {
-  if (tipo.includes("completada") || tipo.includes("aprobado")) return <CheckCircle size={12} style={{ color: "var(--chart-2)", flexShrink: 0 }} />
-  if (tipo.includes("cancelada") || tipo.includes("fallida") || tipo.includes("rechazado")) return <XCircle size={12} style={{ color: "var(--chart-4)", flexShrink: 0 }} />
-  if (tipo.includes("bloqueo")) return <AlertTriangle size={12} style={{ color: "var(--chart-3)", flexShrink: 0 }} />
-  if (tipo.includes("iniciada") || tipo.includes("avanzada")) return <Zap size={12} style={{ color: "var(--chart-1)", flexShrink: 0 }} />
-  return <Activity size={12} style={{ color: "var(--primary)", flexShrink: 0 }} />
+  if (tipo.includes("completada") || tipo.includes("aprobado")) return <CheckCircle size={12} className="text-chart-2 shrink-0" />
+  if (tipo.includes("cancelada") || tipo.includes("fallida") || tipo.includes("rechazado")) return <XCircle size={12} className="text-chart-4 shrink-0" />
+  if (tipo.includes("bloqueo")) return <AlertTriangle size={12} className="text-chart-3 shrink-0" />
+  if (tipo.includes("iniciada") || tipo.includes("avanzada")) return <Zap size={12} className="text-chart-1 shrink-0" />
+  return <Activity size={12} className="text-primary shrink-0" />
 }
 
-// ── Componente principal ──────────────────────────────────
+const CARD_CLS = "bg-card border border-border rounded-xl"
+const SECTION_TITLE_CLS = "text-[13px] font-bold text-foreground"
+const LABEL_UPPER_CLS = "text-[10px] uppercase tracking-[0.08em] font-bold text-muted-foreground mb-1.5"
+
 export function HomeDashboard({ historias, casos, tareas, onVerHU, onIrATab }: Props) {
 
-  // ── KPIs base ──
   const kpi = useMemo(() => {
     const total      = historias.length
     const sinIniciar = historias.filter(h => h.estado === "sin_iniciar").length
@@ -65,7 +66,6 @@ export function HomeDashboard({ historias, casos, tareas, onVerHU, onIrATab }: P
              totalCasos, casosPendientes, totalBloqueos }
   }, [historias, casos, tareas])
 
-  // ── HUs urgentes (en_progreso + vence en ≤7 días) ──
   const husUrgentes = useMemo(() => {
     const now = Date.now()
     return historias
@@ -76,7 +76,6 @@ export function HomeDashboard({ historias, casos, tareas, onVerHU, onIrATab }: P
       .slice(0, 4)
   }, [historias])
 
-  // ── Actividad reciente (últimos 7 eventos globales) ──
   const actividadReciente = useMemo(() =>
     historias
       .flatMap(h => h.historial.map(ev => ({ ev, hu: h })))
@@ -84,7 +83,6 @@ export function HomeDashboard({ historias, casos, tareas, onVerHU, onIrATab }: P
       .slice(0, 7)
   , [historias])
 
-  // ── Por prioridad ──
   const byPrioridad = useMemo(() => {
     const counts: Record<string, number> = { critica: 0, alta: 0, media: 0, baja: 0 }
     historias.forEach(h => { counts[h.prioridad] = (counts[h.prioridad] ?? 0) + 1 })
@@ -92,7 +90,6 @@ export function HomeDashboard({ historias, casos, tareas, onVerHU, onIrATab }: P
     return { counts, max }
   }, [historias])
 
-  // ── Top responsables ──
   const topResponsables = useMemo(() => {
     const map = new Map<string, { total: number; activas: number }>()
     historias.forEach(h => {
@@ -107,7 +104,6 @@ export function HomeDashboard({ historias, casos, tareas, onVerHU, onIrATab }: P
       .slice(0, 4)
   }, [historias])
 
-  // ── HUs con vencimiento este mes (calendario) ──
   const husVencimientoMesActual = useMemo(() => {
     const ahora = new Date()
     return historias
@@ -119,7 +115,6 @@ export function HomeDashboard({ historias, casos, tareas, onVerHU, onIrATab }: P
       .sort((a, b) => a.fechaFinEstimada!.getTime() - b.fechaFinEstimada!.getTime())
   }, [historias])
 
-  // ── Distribución por estado ──
   const estadosDist = [
     { label: "En Progreso", color: "var(--chart-1)",          count: kpi.enProgreso },
     { label: "Exitosas",    color: "var(--chart-2)",          count: kpi.exitosas },
@@ -128,141 +123,131 @@ export function HomeDashboard({ historias, casos, tareas, onVerHU, onIrATab }: P
     { label: "Canceladas",  color: "var(--chart-4)",          count: kpi.canceladas },
   ]
 
-  // ── Estilos base reutilizables ──
-  const CARD: React.CSSProperties = {
-    background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12,
-  }
-  const SECTION_TITLE: React.CSSProperties = {
-    fontSize: 13, fontWeight: 700, color: "var(--foreground)",
-  }
-  const LABEL_UPPER: React.CSSProperties = {
-    fontSize: 10, textTransform: "uppercase" as const,
-    letterSpacing: "0.08em", fontWeight: 700, color: "var(--muted-foreground)", marginBottom: 6,
-  }
-
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div className="flex flex-col gap-4">
 
       {/* ── Fila 1: KPI Strip (6 tarjetas) ── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
 
-        <div style={{ ...CARD, padding: "14px 16px" }}>
-          <p style={LABEL_UPPER}>HUs Total</p>
-          <p style={{ fontSize: 28, fontWeight: 800, lineHeight: 1, color: "var(--foreground)" }}>{kpi.total}</p>
-          <p style={{ fontSize: 11, color: "var(--muted-foreground)", marginTop: 4 }}>historias registradas</p>
+        <div className={`${CARD_CLS} px-4 py-3.5`}>
+          <p className={LABEL_UPPER_CLS}>HUs Total</p>
+          <p className="text-[28px] font-extrabold leading-none text-foreground">{kpi.total}</p>
+          <p className="text-[11px] text-muted-foreground mt-1">historias registradas</p>
         </div>
 
-        <div style={{ ...CARD, padding: "14px 16px", borderLeft: "3px solid var(--chart-1)" }}>
-          <p style={LABEL_UPPER}>En Progreso</p>
-          <p style={{ fontSize: 28, fontWeight: 800, lineHeight: 1, color: "var(--chart-1)" }}>{kpi.enProgreso}</p>
-          <p style={{ fontSize: 11, color: "var(--muted-foreground)", marginTop: 4 }}>
+        <div className={`${CARD_CLS} px-4 py-3.5 border-l-[3px] border-l-chart-1`}>
+          <p className={LABEL_UPPER_CLS}>En Progreso</p>
+          <p className="text-[28px] font-extrabold leading-none text-chart-1">{kpi.enProgreso}</p>
+          <p className="text-[11px] text-muted-foreground mt-1">
             {kpi.total > 0 ? Math.round((kpi.enProgreso / kpi.total) * 100) : 0}% del total
           </p>
         </div>
 
-        <div style={{ ...CARD, padding: "14px 16px", borderLeft: "3px solid var(--chart-2)" }}>
-          <p style={LABEL_UPPER}>Exitosas</p>
-          <p style={{ fontSize: 28, fontWeight: 800, lineHeight: 1, color: "var(--chart-2)" }}>{kpi.exitosas}</p>
-          <p style={{ fontSize: 11, color: "var(--muted-foreground)", marginTop: 4 }}>{kpi.progresoPct}% completado</p>
+        <div className={`${CARD_CLS} px-4 py-3.5 border-l-[3px] border-l-chart-2`}>
+          <p className={LABEL_UPPER_CLS}>Exitosas</p>
+          <p className="text-[28px] font-extrabold leading-none text-chart-2">{kpi.exitosas}</p>
+          <p className="text-[11px] text-muted-foreground mt-1">{kpi.progresoPct}% completado</p>
         </div>
 
-        <div style={{ ...CARD, padding: "14px 16px" }}>
-          <p style={LABEL_UPPER}>Casos de Prueba</p>
-          <p style={{ fontSize: 28, fontWeight: 800, lineHeight: 1, color: "var(--foreground)" }}>{kpi.totalCasos}</p>
-          <p style={{ fontSize: 11, color: "var(--muted-foreground)", marginTop: 4 }}>casos registrados</p>
+        <div className={`${CARD_CLS} px-4 py-3.5`}>
+          <p className={LABEL_UPPER_CLS}>Casos de Prueba</p>
+          <p className="text-[28px] font-extrabold leading-none text-foreground">{kpi.totalCasos}</p>
+          <p className="text-[11px] text-muted-foreground mt-1">casos registrados</p>
         </div>
 
-        <div style={{ ...CARD, padding: "14px 16px", ...(kpi.casosPendientes > 0 ? { borderLeft: "3px solid var(--chart-3)" } : {}) }}>
-          <p style={LABEL_UPPER}>Pend. Aprobación</p>
-          <p style={{ fontSize: 28, fontWeight: 800, lineHeight: 1, color: kpi.casosPendientes > 0 ? "var(--chart-3)" : "var(--muted-foreground)" }}>
+        <div className={`${CARD_CLS} px-4 py-3.5 ${kpi.casosPendientes > 0 ? "border-l-[3px] border-l-chart-3" : ""}`}>
+          <p className={LABEL_UPPER_CLS}>Pend. Aprobación</p>
+          <p className={`text-[28px] font-extrabold leading-none ${kpi.casosPendientes > 0 ? "text-chart-3" : "text-muted-foreground"}`}>
             {kpi.casosPendientes}
           </p>
-          <p style={{ fontSize: 11, color: "var(--muted-foreground)", marginTop: 4 }}>casos por revisar</p>
+          <p className="text-[11px] text-muted-foreground mt-1">casos por revisar</p>
         </div>
 
-        <div style={{ ...CARD, padding: "14px 16px", ...(kpi.totalBloqueos > 0 ? { borderLeft: "3px solid var(--chart-4)" } : {}) }}>
-          <p style={LABEL_UPPER}>Bloqueos Activos</p>
-          <p style={{ fontSize: 28, fontWeight: 800, lineHeight: 1, color: kpi.totalBloqueos > 0 ? "var(--chart-4)" : "var(--muted-foreground)" }}>
+        <div className={`${CARD_CLS} px-4 py-3.5 ${kpi.totalBloqueos > 0 ? "border-l-[3px] border-l-chart-4" : ""}`}>
+          <p className={LABEL_UPPER_CLS}>Bloqueos Activos</p>
+          <p className={`text-[28px] font-extrabold leading-none ${kpi.totalBloqueos > 0 ? "text-chart-4" : "text-muted-foreground"}`}>
             {kpi.totalBloqueos}
           </p>
-          <p style={{ fontSize: 11, color: "var(--muted-foreground)", marginTop: 4 }}>sin resolver</p>
+          <p className="text-[11px] text-muted-foreground mt-1">sin resolver</p>
         </div>
       </div>
 
-      {/* ── Panel de Riesgos ── */}
       <PanelRiesgos historias={historias} casos={casos} onVerHU={onVerHU} onIrATab={onIrATab} />
 
       {/* ── Fila 2: Distribución + Alertas ── */}
       <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-3.5">
 
-        {/* Distribución por estado */}
-        <div style={{ ...CARD, padding: "18px 20px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-              <BarChart2 size={14} style={{ color: "var(--primary)" }} />
-              <span style={SECTION_TITLE}>Distribución de Historias</span>
+        <div className={`${CARD_CLS} px-5 py-4.5`}>
+          <div className="flex justify-between items-center mb-4">
+            <div className="flex items-center gap-1.75">
+              <BarChart2 size={14} className="text-primary" />
+              <span className={SECTION_TITLE_CLS}>Distribución de Historias</span>
             </div>
-            <span style={{ fontSize: 11, color: "var(--muted-foreground)" }}>
-              Progreso global: <strong style={{ color: "var(--primary)" }}>{kpi.progresoPct}%</strong>
+            <span className="text-[11px] text-muted-foreground">
+              Progreso global: <strong className="text-primary">{kpi.progresoPct}%</strong>
             </span>
           </div>
           <Progress value={kpi.progresoPct} className="h-2 mb-5" />
-          <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
+          <div className="flex flex-col gap-2.75">
             {estadosDist.map(({ label, color, count }) => (
               <div key={label}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                  <span style={{ fontSize: 12, color: "var(--foreground)" }}>{label}</span>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color }}>{count}</span>
-                    <span style={{ fontSize: 10, color: "var(--muted-foreground)", minWidth: 30, textAlign: "right" }}>
+                <div className="flex justify-between mb-1">
+                  <span className="text-xs text-foreground">{label}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-bold" style={{ color }}>{count}</span>
+                    <span className="text-[10px] text-muted-foreground min-w-7.5 text-right">
                       {kpi.total > 0 ? Math.round((count / kpi.total) * 100) : 0}%
                     </span>
                   </div>
                 </div>
-                <div style={{ height: 5, borderRadius: 3, background: "var(--secondary)", overflow: "hidden" }}>
-                  <div style={{ width: `${kpi.total > 0 ? Math.round((count / kpi.total) * 100) : 0}%`, height: "100%", background: color, borderRadius: 3 }} />
+                <div className="h-1.25 rounded-[3px] bg-secondary overflow-hidden">
+                  <div
+                    className="h-full rounded-[3px]"
+                    style={{ width: `${kpi.total > 0 ? Math.round((count / kpi.total) * 100) : 0}%`, background: color }}
+                  />
                 </div>
               </div>
             ))}
           </div>
           <button
             onClick={() => onIrATab("historias")}
-            style={{ display: "inline-flex", alignItems: "center", gap: 5, marginTop: 16, fontSize: 12, fontWeight: 600, color: "var(--primary)", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+            className="inline-flex items-center gap-1.5 mt-4 text-xs font-semibold text-primary bg-transparent border-none cursor-pointer p-0"
           >
             Ver todas las historias <ArrowRight size={12} />
           </button>
         </div>
 
         {/* Alertas: urgentes + bloqueos */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div className="flex flex-col gap-3">
 
-          {/* HUs próximas a vencer */}
-          <div style={{ ...CARD, padding: "16px 18px", flex: 1 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 12 }}>
-              <Clock size={13} style={{ color: "var(--chart-3)" }} />
-              <span style={SECTION_TITLE}>Próximas a Vencer</span>
+          <div className={`${CARD_CLS} px-4.5 py-4 flex-1`}>
+            <div className="flex items-center gap-1.75 mb-3">
+              <Clock size={13} className="text-chart-3" />
+              <span className={SECTION_TITLE_CLS}>Próximas a Vencer</span>
               {husUrgentes.length > 0 && (
-                <span style={{ marginLeft: "auto", fontSize: 10, fontWeight: 700, background: "color-mix(in oklch, var(--chart-3) 15%, transparent)", color: "var(--chart-3)", borderRadius: 8, padding: "2px 7px" }}>
+                <span className="ml-auto text-[10px] font-bold bg-chart-3/15 text-chart-3 rounded-lg px-1.75 py-px">
                   {husUrgentes.length}
                 </span>
               )}
             </div>
             {husUrgentes.length === 0 ? (
-              <p style={{ fontSize: 12, color: "var(--muted-foreground)", fontStyle: "italic" }}>Sin HUs urgentes</p>
+              <p className="text-xs text-muted-foreground italic">Sin HUs urgentes</p>
             ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <div className="flex flex-col gap-1.5">
                 {husUrgentes.map(({ hu, dias }) => {
                   const vencida = dias <= 0
                   const color = dias <= 3 ? "var(--chart-4)" : "var(--chart-3)"
                   return (
                     <div key={hu.id}
                       onClick={() => onVerHU(hu)}
-                      className="hover:bg-secondary/60"
-                      style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "6px 8px", borderRadius: 7, border: "1px solid var(--border)" }}
+                      className="flex items-center gap-2 cursor-pointer px-2 py-1.5 rounded-[7px] border border-border hover:bg-secondary/60"
                     >
-                      <span style={{ fontSize: 10, fontFamily: "monospace", color: "var(--primary)", fontWeight: 700, flexShrink: 0, minWidth: 54 }}>{hu.codigo}</span>
-                      <span style={{ fontSize: 11, color: "var(--foreground)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{hu.titulo}</span>
-                      <span style={{ fontSize: 10, fontWeight: 700, color, flexShrink: 0, background: `color-mix(in oklch, ${color} 10%, transparent)`, padding: "2px 6px", borderRadius: 5 }}>
+                      <span className="text-[10px] font-mono text-primary font-bold shrink-0 min-w-13.5">{hu.codigo}</span>
+                      <span className="text-[11px] text-foreground flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{hu.titulo}</span>
+                      <span
+                        className="text-[10px] font-bold shrink-0 px-1.5 py-px rounded-[5px]"
+                        style={{ color, background: `color-mix(in oklch, ${color} 10%, transparent)` }}
+                      >
                         {vencida ? "Vencida" : dias === 1 ? "Mañana" : `${dias}d`}
                       </span>
                     </div>
@@ -272,35 +257,34 @@ export function HomeDashboard({ historias, casos, tareas, onVerHU, onIrATab }: P
             )}
           </div>
 
-          {/* Bloqueos activos */}
-          <div style={{ ...CARD, padding: "16px 18px", flex: 1 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 12 }}>
-              <ShieldAlert size={13} style={{ color: kpi.totalBloqueos > 0 ? "var(--chart-4)" : "var(--muted-foreground)" }} />
-              <span style={SECTION_TITLE}>Bloqueos Activos</span>
+          <div className={`${CARD_CLS} px-4.5 py-4 flex-1`}>
+            <div className="flex items-center gap-1.75 mb-3">
+              <ShieldAlert size={13} className={kpi.totalBloqueos > 0 ? "text-chart-4" : "text-muted-foreground"} />
+              <span className={SECTION_TITLE_CLS}>Bloqueos Activos</span>
               {kpi.totalBloqueos > 0 && (
-                <span style={{ marginLeft: "auto", fontSize: 10, fontWeight: 700, background: "color-mix(in oklch, var(--chart-4) 15%, transparent)", color: "var(--chart-4)", borderRadius: 8, padding: "2px 7px" }}>
+                <span className="ml-auto text-[10px] font-bold bg-chart-4/15 text-chart-4 rounded-lg px-1.75 py-px">
                   {kpi.totalBloqueos}
                 </span>
               )}
             </div>
             {kpi.totalBloqueos === 0 ? (
-              <p style={{ fontSize: 12, color: "var(--muted-foreground)", fontStyle: "italic" }}>Sin bloqueos activos</p>
+              <p className="text-xs text-muted-foreground italic">Sin bloqueos activos</p>
             ) : (
               <>
-                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <div className="flex flex-col gap-1.5">
                   {historias
                     .filter(h => h.bloqueos.some(b => !b.resuelto))
                     .slice(0, 3)
                     .map(hu => (
                       <div key={hu.id}
                         onClick={() => onVerHU(hu)}
-                        className="hover:bg-secondary/60"
-                        style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "6px 8px", borderRadius: 7, border: "1px solid color-mix(in oklch, var(--chart-4) 30%, var(--border))" }}
+                        className="flex items-center gap-2 cursor-pointer px-2 py-1.5 rounded-[7px] hover:bg-secondary/60"
+                        style={{ border: "1px solid color-mix(in oklch, var(--chart-4) 30%, var(--border))" }}
                       >
-                        <AlertTriangle size={10} style={{ color: "var(--chart-4)", flexShrink: 0 }} />
-                        <span style={{ fontSize: 10, fontFamily: "monospace", color: "var(--primary)", fontWeight: 700, flexShrink: 0 }}>{hu.codigo}</span>
-                        <span style={{ fontSize: 11, color: "var(--foreground)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{hu.titulo}</span>
-                        <span style={{ fontSize: 10, fontWeight: 700, color: "var(--chart-4)", flexShrink: 0 }}>
+                        <AlertTriangle size={10} className="text-chart-4 shrink-0" />
+                        <span className="text-[10px] font-mono text-primary font-bold shrink-0">{hu.codigo}</span>
+                        <span className="text-[11px] text-foreground flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{hu.titulo}</span>
+                        <span className="text-[10px] font-bold text-chart-4 shrink-0">
                           {hu.bloqueos.filter(b => !b.resuelto).length}
                         </span>
                       </div>
@@ -309,7 +293,7 @@ export function HomeDashboard({ historias, casos, tareas, onVerHU, onIrATab }: P
                 </div>
                 <button
                   onClick={() => onIrATab("bloqueos")}
-                  style={{ display: "inline-flex", alignItems: "center", gap: 5, marginTop: 10, fontSize: 12, fontWeight: 600, color: "var(--chart-4)", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                  className="inline-flex items-center gap-1.5 mt-2.5 text-xs font-semibold text-chart-4 bg-transparent border-none cursor-pointer p-0"
                 >
                   Ver todos los bloqueos <ArrowRight size={12} />
                 </button>
@@ -322,52 +306,49 @@ export function HomeDashboard({ historias, casos, tareas, onVerHU, onIrATab }: P
       {/* ── Fila 3: Actividad reciente + Prioridad + Responsables ── */}
       <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-3.5">
 
-        {/* Actividad reciente */}
-        <div style={{ ...CARD, padding: "18px 20px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 14 }}>
-            <Activity size={14} style={{ color: "var(--primary)" }} />
-            <span style={SECTION_TITLE}>Actividad Reciente</span>
+        <div className={`${CARD_CLS} px-5 py-4.5`}>
+          <div className="flex items-center gap-1.75 mb-3.5">
+            <Activity size={14} className="text-primary" />
+            <span className={SECTION_TITLE_CLS}>Actividad Reciente</span>
           </div>
           {actividadReciente.length === 0 ? (
-            <p style={{ fontSize: 12, color: "var(--muted-foreground)", fontStyle: "italic" }}>Sin actividad registrada</p>
+            <p className="text-xs text-muted-foreground italic">Sin actividad registrada</p>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column" }}>
+            <div className="flex flex-col">
               {actividadReciente.map(({ ev, hu }, i) => (
                 <div key={ev.id}
-                  style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "8px 0", borderBottom: i < actividadReciente.length - 1 ? "1px solid var(--border)" : "none" }}
+                  className={`flex items-start gap-2.5 py-2 ${i < actividadReciente.length - 1 ? "border-b border-border" : ""}`}
                 >
-                  <div style={{ paddingTop: 1, flexShrink: 0 }}>{eventoIcon(ev.tipo)}</div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: 12, color: "var(--foreground)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <div className="pt-px shrink-0">{eventoIcon(ev.tipo)}</div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-foreground overflow-hidden text-ellipsis whitespace-nowrap">
                       {ev.descripcion}
                     </p>
-                    <div style={{ display: "flex", gap: 6, marginTop: 2 }}>
+                    <div className="flex gap-1.5 mt-0.5">
                       <button
                         onClick={() => onVerHU(hu)}
-                        style={{ fontSize: 10, fontFamily: "monospace", color: "var(--primary)", background: "none", border: "none", cursor: "pointer", padding: 0, fontWeight: 700 }}
+                        className="text-[10px] font-mono text-primary bg-transparent border-none cursor-pointer p-0 font-bold"
                       >
                         {hu.codigo}
                       </button>
-                      <span style={{ fontSize: 10, color: "var(--muted-foreground)" }}>· {ev.usuario}</span>
+                      <span className="text-[10px] text-muted-foreground">· {ev.usuario}</span>
                     </div>
                   </div>
-                  <span style={{ fontSize: 10, color: "var(--muted-foreground)", flexShrink: 0 }}>{formatRelativa(ev.fecha)}</span>
+                  <span className="text-[10px] text-muted-foreground shrink-0">{formatRelativa(ev.fecha)}</span>
                 </div>
               ))}
             </div>
           )}
         </div>
 
-        {/* Prioridad + Responsables */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div className="flex flex-col gap-3">
 
-          {/* Por prioridad */}
-          <div style={{ ...CARD, padding: "16px 18px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 12 }}>
-              <Flag size={13} style={{ color: "var(--primary)" }} />
-              <span style={SECTION_TITLE}>HUs por Prioridad</span>
+          <div className={`${CARD_CLS} px-4.5 py-4`}>
+            <div className="flex items-center gap-1.75 mb-3">
+              <Flag size={13} className="text-primary" />
+              <span className={SECTION_TITLE_CLS}>HUs por Prioridad</span>
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+            <div className="flex flex-col gap-2.25">
               {(["critica", "alta", "media", "baja"] as const).map(p => {
                 const cfg   = PRIORIDAD_CFG[p]
                 const count = byPrioridad.counts[p] ?? 0
@@ -375,12 +356,12 @@ export function HomeDashboard({ historias, casos, tareas, onVerHU, onIrATab }: P
                 const opacity = p === "critica" ? 1 : p === "alta" ? 0.75 : p === "media" ? 0.5 : 0.3
                 return (
                   <div key={p}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
-                      <span style={{ fontSize: 12, color: "var(--foreground)" }}>{cfg.label}</span>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: "var(--foreground)" }}>{count}</span>
+                    <div className="flex justify-between mb-0.75">
+                      <span className="text-xs text-foreground">{cfg.label}</span>
+                      <span className="text-[11px] font-bold text-foreground">{count}</span>
                     </div>
-                    <div style={{ height: 4, borderRadius: 3, background: "var(--secondary)", overflow: "hidden" }}>
-                      <div style={{ width: `${pct}%`, height: "100%", background: "var(--primary)", opacity, borderRadius: 3 }} />
+                    <div className="h-1 rounded-[3px] bg-secondary overflow-hidden">
+                      <div className="h-full bg-primary rounded-[3px]" style={{ width: `${pct}%`, opacity }} />
                     </div>
                   </div>
                 )
@@ -388,38 +369,37 @@ export function HomeDashboard({ historias, casos, tareas, onVerHU, onIrATab }: P
             </div>
           </div>
 
-          {/* Top responsables */}
-          <div style={{ ...CARD, padding: "16px 18px", flex: 1 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                <User2 size={13} style={{ color: "var(--primary)" }} />
-                <span style={SECTION_TITLE}>Responsables</span>
+          <div className={`${CARD_CLS} px-4.5 py-4 flex-1`}>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-1.75">
+                <User2 size={13} className="text-primary" />
+                <span className={SECTION_TITLE_CLS}>Responsables</span>
               </div>
               <button
                 onClick={() => onIrATab("carga")}
-                style={{ fontSize: 11, color: "var(--primary)", background: "none", border: "none", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4, fontWeight: 600, padding: 0 }}
+                className="text-[11px] text-primary bg-transparent border-none cursor-pointer inline-flex items-center gap-1 font-semibold p-0"
               >
                 Carga <ArrowRight size={11} />
               </button>
             </div>
             {topResponsables.length === 0 ? (
-              <p style={{ fontSize: 12, color: "var(--muted-foreground)", fontStyle: "italic" }}>Sin datos</p>
+              <p className="text-xs text-muted-foreground italic">Sin datos</p>
             ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+              <div className="flex flex-col gap-2.25">
                 {topResponsables.map(({ nombre, total, activas }) => (
-                  <div key={nombre} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <div style={{ width: 28, height: 28, borderRadius: "50%", background: "color-mix(in oklch, var(--primary) 15%, transparent)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: "var(--primary)" }}>
+                  <div key={nombre} className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
+                      <span className="text-[11px] font-bold text-primary">
                         {nombre.charAt(0).toUpperCase()}
                       </span>
                     </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontSize: 12, fontWeight: 600, color: "var(--foreground)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{nombre}</p>
-                      <p style={{ fontSize: 10, color: "var(--muted-foreground)" }}>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-foreground overflow-hidden text-ellipsis whitespace-nowrap">{nombre}</p>
+                      <p className="text-[10px] text-muted-foreground">
                         {activas} activa{activas !== 1 ? "s" : ""} · {total} total
                       </p>
                     </div>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: "var(--foreground)", flexShrink: 0 }}>{total}</span>
+                    <span className="text-[13px] font-bold text-foreground shrink-0">{total}</span>
                   </div>
                 ))}
               </div>
@@ -433,21 +413,20 @@ export function HomeDashboard({ historias, casos, tareas, onVerHU, onIrATab }: P
 
         <MiniCalendario historias={historias} onVerHU={onVerHU} />
 
-        {/* Panel entregas del mes actual */}
-        <div style={{ ...CARD, padding:"18px 20px", display:"flex", flexDirection:"column" }}>
-          <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:14 }}>
-            <Clock size={13} style={{ color:"var(--primary)" }}/>
-            <span style={SECTION_TITLE}>Entregas Este Mes</span>
+        <div className={`${CARD_CLS} px-5 py-4.5 flex flex-col`}>
+          <div className="flex items-center gap-1.75 mb-3.5">
+            <Clock size={13} className="text-primary"/>
+            <span className={SECTION_TITLE_CLS}>Entregas Este Mes</span>
             {husVencimientoMesActual.length > 0 && (
-              <span style={{ marginLeft:"auto", fontSize:10, fontWeight:700, background:"color-mix(in oklch, var(--primary) 14%, transparent)", color:"var(--primary)", borderRadius:8, padding:"2px 7px" }}>
+              <span className="ml-auto text-[10px] font-bold bg-primary/14 text-primary rounded-lg px-1.75 py-px">
                 {husVencimientoMesActual.length}
               </span>
             )}
           </div>
           {husVencimientoMesActual.length === 0 ? (
-            <p style={{ fontSize:12, color:"var(--muted-foreground)", fontStyle:"italic" }}>Sin HUs con fecha de entrega este mes</p>
+            <p className="text-xs text-muted-foreground italic">Sin HUs con fecha de entrega este mes</p>
           ) : (
-            <div style={{ display:"flex", flexDirection:"column", gap:7, overflowY:"auto", maxHeight:320 }}>
+            <div className="flex flex-col gap-1.75 overflow-y-auto max-h-80">
               {husVencimientoMesActual.map(hu => {
                 const dias  = Math.ceil((hu.fechaFinEstimada!.getTime() - Date.now()) / 86400000)
                 const bc    = dias <= 0 ? "var(--chart-4)" : dias <= 3 ? "var(--chart-4)" : dias <= 7 ? "var(--chart-3)" : "var(--primary)"
@@ -455,21 +434,26 @@ export function HomeDashboard({ historias, casos, tareas, onVerHU, onIrATab }: P
                 const dia   = String(fecha.getDate()).padStart(2,"0")
                 const mesN  = String(fecha.getMonth()+1).padStart(2,"0")
                 return (
-                  <div key={hu.id} onClick={() => onVerHU(hu)} className="hover:bg-secondary/60"
-                    style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 10px", borderRadius:8, border:"1px solid var(--border)", cursor:"pointer" }}>
-                    {/* Fecha */}
-                    <div style={{ flexShrink:0, textAlign:"center", minWidth:32 }}>
-                      <div style={{ fontSize:15, fontWeight:800, lineHeight:1, color:bc }}>{dia}</div>
-                      <div style={{ fontSize:9, color:"var(--muted-foreground)", fontWeight:600 }}>/{mesN}</div>
+                  <div key={hu.id} onClick={() => onVerHU(hu)}
+                    className="flex items-center gap-2 px-2.5 py-1.75 rounded-lg border border-border cursor-pointer hover:bg-secondary/60"
+                  >
+                    <div className="shrink-0 text-center min-w-8">
+                      <div className="text-[15px] font-extrabold leading-none" style={{ color: bc }}>{dia}</div>
+                      <div className="text-[9px] text-muted-foreground font-semibold">/{mesN}</div>
                     </div>
-                    <div style={{ width:1, height:28, background:"var(--border)", flexShrink:0 }}/>
-                    {/* Info */}
-                    <div style={{ flex:1, minWidth:0 }}>
-                      <p style={{ fontSize:11, fontWeight:700, color:"var(--primary)", fontFamily:"monospace" }}>{hu.codigo}</p>
-                      <p style={{ fontSize:12, color:"var(--foreground)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{hu.titulo}</p>
+                    <div className="w-px h-7 bg-border shrink-0"/>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] font-bold text-primary font-mono">{hu.codigo}</p>
+                      <p className="text-xs text-foreground overflow-hidden text-ellipsis whitespace-nowrap">{hu.titulo}</p>
                     </div>
-                    {/* Badge días */}
-                    <span style={{ fontSize:10, fontWeight:700, color:bc, flexShrink:0, background:`color-mix(in oklch, ${bc} 10%, transparent)`, padding:"2px 6px", borderRadius:5, border:`1px solid color-mix(in oklch, ${bc} 25%, transparent)` }}>
+                    <span
+                      className="text-[10px] font-bold shrink-0 px-1.5 py-px rounded-[5px]"
+                      style={{
+                        color: bc,
+                        background: `color-mix(in oklch, ${bc} 10%, transparent)`,
+                        border: `1px solid color-mix(in oklch, ${bc} 25%, transparent)`,
+                      }}
+                    >
                       {dias <= 0 ? "Vencida" : dias === 1 ? "Mañana" : `${dias}d`}
                     </span>
                   </div>
@@ -480,8 +464,7 @@ export function HomeDashboard({ historias, casos, tareas, onVerHU, onIrATab }: P
         </div>
       </div>
 
-      {/* ── Accesos rápidos ── */}
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+      <div className="flex gap-2.5 flex-wrap">
         {([
           { tab: "historias", icon: <BarChart2 size={13}/>, label: "Ver Historias" },
           { tab: "casos",     icon: <ClipboardList size={13}/>, label: "Ver Casos" },
@@ -491,13 +474,7 @@ export function HomeDashboard({ historias, casos, tareas, onVerHU, onIrATab }: P
           <button
             key={tab}
             onClick={() => onIrATab(tab)}
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 7,
-              padding: "7px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600,
-              border: "1px solid var(--border)", background: "var(--secondary)",
-              color: "var(--foreground)", cursor: "pointer",
-            }}
-            className="hover:bg-secondary/70 hover:border-primary/30"
+            className="inline-flex items-center gap-1.75 px-3.5 py-1.75 rounded-lg text-xs font-semibold border border-border bg-secondary text-foreground cursor-pointer hover:bg-secondary/70 hover:border-primary/30"
           >
             {icon} {label}
           </button>

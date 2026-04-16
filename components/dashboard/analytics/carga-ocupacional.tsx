@@ -243,7 +243,7 @@ export function CargaOcupacional({ tareas, casos, historias, currentUserName, fi
 
   // ── Si solo hay una persona (QA puro), vista personal directa sin tabs ──
   if (filtroNombres?.length === 1) {
-    return <VistaPersonal p={personas[0]} historiasVistas={historiasVistas} />
+    return <VistaPersonal p={personas[0]!} historiasVistas={historiasVistas} />
   }
 
   // ── Vista con tabs: Equipo + cada persona ──

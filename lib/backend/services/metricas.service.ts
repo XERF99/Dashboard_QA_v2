@@ -5,28 +5,23 @@
 
 import { prisma } from "@/lib/backend/prisma"
 
+const notDeleted = { deletedAt: null }
+
 function grupoFilter(grupoId?: string) {
-  return grupoId ? { grupoId } : {}
+  return { ...notDeleted, ...(grupoId ? { grupoId } : {}) }
 }
 
 function grupoHUFilter(grupoId?: string) {
-  return grupoId ? { hu: { grupoId } } : {}
+  return { ...notDeleted, ...(grupoId ? { hu: { grupoId } } : {}) }
 }
 
 function grupoHUCasoFilter(grupoId?: string) {
-  return grupoId ? { caso: { hu: { grupoId } } } : {}
+  return { ...notDeleted, ...(grupoId ? { caso: { hu: { grupoId } } } : {}) }
 }
 
 export async function getMetricas(grupoId?: string) {
-  const [
-    historiasPorEstado,
-    historiasPorSprint,
-    casosPorEstado,
-    tareasPorEstado,
-    tareasPendientesPorAsignado,
-    velocidadPorSprint,
-    tareasCountPorResultado,
-  ] = await Promise.all([
+  // Use allSettled for error isolation — one failing aggregation won't break the rest
+  const results = await Promise.allSettled([
     // Historias agrupadas por estado
     prisma.historiaUsuario.groupBy({
       by: ["estado"],
@@ -77,6 +72,17 @@ export async function getMetricas(grupoId?: string) {
       _count: { _all: true },
     }),
   ])
+
+  // Extract values with empty-array fallback for failed queries
+  const val = <T,>(r: PromiseSettledResult<T>): T | [] =>
+    r.status === "fulfilled" ? r.value : []
+  const historiasPorEstado          = val(results[0]!) as { estado: string; _count: { _all: number } }[]
+  const historiasPorSprint          = val(results[1]!) as { sprint: string | null; _count: { _all: number } }[]
+  const casosPorEstado              = val(results[2]!) as { estadoAprobacion: string; _count: { _all: number } }[]
+  const tareasPorEstado             = val(results[3]!) as { estado: string; _count: { _all: number } }[]
+  const tareasPendientesPorAsignado = val(results[4]!) as { asignado: string; estado: string; _count: { _all: number } }[]
+  const velocidadPorSprint          = val(results[5]!) as { sprint: string | null; _sum: { puntos: number | null }; _count: { _all: number } }[]
+  const tareasCountPorResultado     = val(results[6]!) as { resultado: string; _count: { _all: number } }[]
 
   const totalTareas              = tareasCountPorResultado.reduce((s, r) => s + r._count._all, 0)
   const tareasConResultadoFallido = tareasCountPorResultado.find(r => r.resultado === "fallido")?._count._all ?? 0

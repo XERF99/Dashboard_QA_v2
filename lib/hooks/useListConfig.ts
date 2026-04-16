@@ -42,13 +42,13 @@ export function useListConfig<T extends IdLabelItem>(
     const swap = idx + dir
     if (swap < 0 || swap >= items.length) return
     const next = [...items]
-    ;[next[idx], next[swap]] = [next[swap], next[idx]]
+    ;[next[idx], next[swap]] = [next[swap]!, next[idx]!]
     onChange(next)
   }
 
   function editarLabel(idx: number, label: string) {
     const next = [...items]
-    next[idx] = { ...next[idx], label }
+    next[idx] = { ...next[idx]!, label }
     onChange(next)
   }
 

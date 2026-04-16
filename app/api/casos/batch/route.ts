@@ -1,11 +1,10 @@
 // ── PATCH /api/casos/batch — aprobar o rechazar múltiples casos
 import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
-import { requireAdmin } from "@/lib/backend/middleware/auth.middleware"
+import { withAuthAdmin } from "@/lib/backend/middleware/with-auth"
 import { checkRateLimit, getClientIp, rlKey } from "@/lib/backend/middleware/rate-limit"
 import { prisma } from "@/lib/backend/prisma"
 import { invalidateMetricasCache } from "@/lib/backend/metricas-cache"
-import { logger } from "@/lib/backend/logger"
 import { audit } from "@/lib/backend/services/audit.service"
 
 const BatchSchema = z.object({
@@ -14,12 +13,9 @@ const BatchSchema = z.object({
   motivo: z.string().optional(),
 })
 
-export async function PATCH(request: NextRequest) {
-  const payload = await requireAdmin(request)
-  if (payload instanceof NextResponse) return payload
-
+export const PATCH = withAuthAdmin(async (request, payload) => {
   const ip = getClientIp(request.headers)
-  const rl = checkRateLimit(rlKey(ip, "/api/casos/batch"), 20, 60_000)
+  const rl = checkRateLimit(rlKey(ip, "POST /api/casos/batch"), 20, 60_000)
   if (!rl.allowed) {
     const retryAfterSecs = Math.ceil((rl.resetAt - Date.now()) / 1000)
     return NextResponse.json(
@@ -52,18 +48,12 @@ export async function PATCH(request: NextRequest) {
     ? { aprobadoPor: payload.nombre, fechaAprobacion: new Date() }
     : { motivoRechazo: motivo ?? "" }
 
-  try {
-    const result = await prisma.casoPrueba.updateMany({
-      where: { ...whereWorkspace, estadoAprobacion: "pendiente_aprobacion" },
-      data:  { estadoAprobacion, ...extra },
-    })
-    invalidateMetricasCache(payload.grupoId)
-    const auditAction = accion === "aprobar" ? "APPROVE" : "REJECT"
-    void audit({ actor: payload, action: auditAction, resource: "casos", meta: { ids, motivo: motivo ?? null, count: result.count } })
-    return NextResponse.json({ success: true, count: result.count })
-  } catch (e) {
-    logger.error("PATCH /api/casos/batch", "Error al procesar lote", e)
-    const msg = e instanceof Error ? e.message : "Error al procesar lote"
-    return NextResponse.json({ error: msg }, { status: 500 })
-  }
-}
+  const result = await prisma.casoPrueba.updateMany({
+    where: { ...whereWorkspace, estadoAprobacion: "pendiente_aprobacion" },
+    data:  { estadoAprobacion, ...extra },
+  })
+  invalidateMetricasCache(payload.grupoId)
+  const auditAction = accion === "aprobar" ? "APPROVE" : "REJECT"
+  void audit({ actor: payload, action: auditAction, resource: "casos", meta: { ids, motivo: motivo ?? null, count: result.count } })
+  return NextResponse.json({ success: true, count: result.count })
+})

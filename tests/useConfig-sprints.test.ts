@@ -73,7 +73,7 @@ describe("carga inicial desde API", () => {
     })
 
     expect(vi.mocked(api.get)).toHaveBeenCalledWith("/api/sprints")
-    expect(result.current.sprints[0].nombre).toBe("Sprint 1")
+    expect(result.current.sprints[0]!.nombre).toBe("Sprint 1")
   })
 
   it("mantiene localStorage si la API falla", async () => {

@@ -98,7 +98,7 @@ describe("useListConfig", () => {
     act(() => { result.current.eliminar(0) })
 
     expect(items).toHaveLength(1)
-    expect(items[0].id).toBe("mobile")
+    expect(items[0]!.id).toBe("mobile")
   })
 
   it("mover hacia arriba intercambia con el elemento anterior", () => {
@@ -109,8 +109,8 @@ describe("useListConfig", () => {
 
     act(() => { result.current.mover(1, -1) }) // mueve "mobile" a posición 0
 
-    expect(items[0].id).toBe("mobile")
-    expect(items[1].id).toBe("web")
+    expect(items[0]!.id).toBe("mobile")
+    expect(items[1]!.id).toBe("web")
   })
 
   it("mover fuera de límites no modifica la lista", () => {

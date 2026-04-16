@@ -554,7 +554,7 @@ function TareaItem({ tarea, casoId, huCerrada, onAbrirEditar }: TareaItemProps) 
           <p style={{ fontSize:10, color:"var(--muted-foreground)", marginTop:2, display:"flex", alignItems:"center", gap:3 }}>
             {tarea.asignado} · {tarea.horasEstimadas}h
             {!isResponsableActivo(tarea.asignado, users) && (
-              <UserX size={9} style={{ color:"var(--chart-4)", flexShrink:0 }} title="Usuario sin workspace activo" />
+              <UserX size={9} style={{ color:"var(--chart-4)", flexShrink:0 }} aria-label="Usuario sin workspace activo" />
             )}
           </p>
         </div>

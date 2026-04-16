@@ -108,7 +108,7 @@ describe("GET /api/historias — paginación", () => {
     )
     await getHistorias(makeReq("/api/historias?limit=999", token))
 
-    const [, , limit] = vi.mocked(getAllHistorias).mock.calls[0]
+    const [, , limit] = vi.mocked(getAllHistorias).mock.calls[0]!
     expect(limit).toBe(200)
   })
 

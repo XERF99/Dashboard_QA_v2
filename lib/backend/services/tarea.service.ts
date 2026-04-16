@@ -1,19 +1,12 @@
-// ═══════════════════════════════════════════════════════════
-//  TAREA SERVICE — lógica de negocio para Tareas
-// ═══════════════════════════════════════════════════════════
-
 import { prisma } from "@/lib/backend/prisma"
 import { Prisma } from "@prisma/client"
+import { notDeleted, paginatedQuery, softDelete, createRecord, updateRecord } from "./base-crud.service"
 
 export async function getAllTareas(grupoId?: string, asignado?: string, page = 1, limit = 50) {
-  const skip = (page - 1) * limit
-  const where: Prisma.TareaWhereInput = grupoId ? { caso: { hu: { grupoId } } } : {}
+  const where: Prisma.TareaWhereInput = { ...notDeleted, ...(grupoId ? { caso: { hu: { grupoId } } } : {}) }
   if (asignado) where.asignado = asignado
-  const [tareas, total] = await prisma.$transaction([
-    prisma.tarea.findMany({ where, orderBy: { fechaCreacion: "desc" }, skip, take: limit }),
-    prisma.tarea.count({ where }),
-  ])
-  return { tareas, total, page, limit, pages: Math.ceil(total / limit) }
+  const result = await paginatedQuery(prisma.tarea, where, page, limit)
+  return { tareas: result.data, total: result.total, page: result.page, limit: result.limit, pages: result.pages }
 }
 
 export async function getTareaById(id: string) {
@@ -21,33 +14,25 @@ export async function getTareaById(id: string) {
 }
 
 export async function getTareasByCaso(casoPruebaId: string, page = 1, limit = 200) {
-  const skip = (page - 1) * limit
-  const where = { casoPruebaId }
-  const [tareas, total] = await prisma.$transaction([
-    prisma.tarea.findMany({ where, orderBy: { fechaCreacion: "asc" }, skip, take: limit }),
-    prisma.tarea.count({ where }),
-  ])
-  return { tareas, total, page, limit, pages: Math.ceil(total / limit) }
+  const where = { ...notDeleted, casoPruebaId }
+  const result = await paginatedQuery(prisma.tarea, where, page, limit, { fechaCreacion: "asc" })
+  return { tareas: result.data, total: result.total, page: result.page, limit: result.limit, pages: result.pages }
 }
 
 export async function getTareasByHU(huId: string, page = 1, limit = 200) {
-  const skip = (page - 1) * limit
-  const where = { huId }
-  const [tareas, total] = await prisma.$transaction([
-    prisma.tarea.findMany({ where, orderBy: { fechaCreacion: "asc" }, skip, take: limit }),
-    prisma.tarea.count({ where }),
-  ])
-  return { tareas, total, page, limit, pages: Math.ceil(total / limit) }
+  const where = { ...notDeleted, huId }
+  const result = await paginatedQuery(prisma.tarea, where, page, limit, { fechaCreacion: "asc" })
+  return { tareas: result.data, total: result.total, page: result.page, limit: result.limit, pages: result.pages }
 }
 
 export async function createTarea(data: Prisma.TareaUncheckedCreateInput) {
-  return prisma.tarea.create({ data })
+  return createRecord(prisma.tarea, data)
 }
 
 export async function updateTarea(id: string, data: Prisma.TareaUncheckedUpdateInput) {
-  return prisma.tarea.update({ where: { id }, data })
+  return updateRecord(prisma.tarea, id, data)
 }
 
 export async function deleteTarea(id: string) {
-  return prisma.tarea.delete({ where: { id } })
+  return softDelete(prisma.tarea, id)
 }

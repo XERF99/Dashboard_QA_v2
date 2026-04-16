@@ -60,7 +60,7 @@ describe("useConfig — filtro de labels vacíos en sync a la API", () => {
 
     const [, body] = vi.mocked(api.put).mock.calls[0] as [string, { tiposAplicacion: { id: string; label: string }[] }]
     expect(body.tiposAplicacion).toHaveLength(1)
-    expect(body.tiposAplicacion[0].label).toBe("Web")
+    expect(body.tiposAplicacion[0]!.label).toBe("Web")
   })
 
   it("ambientes con label vacío no se incluyen en el PUT", async () => {
@@ -78,7 +78,7 @@ describe("useConfig — filtro de labels vacíos en sync a la API", () => {
 
     const [, body] = vi.mocked(api.put).mock.calls[0] as [string, { ambientes: { id: string; label: string }[] }]
     expect(body.ambientes).toHaveLength(1)
-    expect(body.ambientes[0].label).toBe("QA")
+    expect(body.ambientes[0]!.label).toBe("QA")
   })
 
   it("labels válidos se envían sin modificar al PUT", async () => {

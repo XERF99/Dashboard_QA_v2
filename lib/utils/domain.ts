@@ -81,7 +81,7 @@ export function siguienteEtapa(
 ): EtapaEjecucion | null {
   const etapas = etapasParaTipo(tipo, config)
   const idx = etapas.indexOf(etapaActual)
-  return idx >= 0 && idx < etapas.length - 1 ? etapas[idx + 1] : null
+  return idx >= 0 && idx < etapas.length - 1 ? etapas[idx + 1] ?? null : null
 }
 
 export function etapaCompletada(

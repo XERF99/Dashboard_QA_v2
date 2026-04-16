@@ -7,13 +7,23 @@ import type { CasoPrueba, HistoriaUsuario, Tarea, Bloqueo } from "@/lib/types"
 // ── Factories ────────────────────────────────────────────────
 
 function makeBloqueo(resuelto = false): Bloqueo {
-  return {
-    id: `bl-${Math.random()}`,
-    descripcion: "Bloqueo de prueba",
-    reportadoPor: "QA",
-    fecha: new Date(),
-    resuelto,
-  }
+  return resuelto
+    ? {
+        id: `bl-${Math.random()}`,
+        descripcion: "Bloqueo de prueba",
+        reportadoPor: "QA",
+        fecha: new Date(),
+        resuelto: true,
+        fechaResolucion: new Date(),
+        resueltoPor: "Admin",
+      }
+    : {
+        id: `bl-${Math.random()}`,
+        descripcion: "Bloqueo de prueba",
+        reportadoPor: "QA",
+        fecha: new Date(),
+        resuelto: false,
+      }
 }
 
 function makeTarea(overrides: Partial<Tarea> = {}): Tarea {
@@ -195,7 +205,7 @@ describe("handleCompletarCasoEtapa — guardia de bloqueos de tareas", () => {
 
     createCasoHandlers(ctx).handleCompletarCasoEtapa("caso-1", "test", "exitoso")
 
-    const call = (addToast as ReturnType<typeof vi.fn>).mock.calls[0][0]
+    const call = (addToast as ReturnType<typeof vi.fn>).mock.calls[0]![0]
     expect(call.desc).toContain("2 tareas")
   })
 
@@ -205,7 +215,7 @@ describe("handleCompletarCasoEtapa — guardia de bloqueos de tareas", () => {
 
     createCasoHandlers(ctx).handleCompletarCasoEtapa("caso-1", "test", "exitoso")
 
-    const call = (addToast as ReturnType<typeof vi.fn>).mock.calls[0][0]
+    const call = (addToast as ReturnType<typeof vi.fn>).mock.calls[0]![0]
     expect(call.desc).toMatch(/^Hay 1 tarea /)
   })
 })
@@ -267,7 +277,7 @@ describe("handleAvanzarEtapa — guardia de bloqueos de casos", () => {
 
     createHUHandlers(ctx).handleAvanzarEtapa("hu-1")
 
-    const call = (addToast as ReturnType<typeof vi.fn>).mock.calls[0][0]
+    const call = (addToast as ReturnType<typeof vi.fn>).mock.calls[0]![0]
     expect(call.desc).toContain("2 casos")
   })
 
@@ -277,7 +287,7 @@ describe("handleAvanzarEtapa — guardia de bloqueos de casos", () => {
 
     createHUHandlers(ctx).handleAvanzarEtapa("hu-1")
 
-    const call = (addToast as ReturnType<typeof vi.fn>).mock.calls[0][0]
+    const call = (addToast as ReturnType<typeof vi.fn>).mock.calls[0]![0]
     expect(call.desc).toMatch(/^Hay 1 caso /)
   })
 })

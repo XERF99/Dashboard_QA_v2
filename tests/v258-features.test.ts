@@ -450,7 +450,7 @@ describe("POST /api/users — rate limiting", () => {
     const res = await postUser(makeReq("POST", "/api/users", { nombre: "A", email: "a@t.com", rol: "qa" }, adminToken))
     expect(res.status).toBe(429)
     expect(res.headers.get("Retry-After")).toBeTruthy()
-    expect(res.headers.get("X-RateLimit-Limit")).toBe("20")
+    expect(res.headers.get("X-RateLimit-Limit")).toBe("30")
     expect(res.headers.get("X-RateLimit-Remaining")).toBe("0")
   })
 

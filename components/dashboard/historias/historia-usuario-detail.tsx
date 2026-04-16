@@ -5,49 +5,36 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
-  CheckSquare, Star, TrendingUp,
-  AlertTriangle, Plus, CheckCircle2, ShieldAlert, Layers,
+  CheckSquare, Star,
+  ShieldAlert, Layers,
   User, Play, XCircle, Send, ThumbsUp, ThumbsDown,
-  Lock, Unlock, FileText, ArrowRight,
-  Pencil, MessageSquare, UserX,
+  Lock, Unlock,
+  MessageSquare, UserX,
 } from "lucide-react"
 import {
   ESTADO_HU_CFG, PRIORIDAD_CFG,
-  etapaDefsParaTipo, getEtapaHUCfg, ETAPAS_PREDETERMINADAS, siguienteEtapa,
+  etapaDefsParaTipo, getEtapaHUCfg,
   getTipoAplicacionLabel, getAmbienteLabel, getTipoPruebaLabel, getTipoPruebaColor,
-  TIPOS_PRUEBA_PREDETERMINADOS,
-  fmtCorto, fmtHora,
-  type HistoriaUsuario, type CasoPrueba, type Tarea, type Bloqueo,
-  type EtapaEjecucion, type ResultadoEtapa, type TipoPrueba, type ComplejidadCaso, type EntornoCaso,
-  type TipoPruebaDef,
+  type HistoriaUsuario, type CasoPrueba, type Tarea, type BloqueoActivo, type BloqueoResuelto,
+  type EtapaEjecucion,
 } from "@/lib/types"
 import { CommentThread } from "../shared/comment-thread"
-import { CasoPruebaCard } from "../casos/caso-prueba-card"
 import { useHUDetail } from "@/lib/contexts/hu-detail-context"
 import { useAuth } from "@/lib/contexts/auth-context"
 import { isResponsableActivo } from "@/lib/utils/asignaciones"
+import { HUBloqueos } from "./hu-bloqueos"
+import { HUHistorialPanel } from "./hu-historial"
+import { HUCasosPanel } from "./hu-casos-panel"
+import { PNL, SLBL, fmt } from "./hu-detail-shared"
 
 // ── Props ──────────────────────────────────────────────────────
-// Los handlers, permisos y config se consumen desde HUDetailContext.
-// Solo se pasan los datos específicos de cada instancia del diálogo.
 interface Props {
   open: boolean
   onClose: () => void
   hu: HistoriaUsuario | null
   casos: CasoPrueba[]
   tareas: Tarea[]
-}
-
-// ── Helpers ──
-const PNL: React.CSSProperties = { padding:"13px 15px", borderRadius:10, border:"1px solid var(--border)", background:"var(--background)" }
-const SLBL: React.CSSProperties = { fontSize:"10px", textTransform:"uppercase", letterSpacing:"0.1em", fontWeight:700, color:"var(--muted-foreground)", marginBottom:10, display:"flex", alignItems:"center", gap:5 }
-
-function fmt(d: Date): string {
-  const MESES = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"]
-  return `${d.getDate().toString().padStart(2,"0")} ${MESES[d.getMonth()]} ${d.getFullYear()}`
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -75,29 +62,25 @@ export function HistoriaUsuarioDetail({ open, onClose, hu, casos, tareas }: Prop
   if (!hu) return null
 
   const casosHU = casos.filter(c => hu.casosIds.includes(c.id))
-  const blActivos = hu.bloqueos.filter(b => !b.resuelto)
-  const blResueltos = hu.bloqueos.filter(b => b.resuelto)
+  const blActivos = hu.bloqueos.filter((b): b is BloqueoActivo => !b.resuelto)
+  const blResueltos = hu.bloqueos.filter((b): b is BloqueoResuelto => b.resuelto)
 
   const estCfg = ESTADO_HU_CFG[hu.estado]
   const etaCfg = getEtapaHUCfg(hu.etapa, configEtapas)
   const priCfg = PRIORIDAD_CFG[hu.prioridad]
 
-  // HU cerrada = ya no se puede crear nada
   const huCerrada = hu.estado === "exitosa" || hu.estado === "cancelada" || hu.estado === "fallida"
 
-  // Puede agregar casos?
   const etapasDisponibles = etapaDefsParaTipo(hu.tipoAplicacion, configEtapas)
   const primeraEtapa = etapasDisponibles[0]?.id
   const enDespliegue = hu.etapa === primeraEtapa
   const pasoPrimeraEtapa = hu.etapa !== "sin_iniciar" && hu.etapa !== primeraEtapa
   const puedeAgregarCasos = !huCerrada && hu.estado === "en_progreso" && (enDespliegue || hu.permitirCasosAdicionales)
 
-  // Casos con estados
   const borradores = casosHU.filter(c => c.estadoAprobacion === "borrador")
   const pendientesAprobacion = casosHU.filter(c => c.estadoAprobacion === "pendiente_aprobacion")
   const aprobados = casosHU.filter(c => c.estadoAprobacion === "aprobado")
 
-  // Etapa ya iniciada
   const etapaYaIniciada = aprobados.some(c =>
     c.resultadosPorEtapa.some(r => r.etapa === hu.etapa && r.estado !== "pendiente")
   )
@@ -129,7 +112,7 @@ export function HistoriaUsuarioDetail({ open, onClose, hu, casos, tareas }: Prop
                 <User size={12}/>
                 {hu.responsable}
                 {!isResponsableActivo(hu.responsable, users) && (
-                  <UserX size={11} style={{ color:"var(--chart-4)" }} title="Responsable sin workspace activo" />
+                  <UserX size={11} style={{ color:"var(--chart-4)" }} aria-label="Responsable sin workspace activo" />
                 )}
               </span>
               <Badge variant="outline" className="bg-muted text-muted-foreground border-border text-[10px]">{getTipoAplicacionLabel(hu.tipoAplicacion, tiposAplicacion)}</Badge>
@@ -152,7 +135,6 @@ export function HistoriaUsuarioDetail({ open, onClose, hu, casos, tareas }: Prop
                     <XCircle size={12} className="mr-1"/> Cancelar HU
                   </Button>
                 )}
-                {/* Enviar todos los borradores/rechazados a aprobación */}
                 {isQA && (borradores.length > 0 || casosHU.filter(c => c.estadoAprobacion === "rechazado").length > 0) && (
                   <Button size="sm" variant="outline" onClick={() => onEnviarAprobacion(hu.id)}>
                     <Send size={12} className="mr-1"/>
@@ -340,473 +322,5 @@ export function HistoriaUsuarioDetail({ open, onClose, hu, casos, tareas }: Prop
         </div>
       </DialogContent>
     </Dialog>
-  )
-}
-
-// ══════════════════════════════════════════════════════════════
-// SUB-COMPONENTES
-// ══════════════════════════════════════════════════════════════
-
-// ── Bloqueos de la HU ─────────────────────────────────────────
-interface HUBloqueosProps {
-  hu: HistoriaUsuario
-  blActivos: Bloqueo[]
-  blResueltos: Bloqueo[]
-  huCerrada: boolean
-}
-
-function HUBloqueos({ hu, blActivos, blResueltos, huCerrada }: HUBloqueosProps) {
-  const { isQA, isAdmin, isQALead, currentUser, onAddBloqueo, onResolverBloqueo } = useHUDetail()
-  const [showBloqueoForm, setShowBloqueoForm] = useState(false)
-  const [nuevoBloqueo, setNuevoBloqueo] = useState("")
-  const [showResolverForm, setShowResolverForm] = useState<string | null>(null)
-  const [notaResolucion, setNotaResolucion] = useState("")
-
-  return (
-    <div style={PNL}>
-      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
-        <p style={{ ...SLBL, marginBottom:0 }}><ShieldAlert size={11}/>Bloqueos de la HU</p>
-        {(isQA || isAdmin || isQALead) && !huCerrada && (
-          <button onClick={()=>setShowBloqueoForm(v=>!v)} style={{ background:"none", border:"none", cursor:"pointer", fontSize:11, color:"var(--primary)", display:"flex", alignItems:"center", gap:4, fontWeight:600 }}>
-            <Plus size={11}/>Reportar
-          </button>
-        )}
-      </div>
-      {showBloqueoForm && (
-        <div style={{ marginBottom:10 }}>
-          <Textarea rows={2} value={nuevoBloqueo} onChange={e=>setNuevoBloqueo(e.target.value)}
-            placeholder="Describe el bloqueo..."
-            style={{ marginBottom:8, resize:"vertical", width:"100%", maxWidth:"100%", wordBreak:"break-word" }}/>
-          <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
-            <Button variant="outline" size="sm" onClick={()=>setShowBloqueoForm(false)}>Cancelar</Button>
-            <Button size="sm" onClick={()=>{
-              if (!nuevoBloqueo.trim()) return
-              onAddBloqueo(hu.id, { id:`bl-${Date.now()}`, descripcion:nuevoBloqueo.trim(), fecha:new Date(), resuelto:false, reportadoPor:currentUser||"Sistema" })
-              setNuevoBloqueo(""); setShowBloqueoForm(false)
-            }} disabled={!nuevoBloqueo.trim()}>Guardar</Button>
-          </div>
-        </div>
-      )}
-      {hu.bloqueos.length===0 && !showBloqueoForm && <p style={{ fontSize:12, color:"var(--muted-foreground)", fontStyle:"italic" }}>Sin bloqueos</p>}
-      <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
-        {blActivos.map(b=>(
-          <div key={b.id} style={{ borderRadius:8, background:"color-mix(in oklch, var(--chart-4) 6%, transparent)", border:"1px solid color-mix(in oklch, var(--chart-4) 30%, var(--border))", overflow:"hidden" }}>
-            <div style={{ display:"flex", gap:8, alignItems:"flex-start", padding:"9px 11px" }}>
-              <AlertTriangle size={13} style={{ color:"var(--chart-4)", marginTop:2, flexShrink:0 }}/>
-              <div style={{ flex:1 }}>
-                <p style={{ fontSize:13, color:"var(--foreground)", lineHeight:1.4, marginBottom:2 }}>{b.descripcion}</p>
-                <p style={{ fontSize:11, color:"var(--muted-foreground)" }}>{fmt(b.fecha)} · {b.reportadoPor}</p>
-              </div>
-              {(isAdmin || isQALead || isQA) && showResolverForm !== b.id && (
-                <Button variant="outline" size="sm" onClick={()=>{ setShowResolverForm(b.id); setNotaResolucion("") }} style={{ height:26, fontSize:11, flexShrink:0 }}>
-                  <CheckCircle2 size={11} className="mr-1"/>Resolver
-                </Button>
-              )}
-            </div>
-            {showResolverForm === b.id && (
-              <div style={{ padding:"0 11px 10px 11px", borderTop:"1px solid color-mix(in oklch, var(--chart-4) 20%, var(--border))" }}>
-                <p style={{ fontSize:11, fontWeight:600, color:"var(--chart-3)", margin:"8px 0 5px" }}>¿Cómo se levantó el bloqueo? *</p>
-                <Textarea rows={2} value={notaResolucion} onChange={e => setNotaResolucion(e.target.value)}
-                  placeholder="Describe cómo se resolvió el bloqueo..." style={{ fontSize:11, resize:"none", marginBottom:7 }} />
-                <div style={{ display:"flex", gap:6, justifyContent:"flex-end" }}>
-                  <Button variant="outline" size="sm" style={{ height:24, fontSize:10 }}
-                    onClick={() => { setShowResolverForm(null); setNotaResolucion("") }}>Cancelar</Button>
-                  <Button size="sm" style={{ height:24, fontSize:10 }} disabled={!notaResolucion.trim()}
-                    className="bg-chart-2 hover:bg-chart-2/90 text-white"
-                    onClick={() => { onResolverBloqueo(hu.id, b.id, notaResolucion.trim()); setShowResolverForm(null); setNotaResolucion("") }}>
-                    <CheckCircle2 size={10} className="mr-1"/>Confirmar resolución
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
-        ))}
-        {blResueltos.map(b=>(
-          <div key={b.id} style={{ display:"flex", gap:8, padding:"8px 11px", borderRadius:8, background:"var(--secondary)", opacity:0.7 }}>
-            <CheckCircle2 size={13} style={{ color:"var(--chart-2)", flexShrink:0, marginTop:2 }}/>
-            <div>
-              <p style={{ fontSize:12, color:"var(--foreground)", textDecoration:"line-through" }}>{b.descripcion}</p>
-              <p style={{ fontSize:10, color:"var(--muted-foreground)", marginTop:1 }}>Resuelto · {b.reportadoPor}{b.resueltoPor ? ` por ${b.resueltoPor}` : ""}</p>
-              {b.notaResolucion && <p style={{ fontSize:11, color:"var(--chart-2)", marginTop:2 }}><strong>Resolución:</strong> {b.notaResolucion}</p>}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-// ── Historial de la HU ────────────────────────────────────────
-interface HUHistorialPanelProps {
-  historial: HistoriaUsuario["historial"]
-}
-
-function HUHistorialPanel({ historial }: HUHistorialPanelProps) {
-  return (
-    <div style={PNL}>
-      <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:14 }}>
-        <TrendingUp size={13} className="text-chart-1"/>
-        <p style={{ fontSize:12, fontWeight:700, color:"var(--foreground)" }}>Historial</p>
-      </div>
-      {historial.length===0
-        ? <p style={{ fontSize:12, color:"var(--muted-foreground)", textAlign:"center", padding:"12px 0" }}>Sin eventos</p>
-        : (
-          <div style={{ display:"flex", flexDirection:"column", maxHeight:520, overflowY:"auto" }} className="no-scrollbar">
-            {[...historial].reverse().map((ev,i)=>{
-              const isLast = i===historial.length-1
-              const dotColor =
-                ev.tipo.includes("bloqueo") ? (ev.tipo === "bloqueo_resuelto" ? "var(--chart-2)" : "var(--chart-4)") :
-                ev.tipo.includes("rechazado") || ev.tipo.includes("cancelada") || ev.tipo.includes("fallida") ? "var(--chart-4)" :
-                ev.tipo.includes("aprobado") || ev.tipo.includes("completada") || ev.tipo.includes("exitosa") ? "var(--chart-2)" :
-                "var(--chart-1)"
-              return (
-                <div key={ev.id} style={{ display:"flex", gap:8 }}>
-                  <div style={{ display:"flex", flexDirection:"column", alignItems:"center", flexShrink:0 }}>
-                    <div style={{ width:8, height:8, borderRadius:"50%", marginTop:4, flexShrink:0,
-                      background:dotColor, boxShadow:`0 0 0 2px ${dotColor}` }}/>
-                    {!isLast && <div style={{ width:2, flex:1, minHeight:14, margin:"2px 0", background:"var(--border)" }}/>}
-                  </div>
-                  <div style={{ paddingBottom:isLast?0:14, flex:1, minWidth:0 }}>
-                    <p style={{ fontSize:11, color:"var(--foreground)", lineHeight:1.4, marginBottom:2 }}>{ev.descripcion}</p>
-                    <p style={{ fontSize:10, color:"var(--muted-foreground)" }}>{fmtCorto(ev.fecha)} · <span style={{ fontFamily:"monospace" }}>{fmtHora(ev.fecha)}</span></p>
-                    <p style={{ fontSize:10, fontWeight:600, color:"var(--foreground)" }}>{ev.usuario}</p>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )
-      }
-    </div>
-  )
-}
-
-// ── Casos de Prueba panel ─────────────────────────────────────
-interface HUCasosPanelProps {
-  casosHU: CasoPrueba[]
-  hu: HistoriaUsuario
-  tareas: Tarea[]
-  puedeAgregarCasos: boolean
-  pasoPrimeraEtapa: boolean
-}
-
-function HUCasosPanel({ casosHU, hu, tareas, puedeAgregarCasos, pasoPrimeraEtapa }: HUCasosPanelProps) {
-  const {
-    isQA, isAdmin, isQALead, currentUser,
-    configEtapas, configResultados, tiposPrueba, onAddCaso, onEditarCaso, onAvanzarEtapa, onFallarHU,
-  } = useHUDetail()
-
-  const esAceptadoResultado = (resultado: string): boolean => {
-    const def = configResultados.find(d => d.id === resultado)
-    if (def) return def.esAceptado
-    return resultado === "exitoso" || resultado === "error_preexistente" || resultado === "bloqueado"
-  }
-
-  const huCerrada = hu.estado === "exitosa" || hu.estado === "cancelada" || hu.estado === "fallida"
-
-  const [showCasoForm, setShowCasoForm] = useState(false)
-  const [editandoCaso, setEditandoCaso] = useState<CasoPrueba | null>(null)
-  const [casoTitulo, setCasoTitulo]         = useState("")
-  const [casoDesc, setCasoDesc]             = useState("")
-  const [casoEntorno, setCasoEntorno]       = useState<EntornoCaso>("test")
-  const [casoTipo, setCasoTipo]             = useState<TipoPrueba>("funcional")
-  const [casoHoras, setCasoHoras]           = useState(8)
-  const [casoArchivos, setCasoArchivos]     = useState("")
-  const [casoComplejidad, setCasoComplejidad] = useState<ComplejidadCaso>("media")
-
-  const resetCasoForm = () => {
-    setCasoTitulo(""); setCasoDesc(""); setCasoEntorno("test"); setCasoTipo("funcional")
-    setCasoHoras(8); setCasoArchivos(""); setCasoComplejidad("media")
-  }
-
-  const submitCaso = () => {
-    if (!casoTitulo.trim()) return
-    const caso: CasoPrueba = {
-      id: `CP-${Date.now()}`, huId: hu.id,
-      titulo: casoTitulo.trim(), descripcion: casoDesc.trim(),
-      entorno: casoEntorno, tipoPrueba: casoTipo, horasEstimadas: casoHoras,
-      archivosAnalizados: casoArchivos.split(",").map((s: string) => s.trim()).filter(Boolean),
-      complejidad: casoComplejidad, estadoAprobacion: "borrador",
-      resultadosPorEtapa: [], fechaCreacion: new Date(), tareasIds: [], bloqueos: [],
-      creadoPor: currentUser || "Sistema", modificacionHabilitada: false, comentarios: [],
-    }
-    onAddCaso(caso)
-    resetCasoForm()
-    setShowCasoForm(false)
-  }
-
-  const submitEditarCaso = () => {
-    if (!editandoCaso || !casoTitulo.trim()) return
-    onEditarCaso({
-      ...editandoCaso,
-      titulo: casoTitulo.trim(), descripcion: casoDesc.trim(),
-      entorno: casoEntorno, tipoPrueba: casoTipo, horasEstimadas: casoHoras,
-      archivosAnalizados: casoArchivos.split(",").map((s: string) => s.trim()).filter(Boolean),
-      complejidad: casoComplejidad, estadoAprobacion: "borrador",
-      modificacionHabilitada: false, modificacionSolicitada: false,
-    })
-    setEditandoCaso(null)
-    resetCasoForm()
-  }
-
-  const abrirEditarCaso = (caso: CasoPrueba) => {
-    setEditandoCaso(caso)
-    setCasoTitulo(caso.titulo); setCasoDesc(caso.descripcion)
-    setCasoEntorno(caso.entorno); setCasoTipo(caso.tipoPrueba)
-    setCasoHoras(caso.horasEstimadas)
-    setCasoArchivos(caso.archivosAnalizados.join(", "))
-    setCasoComplejidad(caso.complejidad)
-    setShowCasoForm(false)
-  }
-
-  // ── Cómputo de progreso de etapa actual ──
-  const etapaActualH = hu.etapa as EtapaEjecucion
-  const enEjecucionActiva = !huCerrada && hu.estado === "en_progreso" &&
-    hu.etapa !== "sin_iniciar" && hu.etapa !== "completada" && hu.etapa !== "cambio_cancelado"
-  const aprobadosHU = casosHU.filter(c => c.estadoAprobacion === "aprobado")
-  const resultadosEtapa: ResultadoEtapa[] = aprobadosHU
-    .map(c => c.resultadosPorEtapa.find(r => r.etapa === etapaActualH))
-    .filter((r): r is ResultadoEtapa => r !== undefined)
-  const completadosEtapa     = resultadosEtapa.filter(r => r.estado === "completado")
-  const exitososEtapa        = completadosEtapa.filter(r => r.resultado === "exitoso")
-  const aceptadosNoExitosos  = completadosEtapa.filter(r => r.resultado !== "exitoso" && esAceptadoResultado(r.resultado))
-  const fallidosEtapa        = completadosEtapa.filter(r => !esAceptadoResultado(r.resultado))
-  const enEjecucionEtapa     = resultadosEtapa.filter(r => r.estado === "en_ejecucion")
-  const todosCompletados     = aprobadosHU.length > 0 && completadosEtapa.length === aprobadosHU.length
-  // Todos aceptados: ningún resultado no-aceptado — QA decide si avanzar con aceptados parciales
-  const todosAceptados       = todosCompletados && fallidosEtapa.length === 0
-  const hayFallidos          = fallidosEtapa.length > 0
-  const nextEtapa            = enEjecucionActiva ? siguienteEtapa(etapaActualH, hu.tipoAplicacion, configEtapas) : null
-
-  return (
-    <div>
-      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
-        <p style={{ ...SLBL, marginBottom:0 }}>
-          <FileText size={11}/>Casos de Prueba ({casosHU.length})
-        </p>
-        {(isQA || isAdmin || isQALead) && puedeAgregarCasos && (
-          <Button size="sm" variant="outline" onClick={() => { setShowCasoForm(true); setEditandoCaso(null); resetCasoForm() }}>
-            <Plus size={12} className="mr-1"/> Nuevo Caso
-          </Button>
-        )}
-        {pasoPrimeraEtapa && !hu.permitirCasosAdicionales && !isAdmin && !isQALead && !huCerrada && (
-          <span style={{ fontSize:10, color:"var(--chart-3)", display:"flex", alignItems:"center", gap:4 }}>
-            <Lock size={10}/> No se pueden agregar más casos
-          </span>
-        )}
-      </div>
-
-      {/* Formulario nuevo caso */}
-      {showCasoForm && !editandoCaso && (
-        <div style={{ ...PNL, marginBottom:12, borderColor:"var(--primary)" }}>
-          <p style={{ fontSize:12, fontWeight:700, color:"var(--foreground)", marginBottom:10 }}>Nuevo Caso de Prueba</p>
-          <CasoFormFields
-            titulo={casoTitulo} onTitulo={setCasoTitulo}
-            desc={casoDesc} onDesc={setCasoDesc}
-            entorno={casoEntorno} onEntorno={setCasoEntorno}
-            tipo={casoTipo} onTipo={setCasoTipo}
-            horas={casoHoras} onHoras={setCasoHoras}
-            archivos={casoArchivos} onArchivos={setCasoArchivos}
-            complejidad={casoComplejidad} onComplejidad={setCasoComplejidad}
-            tiposPrueba={tiposPrueba}
-          />
-          <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
-            <Button variant="outline" size="sm" onClick={() => { setShowCasoForm(false); resetCasoForm() }}>Cancelar</Button>
-            <Button size="sm" disabled={!casoTitulo.trim()} onClick={submitCaso}>Crear caso</Button>
-          </div>
-        </div>
-      )}
-
-      {/* Formulario editar caso */}
-      {editandoCaso && (
-        <div style={{ ...PNL, marginBottom:12, borderColor:"var(--chart-1)" }}>
-          <p style={{ fontSize:12, fontWeight:700, color:"var(--chart-1)", marginBottom:10 }}>
-            <Pencil size={12} style={{ display:"inline", marginRight:5 }}/>Editando caso: {editandoCaso.id}
-          </p>
-          <CasoFormFields
-            titulo={casoTitulo} onTitulo={setCasoTitulo}
-            desc={casoDesc} onDesc={setCasoDesc}
-            entorno={casoEntorno} onEntorno={setCasoEntorno}
-            tipo={casoTipo} onTipo={setCasoTipo}
-            horas={casoHoras} onHoras={setCasoHoras}
-            archivos={casoArchivos} onArchivos={setCasoArchivos}
-            complejidad={casoComplejidad} onComplejidad={setCasoComplejidad}
-            tiposPrueba={tiposPrueba}
-          />
-          <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
-            <Button variant="outline" size="sm" onClick={() => { setEditandoCaso(null); resetCasoForm() }}>Cancelar</Button>
-            <Button size="sm" disabled={!casoTitulo.trim()} onClick={submitEditarCaso}>Guardar cambios</Button>
-          </div>
-        </div>
-      )}
-
-      {casosHU.length === 0 && !showCasoForm && !editandoCaso && (
-        <div style={{ textAlign:"center", padding:24, color:"var(--muted-foreground)", border:"1px dashed var(--border)", borderRadius:10 }}>
-          <p style={{ fontSize:13 }}>Sin casos de prueba.{puedeAgregarCasos ? " Crea uno con el botón Nuevo Caso." : ""}</p>
-        </div>
-      )}
-
-      <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-        {casosHU.map(caso => (
-          <CasoPruebaCard
-            key={caso.id}
-            caso={caso}
-            hu={hu}
-            tareasCaso={tareas.filter(t => caso.tareasIds.includes(t.id))}
-            onAbrirEditar={abrirEditarCaso}
-          />
-        ))}
-      </div>
-
-      {/* ── Panel de avance de etapa ── */}
-      {enEjecucionActiva && aprobadosHU.length > 0 && (
-        <div style={{
-          marginTop:14,
-          padding:"14px 16px",
-          borderRadius:10,
-          border:`1px solid ${todosAceptados ? "var(--chart-2)" : hayFallidos ? "var(--chart-4)" : "var(--border)"}`,
-          background: todosAceptados
-            ? "color-mix(in oklch, var(--chart-2) 6%, var(--background))"
-            : hayFallidos
-            ? "color-mix(in oklch, var(--chart-4) 5%, var(--background))"
-            : "var(--background)",
-        }}>
-          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, flexWrap:"wrap" }}>
-            <div style={{ flex:1, minWidth:0 }}>
-              <p style={{ fontSize:10, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700, color:"var(--muted-foreground)", marginBottom:5 }}>
-                Avance de etapa — {getEtapaHUCfg(etapaActualH, configEtapas).label}
-              </p>
-              {todosAceptados ? (
-                <div>
-                  <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                    <CheckCircle2 size={14} style={{ color:"var(--chart-2)", flexShrink:0 }}/>
-                    <p style={{ fontSize:13, fontWeight:600, color:"var(--chart-2)" }}>
-                      {exitososEtapa.length === aprobadosHU.length
-                        ? `Todos los casos exitosos (${aprobadosHU.length}/${aprobadosHU.length})`
-                        : `${exitososEtapa.length} exitoso${exitososEtapa.length !== 1 ? "s" : ""}${aceptadosNoExitosos.length > 0 ? `, ${aceptadosNoExitosos.length} aceptado${aceptadosNoExitosos.length !== 1 ? "s" : ""} (no exitoso)` : ""} — listo para avanzar`
-                      }
-                    </p>
-                  </div>
-                  {aceptadosNoExitosos.length > 0 && (
-                    <p style={{ fontSize:11, color:"var(--muted-foreground)", marginTop:3 }}>
-                      Los casos aceptados con resultado no exitoso no bloquean el avance — criterio del QA.
-                    </p>
-                  )}
-                </div>
-              ) : hayFallidos ? (
-                <div>
-                  <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                    <AlertTriangle size={14} style={{ color:"var(--chart-4)", flexShrink:0 }}/>
-                    <p style={{ fontSize:13, fontWeight:600, color:"var(--chart-4)" }}>
-                      {fallidosEtapa.length} caso{fallidosEtapa.length > 1 ? "s" : ""} fallido{fallidosEtapa.length > 1 ? "s" : ""} — aplica retesteo
-                    </p>
-                  </div>
-                  <p style={{ fontSize:11, color:"var(--muted-foreground)", marginTop:3 }}>
-                    Corrige los fallos y solicita retesteo, o declara el cambio como fallido.
-                  </p>
-                </div>
-              ) : (
-                <p style={{ fontSize:13, fontWeight:600, color:"var(--foreground)" }}>
-                  {completadosEtapa.length} de {aprobadosHU.length} caso{aprobadosHU.length > 1 ? "s" : ""} completado{completadosEtapa.length !== 1 ? "s" : ""}
-                  {enEjecucionEtapa.length > 0 ? ` · ${enEjecucionEtapa.length} en ejecución` : ""}
-                </p>
-              )}
-            </div>
-            <div style={{ display:"flex", gap:6, flexShrink:0, flexWrap:"wrap" }}>
-              {(isQA || isAdmin || isQALead) && hayFallidos && todosCompletados && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  style={{ borderColor:"var(--chart-4)", color:"var(--chart-4)" }}
-                  onClick={() => onFallarHU(hu.id, "Casos de prueba fallidos sin retesteo exitoso")}
-                >
-                  <XCircle size={12} className="mr-1"/>Declarar cambio fallido
-                </Button>
-              )}
-              {(isQA || isAdmin || isQALead) && todosAceptados && (
-                <Button
-                  size="sm"
-                  onClick={() => onAvanzarEtapa(hu.id)}
-                  className={nextEtapa ? "" : "bg-chart-2 hover:bg-chart-2/90 text-white"}
-                >
-                  {nextEtapa
-                    ? <><ArrowRight size={12} className="mr-1"/>Avanzar a {getEtapaHUCfg(nextEtapa, configEtapas).label}</>
-                    : <><CheckCircle2 size={12} className="mr-1"/>Completar HU</>
-                  }
-                </Button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-interface CasoFormFieldsProps {
-  titulo: string; onTitulo: (v: string) => void
-  desc: string; onDesc: (v: string) => void
-  entorno: EntornoCaso; onEntorno: (v: EntornoCaso) => void
-  tipo: TipoPrueba; onTipo: (v: TipoPrueba) => void
-  horas: number; onHoras: (v: number) => void
-  archivos: string; onArchivos: (v: string) => void
-  complejidad: ComplejidadCaso; onComplejidad: (v: ComplejidadCaso) => void
-  tiposPrueba?: TipoPruebaDef[]
-}
-
-function CasoFormFields({ titulo, onTitulo, desc, onDesc, entorno, onEntorno, tipo, onTipo, horas, onHoras, archivos, onArchivos, complejidad, onComplejidad, tiposPrueba }: CasoFormFieldsProps) {
-  const tiposPruebaOpts = tiposPrueba?.length ? tiposPrueba : TIPOS_PRUEBA_PREDETERMINADOS
-  return (
-    <div className="grid grid-cols-2 gap-2 mb-2">
-      <div style={{ gridColumn:"1/-1" }}>
-        <Input value={titulo} onChange={e => onTitulo(e.target.value)} placeholder="Título del caso de prueba *" style={{ fontSize:12 }} />
-      </div>
-      <div style={{ gridColumn:"1/-1" }}>
-        <Textarea rows={2} value={desc} onChange={e => onDesc(e.target.value)} placeholder="Descripción..." style={{ fontSize:12, resize:"none" }} />
-      </div>
-      <div>
-        <label style={{ fontSize:10, color:"var(--muted-foreground)", display:"block", marginBottom:4 }}>Entorno</label>
-        <Select value={entorno} onValueChange={(v: EntornoCaso) => onEntorno(v)}>
-          <SelectTrigger style={{ height:30, fontSize:11 }}><SelectValue/></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="test">Test</SelectItem>
-            <SelectItem value="preproduccion">Pre-Producción</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <div>
-        <label style={{ fontSize:10, color:"var(--muted-foreground)", display:"block", marginBottom:4 }}>Tipo de prueba</label>
-        <Select value={tipo} onValueChange={(v: TipoPrueba) => onTipo(v)}>
-          <SelectTrigger style={{ height:30, fontSize:11 }}><SelectValue/></SelectTrigger>
-          <SelectContent>
-            {tipo && !tiposPruebaOpts.some(t => t.id === tipo) && (
-              <SelectItem value={tipo}>{tipo}</SelectItem>
-            )}
-            {tiposPruebaOpts.map(t => (
-              <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      <div>
-        <label style={{ fontSize:10, color:"var(--muted-foreground)", display:"block", marginBottom:4 }}>Complejidad</label>
-        <Select value={complejidad} onValueChange={(v: ComplejidadCaso) => onComplejidad(v)}>
-          <SelectTrigger style={{ height:30, fontSize:11 }}><SelectValue/></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="alta">Alta</SelectItem>
-            <SelectItem value="media">Media</SelectItem>
-            <SelectItem value="baja">Baja</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <div>
-        <label style={{ fontSize:10, color:"var(--muted-foreground)", display:"block", marginBottom:4 }}>Horas estimadas</label>
-        <Input type="number" min={1} value={horas} onChange={e => onHoras(parseInt(e.target.value)||1)} style={{ height:30, fontSize:11 }} />
-      </div>
-      <div style={{ gridColumn:"1/3" }}>
-        <label style={{ fontSize:10, color:"var(--muted-foreground)", display:"block", marginBottom:4 }}>Archivos analizados (separados por coma)</label>
-        <Input value={archivos} onChange={e => onArchivos(e.target.value)} placeholder="archivo1.ts, archivo2.tsx" style={{ fontSize:11 }} />
-      </div>
-    </div>
   )
 }

@@ -1,0 +1,8 @@
+export { TabInicio } from "./tab-inicio"
+export { TabHistorias } from "./tab-historias"
+export { TabAnalytics } from "./tab-analytics"
+export { TabCarga } from "./tab-carga"
+export { TabBloqueos } from "./tab-bloqueos"
+export { TabCasos } from "./tab-casos"
+export { TabAdmin } from "./tab-admin"
+export { TabGrupos } from "./tab-grupos"

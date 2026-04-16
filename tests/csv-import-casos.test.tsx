@@ -95,7 +95,8 @@ describe("CSVImportCasosModal — renderizado", () => {
     render(
       <CSVImportCasosModal open={true} onClose={onClose} onImport={() => {}} historias={HISTORIAS} />
     )
-    fireEvent.click(screen.getByTitle ? document.querySelector("button[style*='none']")! : screen.getAllByRole("button")[0])
+    const firstBtn = document.querySelector("button[style*='none']") ?? screen.getAllByRole("button")[0]!
+    fireEvent.click(firstBtn)
     // Cualquier clic en el botón X (primer botón sin texto)
     const btns = screen.getAllByRole("button")
     const closeBtn = btns.find(b => b.textContent === "")
@@ -196,14 +197,14 @@ describe("CSVImportCasosModal — importación", () => {
 
     await waitFor(() => expect(onImport).toHaveBeenCalledOnce())
 
-    const importados = onImport.mock.calls[0][0] as CasoPrueba[]
+    const importados = onImport.mock.calls[0]![0] as CasoPrueba[]
     expect(importados).toHaveLength(2)
-    expect(importados[0].titulo).toBe("Caso login")
-    expect(importados[0].huId).toBe("hu-1")
-    expect(importados[0].complejidad).toBe("alta")
-    expect(importados[0].creadoPor).toBe("Tester")
-    expect(importados[1].huId).toBe("hu-2")
-    expect(importados[1].entorno).toBe("preproduccion")
+    expect(importados[0]!.titulo).toBe("Caso login")
+    expect(importados[0]!.huId).toBe("hu-1")
+    expect(importados[0]!.complejidad).toBe("alta")
+    expect(importados[0]!.creadoPor).toBe("Tester")
+    expect(importados[1]!.huId).toBe("hu-2")
+    expect(importados[1]!.entorno).toBe("preproduccion")
   })
 
   it("no muestra el botón Importar cuando no hay filas válidas", async () => {
@@ -245,8 +246,8 @@ describe("CSVImportCasosModal — importación", () => {
     fireEvent.click(screen.getByRole("button", { name: /importar 2 casos/i }))
 
     await waitFor(() => expect(onImport).toHaveBeenCalledOnce())
-    const importados = onImport.mock.calls[0][0] as CasoPrueba[]
-    expect(importados[0].id).not.toBe(importados[1].id)
+    const importados = onImport.mock.calls[0]![0] as CasoPrueba[]
+    expect(importados[0]!.id).not.toBe(importados[1]!.id)
   })
 })
 
@@ -264,7 +265,7 @@ describe("CSVImportCasosModal — valores por defecto", () => {
     fireEvent.click(screen.getByRole("button", { name: /importar 1 caso/i }))
 
     await waitFor(() => expect(onImport).toHaveBeenCalled())
-    expect(onImport.mock.calls[0][0][0].complejidad).toBe("media")
+    expect(onImport.mock.calls[0]![0][0].complejidad).toBe("media")
   })
 
   it("entorno vacío se mapea a 'test'", async () => {
@@ -278,7 +279,7 @@ describe("CSVImportCasosModal — valores por defecto", () => {
     fireEvent.click(screen.getByRole("button", { name: /importar 1 caso/i }))
 
     await waitFor(() => expect(onImport).toHaveBeenCalled())
-    expect(onImport.mock.calls[0][0][0].entorno).toBe("test")
+    expect(onImport.mock.calls[0]![0][0].entorno).toBe("test")
   })
 
   it("horas vacías se mapean a 1", async () => {
@@ -292,7 +293,7 @@ describe("CSVImportCasosModal — valores por defecto", () => {
     fireEvent.click(screen.getByRole("button", { name: /importar 1 caso/i }))
 
     await waitFor(() => expect(onImport).toHaveBeenCalled())
-    expect(onImport.mock.calls[0][0][0].horasEstimadas).toBe(1)
+    expect(onImport.mock.calls[0]![0][0].horasEstimadas).toBe(1)
   })
 
   it("estadoAprobacion siempre es 'borrador'", async () => {
@@ -306,6 +307,6 @@ describe("CSVImportCasosModal — valores por defecto", () => {
     fireEvent.click(screen.getByRole("button", { name: /importar 1 caso/i }))
 
     await waitFor(() => expect(onImport).toHaveBeenCalled())
-    expect(onImport.mock.calls[0][0][0].estadoAprobacion).toBe("borrador")
+    expect(onImport.mock.calls[0]![0][0].estadoAprobacion).toBe("borrador")
   })
 })

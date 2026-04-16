@@ -125,7 +125,7 @@ describe("handleIniciarHU", () => {
 
     createHUHandlers(ctx).handleIniciarHU("hu-1")
 
-    const h = getHistorias()[0]
+    const h = getHistorias()[0]!
     expect(h.estado).toBe("en_progreso")
     expect(h.etapa).toBe("despliegue")
   })
@@ -136,8 +136,8 @@ describe("handleIniciarHU", () => {
 
     createHUHandlers(ctx).handleIniciarHU("hu-1")
 
-    expect(getHistorias()[0].historial).toHaveLength(1)
-    expect(getHistorias()[0].historial[0].tipo).toBe("hu_iniciada")
+    expect(getHistorias()[0]!.historial).toHaveLength(1)
+    expect(getHistorias()[0]!.historial[0]!.tipo).toBe("hu_iniciada")
   })
 
   it("no cambia estado si la HU ya está en_progreso", () => {
@@ -146,9 +146,9 @@ describe("handleIniciarHU", () => {
 
     createHUHandlers(ctx).handleIniciarHU("hu-1")
 
-    expect(getHistorias()[0].estado).toBe("en_progreso")
-    expect(getHistorias()[0].etapa).toBe("despliegue")
-    expect(getHistorias()[0].historial).toHaveLength(0)
+    expect(getHistorias()[0]!.estado).toBe("en_progreso")
+    expect(getHistorias()[0]!.etapa).toBe("despliegue")
+    expect(getHistorias()[0]!.historial).toHaveLength(0)
   })
 
   it("emite toast de info", () => {
@@ -174,7 +174,7 @@ describe("handleCancelarHU", () => {
 
     createHUHandlers(ctx).handleCancelarHU("hu-1", "Motivo de cancelación")
 
-    const h = getHistorias()[0]
+    const h = getHistorias()[0]!
     expect(h.estado).toBe("cancelada")
     expect(h.etapa).toBe("cambio_cancelado")
     expect(h.motivoCancelacion).toBe("Motivo de cancelación")
@@ -187,8 +187,8 @@ describe("handleCancelarHU", () => {
 
     createHUHandlers(ctx).handleCancelarHU("hu-1", "Motivo")
 
-    expect(getHistorias()[0].historial).toHaveLength(1)
-    expect(getHistorias()[0].historial[0].tipo).toBe("hu_cancelada")
+    expect(getHistorias()[0]!.historial).toHaveLength(1)
+    expect(getHistorias()[0]!.historial[0]!.tipo).toBe("hu_cancelada")
   })
 
   it("emite toast de error", () => {
@@ -214,7 +214,7 @@ describe("handleFallarHU", () => {
 
     createHUHandlers(ctx).handleFallarHU("hu-1", "Bug crítico no resuelto")
 
-    const h = getHistorias()[0]
+    const h = getHistorias()[0]!
     expect(h.estado).toBe("fallida")
     expect(h.etapa).toBe("cambio_cancelado")
     expect(h.motivoCancelacion).toBe("Bug crítico no resuelto")
@@ -227,8 +227,8 @@ describe("handleFallarHU", () => {
 
     createHUHandlers(ctx).handleFallarHU("hu-1", "Motivo")
 
-    expect(getHistorias()[0].historial).toHaveLength(1)
-    expect(getHistorias()[0].historial[0].tipo).toBe("hu_fallida")
+    expect(getHistorias()[0]!.historial).toHaveLength(1)
+    expect(getHistorias()[0]!.historial[0]!.tipo).toBe("hu_fallida")
   })
 
   it("no afecta otras HUs", () => {
@@ -238,7 +238,7 @@ describe("handleFallarHU", () => {
 
     createHUHandlers(ctx).handleFallarHU("hu-1", "Motivo")
 
-    expect(getHistorias()[1].estado).toBe("en_progreso")
+    expect(getHistorias()[1]!.estado).toBe("en_progreso")
   })
 })
 
@@ -255,9 +255,9 @@ describe("handleBulkCambiarEstado", () => {
 
     createHUHandlers(ctx).handleBulkCambiarEstado(["hu-1", "hu-3"], "en_progreso")
 
-    expect(getHistorias()[0].estado).toBe("en_progreso")
-    expect(getHistorias()[1].estado).toBe("sin_iniciar")
-    expect(getHistorias()[2].estado).toBe("en_progreso")
+    expect(getHistorias()[0]!.estado).toBe("en_progreso")
+    expect(getHistorias()[1]!.estado).toBe("sin_iniciar")
+    expect(getHistorias()[2]!.estado).toBe("en_progreso")
   })
 
   it("emite toast de success con el conteo correcto", () => {
@@ -285,8 +285,8 @@ describe("handleBulkCambiarResponsable", () => {
 
     createHUHandlers(ctx).handleBulkCambiarResponsable(["hu-1"], "QA2")
 
-    expect(getHistorias()[0].responsable).toBe("QA2")
-    expect(getHistorias()[1].responsable).toBe("QA1")
+    expect(getHistorias()[0]!.responsable).toBe("QA2")
+    expect(getHistorias()[1]!.responsable).toBe("QA1")
   })
 })
 
@@ -303,7 +303,7 @@ describe("handleImportarHUs", () => {
     createHUHandlers(ctx).handleImportarHUs([nueva])
 
     expect(getHistorias()).toHaveLength(2)
-    expect(getHistorias()[1].id).toBe("hu-2")
+    expect(getHistorias()[1]!.id).toBe("hu-2")
   })
 
   it("descarta HUs con código ya existente (deduplicación)", () => {
@@ -314,7 +314,7 @@ describe("handleImportarHUs", () => {
     createHUHandlers(ctx).handleImportarHUs([duplicada])
 
     expect(getHistorias()).toHaveLength(1)
-    expect(getHistorias()[0].id).toBe("hu-1")
+    expect(getHistorias()[0]!.id).toBe("hu-1")
   })
 
   it("añade solo las no duplicadas de un lote mixto", () => {
@@ -341,7 +341,7 @@ describe("handleAvanzarEtapa", () => {
 
     createHUHandlers(ctx).handleAvanzarEtapa("hu-1")
 
-    expect(getHistorias()[0].etapa).toBe("despliegue")
+    expect(getHistorias()[0]!.etapa).toBe("despliegue")
     expect(ctx.addToast).toHaveBeenCalledWith(expect.objectContaining({ type: "error" }))
   })
 
@@ -353,7 +353,7 @@ describe("handleAvanzarEtapa", () => {
 
     createHUHandlers(ctx).handleAvanzarEtapa("hu-1")
 
-    expect(getHistorias()[0].etapa).toBe("despliegue")
+    expect(getHistorias()[0]!.etapa).toBe("despliegue")
   })
 
   it("avanza a la siguiente etapa cuando todos los casos están completados exitosamente", () => {
@@ -367,10 +367,10 @@ describe("handleAvanzarEtapa", () => {
 
     createHUHandlers(ctx).handleAvanzarEtapa("hu-1")
 
-    const h = getHistorias()[0]
+    const h = getHistorias()[0]!
     expect(h.etapa).toBe("rollback")
     expect(h.historial).toHaveLength(1)
-    expect(h.historial[0].tipo).toBe("hu_etapa_avanzada")
+    expect(h.historial[0]!.tipo).toBe("hu_etapa_avanzada")
   })
 
   it("marca la HU como exitosa al completar la última etapa", () => {
@@ -384,11 +384,11 @@ describe("handleAvanzarEtapa", () => {
 
     createHUHandlers(ctx).handleAvanzarEtapa("hu-1")
 
-    const h = getHistorias()[0]
+    const h = getHistorias()[0]!
     expect(h.estado).toBe("exitosa")
     expect(h.etapa).toBe("completada")
     expect(h.fechaCierre).toBeInstanceOf(Date)
-    expect(h.historial[0].tipo).toBe("hu_completada")
+    expect(h.historial[0]!.tipo).toBe("hu_completada")
   })
 
   it("no hace nada si la HU ya está completada", () => {

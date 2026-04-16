@@ -1,0 +1,13 @@
+node_modules
+.next
+.git
+.github
+.env*
+.claude
+*.md
+tests
+docker-compose*.yml
+Dockerfile
+.dockerignore
+coverage
+.husky

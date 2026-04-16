@@ -163,7 +163,7 @@ export function HistoriasTable({ historias, casos, onVerDetalle, onEditar, onEli
   const toggleSelect = (id: string) =>
     setSelectedIds(prev => {
       const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
+      if (next.has(id)) next.delete(id); else next.add(id)
       return next
     })
 
@@ -413,6 +413,7 @@ export function HistoriasTable({ historias, casos, onVerDetalle, onEditar, onEli
           onVerDetalle={onVerDetalle}
           onEditar={onEditar}
           onEliminar={onEliminar}
+          onMoverHU={onBulkCambiarEstado ? (huId, estado) => onBulkCambiarEstado([huId], estado) : undefined}
         />
       )}
 
@@ -423,7 +424,7 @@ export function HistoriasTable({ historias, casos, onVerDetalle, onEditar, onEli
       <div className="overflow-x-auto -mx-1 px-1">
       <div>
       {historiasOrdenadas.length > 0 && (
-        <div style={{
+        <div role="row" aria-label="Cabecera de la tabla de historias" style={{
           display:"flex", alignItems:"center", gap:12,
           padding:"5px 16px", borderRadius:8,
           background:"var(--secondary)", border:"1px solid var(--border)",
@@ -479,6 +480,7 @@ export function HistoriasTable({ historias, casos, onVerDetalle, onEditar, onEli
       )}
 
       {/* ── Filas ── */}
+      <div role="table" aria-label="Historias de usuario">
       {husEnPagina.map(hu => {
         const estCfg  = ESTADO_HU_CFG[hu.estado]
         const priCfg  = PRIORIDAD_CFG[hu.prioridad]
@@ -493,7 +495,7 @@ export function HistoriasTable({ historias, casos, onVerDetalle, onEditar, onEli
         const pct = casosAprobados.length > 0 ? Math.round((casosCompletados.length / casosAprobados.length) * 100) : 0
 
         return (
-          <div key={hu.id} style={{
+          <div key={hu.id} role="row" aria-label={`${hu.codigo} — ${hu.titulo}`} style={{
             display:"flex", alignItems:"center", gap:12,
             padding:"13px 16px", borderRadius:12,
             border: selectedIds.has(hu.id)
@@ -567,7 +569,7 @@ export function HistoriasTable({ historias, casos, onVerDetalle, onEditar, onEli
               <p style={{ fontSize:12, color:"var(--muted-foreground)", textOverflow:"ellipsis", whiteSpace:"nowrap", overflow:"hidden", display:"flex", alignItems:"center", gap:4 }}>
                 {hu.responsable}
                 {!isResponsableActivo(hu.responsable, users) && (
-                  <UserX size={11} style={{ color:"var(--chart-4)", flexShrink:0 }} title="Responsable sin workspace activo" />
+                  <UserX size={11} style={{ color:"var(--chart-4)", flexShrink:0 }} aria-label="Responsable sin workspace activo" />
                 )}
               </p>
             </div>
@@ -590,6 +592,7 @@ export function HistoriasTable({ historias, casos, onVerDetalle, onEditar, onEli
           </div>
         )
       })}
+      </div>
 
       </div>
       </div>

@@ -1,17 +1,13 @@
 // ── GET  /api/tareas — listar todas
 // ── POST /api/tareas — crear nueva
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth } from "@/lib/backend/middleware/auth.middleware"
+import { withAuth, checkCasoAccess, checkHUAccess } from "@/lib/backend/middleware/with-auth"
+import { checkRateLimit, getClientIp, rlKey } from "@/lib/backend/middleware/rate-limit"
 import { createTareaSchema } from "@/lib/backend/validators/tarea.validator"
 import { getAllTareas, createTarea, getTareasByCaso, getTareasByHU } from "@/lib/backend/services/tarea.service"
 import { invalidateMetricasCache } from "@/lib/backend/metricas-cache"
-import { prisma } from "@/lib/backend/prisma"
-import { logger } from "@/lib/backend/logger"
 
-export async function GET(request: NextRequest) {
-  const payload = await requireAuth(request)
-  if (payload instanceof NextResponse) return payload
-
+export const GET = withAuth(async (request, payload) => {
   const { searchParams } = new URL(request.url)
   const casoPruebaId = searchParams.get("casoPruebaId")
   const huId         = searchParams.get("huId")
@@ -21,55 +17,33 @@ export async function GET(request: NextRequest) {
   if (casoPruebaId) {
     // Validar que el caso pertenezca al workspace (owner ve todo)
     if (payload.grupoId) {
-      const caso = await prisma.casoPrueba.findUnique({
-        where: { id: casoPruebaId },
-        select: { hu: { select: { grupoId: true } } },
-      })
-      if (!caso || caso.hu?.grupoId !== payload.grupoId) {
-        return NextResponse.json({ tareas: [] })
-      }
+      const caso = await checkCasoAccess(casoPruebaId, payload.grupoId)
+      if (!caso) return NextResponse.json({ tareas: [] })
     }
-    try {
-      const result = await getTareasByCaso(casoPruebaId, page, limit)
-      return NextResponse.json(result)
-    } catch (e) {
-      logger.error("GET /api/tareas", "Error al obtener tareas por caso", e)
-      const msg = e instanceof Error ? e.message : "Error al obtener tareas"
-      return NextResponse.json({ error: msg }, { status: 500 })
-    }
+    const result = await getTareasByCaso(casoPruebaId, page, limit)
+    return NextResponse.json(result)
   }
   if (huId) {
     // Validar que la HU pertenezca al workspace (owner ve todo)
     if (payload.grupoId) {
-      const hu = await prisma.historiaUsuario.findUnique({ where: { id: huId }, select: { grupoId: true } })
-      if (!hu || hu.grupoId !== payload.grupoId) {
-        return NextResponse.json({ tareas: [] })
-      }
+      const hu = await checkHUAccess(huId, payload.grupoId)
+      if (!hu) return NextResponse.json({ tareas: [] })
     }
-    try {
-      const result = await getTareasByHU(huId, page, limit)
-      return NextResponse.json(result)
-    } catch (e) {
-      logger.error("GET /api/tareas", "Error al obtener tareas por HU", e)
-      const msg = e instanceof Error ? e.message : "Error al obtener tareas"
-      return NextResponse.json({ error: msg }, { status: 500 })
-    }
+    const result = await getTareasByHU(huId, page, limit)
+    return NextResponse.json(result)
   }
   const asignado = searchParams.get("asignado") ?? undefined
 
-  try {
-    const result = await getAllTareas(payload.grupoId, asignado, page, limit)
-    return NextResponse.json(result)
-  } catch (e) {
-    logger.error("GET /api/tareas", "Error al obtener tareas", e)
-    const msg = e instanceof Error ? e.message : "Error al obtener tareas"
-    return NextResponse.json({ error: msg }, { status: 500 })
-  }
-}
+  const result = await getAllTareas(payload.grupoId, asignado, page, limit)
+  return NextResponse.json(result)
+})
 
-export async function POST(request: NextRequest) {
-  const payload = await requireAuth(request)
-  if (payload instanceof NextResponse) return payload
+export const POST = withAuth(async (request, payload) => {
+  const ip = getClientIp(request.headers)
+  const rl = checkRateLimit(rlKey(ip, "POST /api/tareas"), 120, 60_000)
+  if (!rl.allowed) {
+    return NextResponse.json({ error: "Demasiadas peticiones. Intenta en un momento." }, { status: 429 })
+  }
 
   const body = await request.json()
   const { error, value } = createTareaSchema.validate(body, { abortEarly: false })
@@ -78,28 +52,16 @@ export async function POST(request: NextRequest) {
   }
 
   // Verificar que el caso existe y pertenece al workspace
-  const caso = await prisma.casoPrueba.findUnique({
-    where: { id: value.casoPruebaId },
-    select: { huId: true, hu: { select: { grupoId: true } } },
-  })
+  const caso = await checkCasoAccess(value.casoPruebaId, payload.grupoId)
   if (!caso) {
-    return NextResponse.json({ error: "El Caso de Prueba no existe" }, { status: 422 })
+    return NextResponse.json({ error: "El Caso de Prueba no existe o no pertenece a tu workspace" }, { status: 422 })
   }
-  if (payload.grupoId && caso.hu?.grupoId !== payload.grupoId) {
-    return NextResponse.json({ error: "El Caso de Prueba no pertenece a tu workspace" }, { status: 422 })
-  }
-  // Verificar coherencia de huId
+  // Verificar coherencia de huId (checkCasoAccess already includes huId)
   if (value.huId && caso.huId !== value.huId) {
     return NextResponse.json({ error: "El huId no corresponde al caso indicado" }, { status: 422 })
   }
 
-  try {
-    const tarea = await createTarea(value)
-    invalidateMetricasCache(payload.grupoId)
-    return NextResponse.json({ tarea }, { status: 201 })
-  } catch (e) {
-    logger.error("POST /api/tareas", "Error al crear tarea", e)
-    const msg = e instanceof Error ? e.message : "Error al crear tarea"
-    return NextResponse.json({ error: msg }, { status: 500 })
-  }
-}
+  const tarea = await createTarea(value)
+  invalidateMetricasCache(payload.grupoId)
+  return NextResponse.json({ tarea }, { status: 201 })
+})

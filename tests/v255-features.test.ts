@@ -142,7 +142,7 @@ describe("GET /api/notificaciones — paginación", () => {
     )
     await getNotificaciones(makeReq("GET", "/api/notificaciones?limit=9999", undefined, adminToken))
 
-    const [,,, limitArg] = vi.mocked(getNotificacionesByDestinatario).mock.calls[0]
+    const [,,, limitArg] = vi.mocked(getNotificacionesByDestinatario).mock.calls[0]!
     expect(limitArg).toBe(200)
   })
 

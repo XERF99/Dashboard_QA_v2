@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAdmin } from "@/lib/backend/middleware/auth.middleware"
+import { withAuthAdmin } from "@/lib/backend/middleware/with-auth"
 import { prisma } from "@/lib/backend/prisma"
 
 /**
@@ -8,14 +8,8 @@ import { prisma } from "@/lib/backend/prisma"
  * Usado para advertir antes de quitarle el workspace.
  * Solo accesible por admins y owner.
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const payload = await requireAdmin(request)
-  if (payload instanceof NextResponse) return payload
-
-  const { id } = await params
+export const GET = withAuthAdmin(async (request, payload, ctx) => {
+  const { id } = await ctx!.params
 
   const user = await prisma.user.findUnique({
     where: { id },
@@ -46,4 +40,4 @@ export async function GET(
   })
 
   return NextResponse.json({ historias, tareas })
-}
+})

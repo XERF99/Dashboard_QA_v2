@@ -65,7 +65,7 @@ describe("getAllGrupos", () => {
     mockPrisma.grupo.count.mockResolvedValue(1)
     const result = await getAllGrupos()
     expect(result.grupos).toHaveLength(1)
-    expect(result.grupos[0].nombre).toBe("Equipo Alpha")
+    expect(result.grupos[0]!.nombre).toBe("Equipo Alpha")
     expect(result.total).toBe(1)
     expect(mockPrisma.grupo.findMany).toHaveBeenCalledWith({
       orderBy: { createdAt: "asc" }, skip: 0, take: 50,

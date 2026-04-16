@@ -18,7 +18,7 @@ interface ResultadosConfigProps {
 
 export function ResultadosConfig({ resultados, onChange }: ResultadosConfigProps) {
   const [nuevoLabel, setNuevoLabel]     = useState("")
-  const [nuevoCls, setNuevoCls]         = useState(BADGE_PALETA[0].cls)
+  const [nuevoCls, setNuevoCls]         = useState(BADGE_PALETA[0]!.cls)
   const [nuevoAceptado, setNuevoAceptado] = useState(true)
 
   const hayDiferencias =
@@ -33,7 +33,7 @@ export function ResultadosConfig({ resultados, onChange }: ResultadosConfigProps
     onChange([...resultados, { id, label, esAceptado: nuevoAceptado, esBase: false, cls: nuevoCls }])
     setNuevoLabel("")
     setNuevoAceptado(true)
-    setNuevoCls(BADGE_PALETA[resultados.length % BADGE_PALETA.length].cls)
+    setNuevoCls(BADGE_PALETA[resultados.length % BADGE_PALETA.length]!.cls)
   }
 
   function eliminar(id: string) {

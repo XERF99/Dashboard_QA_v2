@@ -2,6 +2,7 @@ import { crearEvento, etapasParaTipo, etapaCompletada, siguienteEtapa } from "@/
 import type { HistoriaUsuario, EstadoHU, EtapaEjecucion } from "@/lib/types"
 import type { DomainCtx } from "./types"
 import { api } from "@/lib/services/api/client"
+import { API } from "@/lib/constants/api-routes"
 
 /** Handlers de CRUD y ciclo de vida de Historias de Usuario. */
 export function createHUHandlers({ historias, casos, setHistorias, setCasos, setTareas, user, configEtapas, configResultados, addToast }: DomainCtx) {
@@ -14,7 +15,7 @@ export function createHUHandlers({ historias, casos, setHistorias, setCasos, set
     setHistorias(p => p.filter(h => h.id !== hu.id))
     setCasos(p => p.filter(c => c.huId !== hu.id))
     setTareas(p => p.filter(t => t.huId !== hu.id))
-    api.delete(`/api/historias/${hu.id}`).catch(() => console.warn("[HU] Error al eliminar historia en API"))
+    api.delete(API.historia(hu.id)).catch(() => console.warn("[HU] Error al eliminar historia en API"))
     addToast({ type: "error", title: "Historia eliminada", desc: hu.titulo })
   }
 
@@ -32,7 +33,7 @@ export function createHUHandlers({ historias, casos, setHistorias, setCasos, set
     setHistorias(p => p.filter(h => !ids.includes(h.id)))
     setCasos(p => p.filter(c => !ids.includes(c.huId)))
     setTareas(p => p.filter(t => !ids.includes(t.huId)))
-    Promise.all(ids.map(id => api.delete(`/api/historias/${id}`))).catch(() => console.warn("[HU] Error al eliminar historias en bloque en API"))
+    Promise.all(ids.map(id => api.delete(API.historia(id)))).catch(() => console.warn("[HU] Error al eliminar historias en bloque en API"))
     addToast({ type: "error", title: `${ids.length} historia${ids.length !== 1 ? "s" : ""} eliminada${ids.length !== 1 ? "s" : ""}` })
   }
 
@@ -46,7 +47,7 @@ export function createHUHandlers({ historias, casos, setHistorias, setCasos, set
   const handleIniciarHU = (huId: string) => {
     setHistorias(prev => prev.map(h => {
       if (h.id !== huId || h.estado !== "sin_iniciar") return h
-      const primeraEtapa = etapasParaTipo(h.tipoAplicacion, configEtapas)[0]
+      const primeraEtapa = etapasParaTipo(h.tipoAplicacion, configEtapas)[0] ?? "sin_iniciar"
       return {
         ...h, estado: "en_progreso", etapa: primeraEtapa,
         historial: [...h.historial, crearEvento("hu_iniciada",

@@ -37,7 +37,7 @@ export function AplicacionesConfig({ aplicaciones, onChange }: AplicacionesConfi
     const swap = idx + dir
     if (swap < 0 || swap >= aplicaciones.length) return
     const next = [...aplicaciones]
-    ;[next[idx], next[swap]] = [next[swap], next[idx]]
+    ;[next[idx], next[swap]] = [next[swap]!, next[idx]!]
     onChange(next)
   }
 

@@ -2,6 +2,9 @@
 import { useState } from "react"
 import type { HistoriaUsuario } from "@/lib/types"
 
+export type AdminSeccion = "auditoria" | "audit-log" | "usuarios" | "configuracion"
+export type ConfigSeccion = "roles" | "tipos" | "aplicaciones" | "ambientes" | "tipos_prueba" | "etapas" | "resultados" | "sprints"
+
 interface UseHUModalsOptions {
   historias: HistoriaUsuario[]
   onEliminarConfirmado: (hu: HistoriaUsuario) => void
@@ -17,8 +20,8 @@ export function useHUModals({ historias, onEliminarConfirmado, onBulkEliminarCon
   const [huEditar, setHuEditar] = useState<HistoriaUsuario | null>(null)
   const [deleteModal, setDeleteModal] = useState<{ open: boolean; titulo: string; subtitulo?: string; fn: () => void }>({ open: false, titulo: "", fn: () => {} })
   const [importModalOpen, setImportModalOpen] = useState(false)
-  const [configSeccion, setConfigSeccion] = useState<"roles" | "tipos" | "aplicaciones" | "ambientes" | "tipos_prueba" | "etapas" | "resultados" | "sprints">("roles")
-  const [adminSeccion, setAdminSeccion] = useState<"auditoria" | "usuarios" | "configuracion">("auditoria")
+  const [configSeccion, setConfigSeccion] = useState<ConfigSeccion>("roles")
+  const [adminSeccion, setAdminSeccion] = useState<AdminSeccion>("auditoria")
 
   const huSeleccionada = huSeleccionadaId ? (historias.find(h => h.id === huSeleccionadaId) ?? null) : null
 

@@ -18,9 +18,10 @@ if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma
 
 // Cierra la conexión limpiamente al apagar el servidor (evita conexiones huérfanas
 // en despliegues tradicionales y tests de integración).
-if (process.env.NODE_ENV === "production") {
-  process.on("SIGTERM", async () => {
-    await prisma.$disconnect()
-    process.exit(0)
-  })
+// Cierra la conexión limpiamente (SIGTERM en producción, SIGINT en dev con Ctrl-C)
+const shutdownHandler = async () => {
+  await prisma.$disconnect()
+  process.exit(0)
 }
+process.on("SIGTERM", shutdownHandler)
+process.on("SIGINT", shutdownHandler)

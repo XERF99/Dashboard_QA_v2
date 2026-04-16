@@ -2,7 +2,7 @@
 // ── POST /api/grupos — crear nuevo grupo (owner)
 import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
-import { requireAuth } from "@/lib/backend/middleware/auth.middleware"
+import { withAuth } from "@/lib/backend/middleware/with-auth"
 import { getAllGrupos, createGrupo } from "@/lib/backend/services/grupo.service"
 
 const CreateGrupoSchema = z.object({
@@ -16,10 +16,7 @@ function requireOwner(rol: string) {
     : null
 }
 
-export async function GET(request: NextRequest) {
-  const payload = await requireAuth(request)
-  if (payload instanceof NextResponse) return payload
-
+export const GET = withAuth(async (request, payload) => {
   const deny = requireOwner(payload.rol)
   if (deny) return deny
 
@@ -29,12 +26,9 @@ export async function GET(request: NextRequest) {
 
   const result = await getAllGrupos(page, limit)
   return NextResponse.json(result)
-}
+})
 
-export async function POST(request: NextRequest) {
-  const payload = await requireAuth(request)
-  if (payload instanceof NextResponse) return payload
-
+export const POST = withAuth(async (request, payload) => {
   const deny = requireOwner(payload.rol)
   if (deny) return deny
 
@@ -46,4 +40,4 @@ export async function POST(request: NextRequest) {
   const result = await createGrupo(parsed.data)
   if (!result.success) return NextResponse.json({ error: result.error }, { status: 409 })
   return NextResponse.json({ grupo: result.grupo }, { status: 201 })
-}
+})

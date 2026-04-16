@@ -1,11 +1,11 @@
 // ── PUT    /api/users/[id] — actualizar usuario
 // ── DELETE /api/users/[id] — eliminar usuario
 import { NextRequest, NextResponse } from "next/server"
-import { requireAdmin } from "@/lib/backend/middleware/auth.middleware"
+import { withAuthAdmin } from "@/lib/backend/middleware/with-auth"
+import { checkRateLimit, getClientIp, rlKey } from "@/lib/backend/middleware/rate-limit"
 import { updateUserSchema } from "@/lib/backend/validators/auth.validator"
 import { prisma } from "@/lib/backend/prisma"
 import { resetPasswordService, desbloquearUsuarioService } from "@/lib/backend/services/auth.service"
-import { logger } from "@/lib/backend/logger"
 import { audit } from "@/lib/backend/services/audit.service"
 
 // Roles que un admin (no owner) puede asignar
@@ -45,11 +45,14 @@ async function checkWorkspaceAccess(
   return { ok: true, target }
 }
 
-export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const payload = await requireAdmin(request)
-  if (payload instanceof NextResponse) return payload
+export const PUT = withAuthAdmin(async (request, payload, ctx) => {
+  const { id } = await ctx!.params
 
-  const { id } = await params
+  const ip = getClientIp(request.headers)
+  const rl = checkRateLimit(rlKey(ip, "PUT /api/users/:id"), 60, 60_000)
+  if (!rl.allowed) {
+    return NextResponse.json({ error: "Demasiadas peticiones. Intenta en un momento." }, { status: 429 })
+  }
 
   if (payload.rol !== "owner") {
     const check = await checkWorkspaceAccess(id, payload, true)
@@ -62,24 +65,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   const action = searchParams.get("action")
 
   if (action === "reset-password") {
-    try {
-      const result = await resetPasswordService(id)
-      void audit({ actor: payload, action: "RESET_PASSWORD", resource: "users", resourceId: id })
-      return NextResponse.json(result)
-    } catch (e) {
-      logger.error("PUT /api/users/:id", "Error al resetear password", e)
-      return NextResponse.json({ error: "Error al resetear contraseña" }, { status: 500 })
-    }
+    const result = await resetPasswordService(id)
+    void audit({ actor: payload, action: "RESET_PASSWORD", resource: "users", resourceId: id })
+    return NextResponse.json(result)
   }
   if (action === "desbloquear") {
-    try {
-      const result = await desbloquearUsuarioService(id)
-      void audit({ actor: payload, action: "UNLOCK", resource: "users", resourceId: id })
-      return NextResponse.json(result)
-    } catch (e) {
-      logger.error("PUT /api/users/:id", "Error al desbloquear usuario", e)
-      return NextResponse.json({ error: "Error al desbloquear usuario" }, { status: 500 })
-    }
+    const result = await desbloquearUsuarioService(id)
+    void audit({ actor: payload, action: "UNLOCK", resource: "users", resourceId: id })
+    return NextResponse.json(result)
   }
 
   const { error, value } = updateUserSchema.validate(body, { abortEarly: false })
@@ -92,33 +85,31 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ error: "Permisos insuficientes para asignar ese rol" }, { status: 403 })
   }
 
-  try {
-    const user = await prisma.user.update({
-      where: { id },
-      data: {
-        ...(value.nombre              !== undefined && { nombre:              value.nombre }),
-        ...(value.email               !== undefined && { email:               value.email.toLowerCase() }),
-        ...(value.rol                 !== undefined && { rol:                 value.rol }),
-        ...(value.activo              !== undefined && { activo:              value.activo }),
-        ...(value.debeCambiarPassword !== undefined && { debeCambiarPassword: value.debeCambiarPassword }),
-        ...(value.grupoId             !== undefined && { grupoId:             value.grupoId || null }),
-      },
-      select: { id: true, nombre: true, email: true, rol: true, grupoId: true, activo: true },
-    })
-    void audit({ actor: payload, action: "UPDATE", resource: "users", resourceId: id, meta: { changes: Object.keys(value) } })
-    return NextResponse.json({ user })
-  } catch (e) {
-    logger.error("PUT /api/users/:id", "Error al actualizar usuario", e)
-    const msg = e instanceof Error ? e.message : "Error al actualizar usuario"
-    return NextResponse.json({ error: msg }, { status: 500 })
+  const user = await prisma.user.update({
+    where: { id },
+    data: {
+      ...(value.nombre              !== undefined && { nombre:              value.nombre }),
+      ...(value.email               !== undefined && { email:               value.email.toLowerCase() }),
+      ...(value.rol                 !== undefined && { rol:                 value.rol }),
+      ...(value.activo              !== undefined && { activo:              value.activo }),
+      ...(value.debeCambiarPassword !== undefined && { debeCambiarPassword: value.debeCambiarPassword }),
+      ...(value.grupoId             !== undefined && { grupoId:             value.grupoId || null }),
+    },
+    select: { id: true, nombre: true, email: true, rol: true, grupoId: true, activo: true },
+  })
+  void audit({ actor: payload, action: "UPDATE", resource: "users", resourceId: id, meta: { changes: Object.keys(value) } })
+  return NextResponse.json({ user })
+})
+
+export const DELETE = withAuthAdmin(async (request, payload, ctx) => {
+  const { id } = await ctx!.params
+
+  const ip = getClientIp(request.headers)
+  const rl = checkRateLimit(rlKey(ip, "DELETE /api/users/:id"), 30, 60_000)
+  if (!rl.allowed) {
+    return NextResponse.json({ error: "Demasiadas peticiones. Intenta en un momento." }, { status: 429 })
   }
-}
 
-export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const payload = await requireAdmin(request)
-  if (payload instanceof NextResponse) return payload
-
-  const { id } = await params
   if (payload.sub === id) {
     return NextResponse.json({ error: "No puedes eliminar tu propia cuenta" }, { status: 400 })
   }
@@ -129,13 +120,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     if (!check.ok) return check.response
   }
 
-  try {
-    await prisma.user.delete({ where: { id } })
-    void audit({ actor: payload, action: "DELETE", resource: "users", resourceId: id })
-    return NextResponse.json({ success: true })
-  } catch (e) {
-    logger.error("DELETE /api/users/:id", "Error al eliminar usuario", e)
-    const msg = e instanceof Error ? e.message : "Error al eliminar usuario"
-    return NextResponse.json({ error: msg }, { status: 500 })
-  }
-}
+  await prisma.user.delete({ where: { id } })
+  void audit({ actor: payload, action: "DELETE", resource: "users", resourceId: id })
+  return NextResponse.json({ success: true })
+})

@@ -33,15 +33,15 @@ export function EtapasConfig({ config, onChange, tipos: tiposProp, historias }: 
   const tipos = tiposProp ?? TIPOS_APLICACION_PREDETERMINADOS
 
   function moverEtapa(tipo: string, idx: number, dir: -1 | 1) {
-    const etapas = [...config[tipo]]
+    const etapas = [...(config[tipo] ?? [])]
     const swapIdx = idx + dir
     if (swapIdx < 0 || swapIdx >= etapas.length) return
-    ;[etapas[idx], etapas[swapIdx]] = [etapas[swapIdx], etapas[idx]]
+    ;[etapas[idx], etapas[swapIdx]] = [etapas[swapIdx]!, etapas[idx]!]
     onChange({ ...config, [tipo]: etapas })
   }
 
   function eliminarEtapa(tipo: string, idx: number) {
-    const etapas = config[tipo].filter((_, i) => i !== idx)
+    const etapas = (config[tipo] ?? []).filter((_, i) => i !== idx)
     onChange({ ...config, [tipo]: etapas })
   }
 
@@ -49,20 +49,20 @@ export function EtapasConfig({ config, onChange, tipos: tiposProp, historias }: 
     const label = (nuevoLabel[tipo] ?? "").trim()
     if (!label) return
     const id = labelToId(label)
-    if (!id || config[tipo].some(e => e.id === id)) return
-    const cls = nuevoCls[tipo] ?? BADGE_PALETA[config[tipo].length % BADGE_PALETA.length].cls
-    onChange({ ...config, [tipo]: [...config[tipo], { id, label, cls }] })
+    if (!id || (config[tipo] ?? []).some(e => e.id === id)) return
+    const cls = nuevoCls[tipo] ?? BADGE_PALETA[(config[tipo] ?? []).length % BADGE_PALETA.length]!.cls
+    onChange({ ...config, [tipo]: [...(config[tipo] ?? []), { id, label, cls }] })
     setNuevoLabel(p => ({ ...p, [tipo]: "" }))
     setNuevoCls(p => ({ ...p, [tipo]: "" }))
   }
 
   function cambiarLabel(tipo: string, idx: number, label: string) {
-    const etapas = config[tipo].map((e, i) => i === idx ? { ...e, label } : e)
+    const etapas = (config[tipo] ?? []).map((e, i) => i === idx ? { ...e, label } : e)
     onChange({ ...config, [tipo]: etapas })
   }
 
   function cambiarCls(tipo: string, idx: number, cls: string) {
-    const etapas = config[tipo].map((e, i) => i === idx ? { ...e, cls } : e)
+    const etapas = (config[tipo] ?? []).map((e, i) => i === idx ? { ...e, cls } : e)
     onChange({ ...config, [tipo]: etapas })
   }
 
@@ -96,7 +96,7 @@ export function EtapasConfig({ config, onChange, tipos: tiposProp, historias }: 
     const orig = ETAPAS_PREDETERMINADAS[tipoId]
     if (!orig) return !!curr?.length  // tipo personalizado: si tiene etapas, se considera modificado
     if (!curr || curr.length !== orig.length) return true
-    return curr.some((e, i) => e.id !== orig[i].id || e.label !== orig[i].label)
+    return curr.some((e, i) => e.id !== orig[i]!.id || e.label !== orig[i]!.label)
   }
 
   return (
@@ -283,7 +283,7 @@ export function EtapasConfig({ config, onChange, tipos: tiposProp, historias }: 
                           onClick={() => setNuevoCls(prev => ({ ...prev, [tid]: p.cls }))}
                           style={{
                             width: 14, height: 14, borderRadius: "50%",
-                            border: (nuevoCls[tid] ?? BADGE_PALETA[etapas.length % BADGE_PALETA.length].cls) === p.cls
+                            border: (nuevoCls[tid] ?? BADGE_PALETA[etapas.length % BADGE_PALETA.length]!.cls) === p.cls
                               ? "2px solid var(--foreground)" : "2px solid transparent",
                             background: p.sample, cursor: "pointer", padding: 0,
                           }}

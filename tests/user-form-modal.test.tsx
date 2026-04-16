@@ -120,7 +120,7 @@ describe("UserFormModal — crear usuario vía API", () => {
     fireEvent.click(screen.getByRole("button", { name: /crear usuario/i }))
 
     await waitFor(() => expect(mockFetch).toHaveBeenCalled())
-    const body = JSON.parse(mockFetch.mock.calls[0][1].body as string)
+    const body = JSON.parse(mockFetch.mock.calls[0]![1].body as string)
     expect(body.grupoId).toBeUndefined()
     expect(body.nombre).toBe("María García")
     expect(body.email).toBe("maria@test.com")
@@ -222,7 +222,7 @@ describe("UserFormModal — editar usuario vía API", () => {
     fireEvent.click(screen.getByRole("button", { name: /guardar cambios/i }))
 
     await waitFor(() => expect(mockFetch).toHaveBeenCalled())
-    const body = JSON.parse(mockFetch.mock.calls[0][1].body as string)
+    const body = JSON.parse(mockFetch.mock.calls[0]![1].body as string)
     expect(body.id).toBe(usuarioEditar.id)
     expect(body.nombre).toBe("Laura Mendez")
     expect(body.email).toBe("laura@test.com")
@@ -233,7 +233,7 @@ describe("UserFormModal — editar usuario vía API", () => {
     fireEvent.click(screen.getByRole("button", { name: /guardar cambios/i }))
 
     await waitFor(() => expect(mockFetch).toHaveBeenCalled())
-    const body = JSON.parse(mockFetch.mock.calls[0][1].body as string)
+    const body = JSON.parse(mockFetch.mock.calls[0]![1].body as string)
     expect(body.equipoIds).toBeUndefined()
   })
 

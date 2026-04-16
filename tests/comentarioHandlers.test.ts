@@ -108,8 +108,8 @@ describe("handleAddComentarioHU", () => {
 
     createComentarioHandlers(ctx).handleAddComentarioHU("hu-1", "Primer comentario")
 
-    expect(getHistorias()[0].comentarios).toHaveLength(1)
-    expect(getHistorias()[0].comentarios[0].texto).toBe("Primer comentario")
+    expect(getHistorias()[0]!.comentarios).toHaveLength(1)
+    expect(getHistorias()[0]!.comentarios[0]!.texto).toBe("Primer comentario")
   })
 
   it("no afecta a otras HUs", () => {
@@ -117,7 +117,7 @@ describe("handleAddComentarioHU", () => {
 
     createComentarioHandlers(ctx).handleAddComentarioHU("hu-1", "Comentario")
 
-    expect(getHistorias()[1].comentarios).toHaveLength(0)
+    expect(getHistorias()[1]!.comentarios).toHaveLength(0)
   })
 
   it("el comentario tiene el autor del usuario activo y una fecha", () => {
@@ -125,7 +125,7 @@ describe("handleAddComentarioHU", () => {
 
     createComentarioHandlers(ctx).handleAddComentarioHU("hu-1", "Texto")
 
-    const c = getHistorias()[0].comentarios[0]
+    const c = getHistorias()[0]!.comentarios[0]!
     expect(c.autor).toBe("QA User")
     expect(c.fecha).toBeInstanceOf(Date)
   })
@@ -138,7 +138,7 @@ describe("handleAddComentarioHU", () => {
     h.handleAddComentarioHU("hu-1", "Comentario 2")
     h.handleAddComentarioHU("hu-1", "Comentario 3")
 
-    const ids = getHistorias()[0].comentarios.map(c => c.id)
+    const ids = getHistorias()[0]!.comentarios.map(c => c.id)
     expect(new Set(ids).size).toBe(3)
   })
 })
@@ -153,8 +153,8 @@ describe("handleAddComentarioCaso", () => {
 
     createComentarioHandlers(ctx).handleAddComentarioCaso("c1", "Comentario de caso")
 
-    expect(getCasos()[0].comentarios).toHaveLength(1)
-    expect(getCasos()[0].comentarios[0].texto).toBe("Comentario de caso")
+    expect(getCasos()[0]!.comentarios).toHaveLength(1)
+    expect(getCasos()[0]!.comentarios[0]!.texto).toBe("Comentario de caso")
   })
 
   it("no afecta a otros casos", () => {
@@ -162,7 +162,7 @@ describe("handleAddComentarioCaso", () => {
 
     createComentarioHandlers(ctx).handleAddComentarioCaso("c1", "Comentario")
 
-    expect(getCasos()[1].comentarios).toHaveLength(0)
+    expect(getCasos()[1]!.comentarios).toHaveLength(0)
   })
 
   it("el comentario tiene el autor del usuario activo", () => {
@@ -170,6 +170,6 @@ describe("handleAddComentarioCaso", () => {
 
     createComentarioHandlers(ctx).handleAddComentarioCaso("caso-1", "Texto")
 
-    expect(getCasos()[0].comentarios[0].autor).toBe("QA User")
+    expect(getCasos()[0]!.comentarios[0]!.autor).toBe("QA User")
   })
 })

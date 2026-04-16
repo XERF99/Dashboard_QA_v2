@@ -176,8 +176,7 @@ describe("audit service — resiliencia", () => {
 
     // Cargamos la implementación real de audit (sin mock)
     vi.doUnmock("@/lib/backend/services/audit.service")
-    const { audit: realAudit } = await import("@/lib/backend/services/audit.service?real")
-      .catch(() => import("@/lib/backend/services/audit.service"))
+    const { audit: realAudit } = await import("@/lib/backend/services/audit.service")
 
     const actor = { sub: "u1", email: "e@t.com", nombre: "N", rol: "admin", grupoId: "g1" }
     await expect(realAudit({ actor, action: "CREATE", resource: "historias" })).resolves.not.toThrow()
@@ -188,12 +187,14 @@ describe("audit service — resiliencia", () => {
 //  7. GET /api/audit — solo owner
 // ══════════════════════════════════════════════════════════
 describe("GET /api/audit", () => {
-  it("retorna 403 para rol admin", async () => {
-    await mockAuthOk()
+  it("retorna 200 para rol admin (scoped a su workspace)", async () => {
+    const { prisma } = await import("@/lib/backend/prisma")
+    vi.mocked(prisma.$transaction).mockResolvedValueOnce([[], 0] as never)
+
     const { GET } = await import("@/app/api/audit/route")
     const req = await makeRequest("GET", "/api/audit", undefined, "admin")
     const res = await GET(req)
-    expect(res.status).toBe(403)
+    expect(res.status).toBe(200)
   })
 
   it("retorna 200 con lista para owner", async () => {

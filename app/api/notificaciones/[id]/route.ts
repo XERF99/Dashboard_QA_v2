@@ -1,12 +1,9 @@
 // ── PATCH  /api/notificaciones/[id] — marcar como leída
 // ── DELETE /api/notificaciones/[id] — eliminar
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth } from "@/lib/backend/middleware/auth.middleware"
+import { withAuth } from "@/lib/backend/middleware/with-auth"
 import { marcarLeida, rolToDestinatario } from "@/lib/backend/services/notificacion.service"
 import { prisma } from "@/lib/backend/prisma"
-import { logger } from "@/lib/backend/logger"
-
-type Ctx = { params: Promise<{ id: string }> }
 
 async function resolveNotif(id: string, payload: { grupoId?: string; rol: string }) {
   const notif = await prisma.notificacion.findUnique({
@@ -20,38 +17,22 @@ async function resolveNotif(id: string, payload: { grupoId?: string; rol: string
   return grupoOk && destOk ? notif : null
 }
 
-export async function PATCH(request: NextRequest, { params }: Ctx) {
-  const payload = await requireAuth(request)
-  if (payload instanceof NextResponse) return payload
+export const PATCH = withAuth(async (request, payload, ctx) => {
+  const { id } = await ctx!.params
 
-  const { id } = await params
+  const notif = await resolveNotif(id, payload)
+  if (!notif) return NextResponse.json({ error: "No encontrada" }, { status: 404 })
 
-  try {
-    const notif = await resolveNotif(id, payload)
-    if (!notif) return NextResponse.json({ error: "No encontrada" }, { status: 404 })
+  const notificacion = await marcarLeida(id)
+  return NextResponse.json({ notificacion })
+})
 
-    const notificacion = await marcarLeida(id)
-    return NextResponse.json({ notificacion })
-  } catch (e) {
-    logger.error("PATCH /api/notificaciones/:id", "Error al marcar notificación", e)
-    return NextResponse.json({ error: "Error al marcar notificación" }, { status: 500 })
-  }
-}
+export const DELETE = withAuth(async (request, payload, ctx) => {
+  const { id } = await ctx!.params
 
-export async function DELETE(request: NextRequest, { params }: Ctx) {
-  const payload = await requireAuth(request)
-  if (payload instanceof NextResponse) return payload
+  const notif = await resolveNotif(id, payload)
+  if (!notif) return NextResponse.json({ error: "No encontrada" }, { status: 404 })
 
-  const { id } = await params
-
-  try {
-    const notif = await resolveNotif(id, payload)
-    if (!notif) return NextResponse.json({ error: "No encontrada" }, { status: 404 })
-
-    await prisma.notificacion.delete({ where: { id } })
-    return NextResponse.json({ success: true })
-  } catch (e) {
-    logger.error("DELETE /api/notificaciones/:id", "Error al eliminar notificación", e)
-    return NextResponse.json({ error: "Error al eliminar notificación" }, { status: 500 })
-  }
-}
+  await prisma.notificacion.delete({ where: { id } })
+  return NextResponse.json({ success: true })
+})

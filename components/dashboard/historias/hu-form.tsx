@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -39,6 +39,7 @@ export function HUForm({ open, onClose, onSubmit, huEditar, currentUser, configE
   const tiposPruebaDisponibles = tiposPrueba?.length ? tiposPrueba : TIPOS_PRUEBA_PREDETERMINADOS
   const defaultAmbiente = ambientesDisponibles[0]?.id ?? "test"
   const defaultTipoPrueba = tiposPruebaDisponibles[0]?.id ?? "funcional"
+  const [submitting, setSubmitting] = useState(false)
   const [hu, setHu] = useState({
     titulo: "",
     descripcion: "",
@@ -99,6 +100,8 @@ export function HUForm({ open, onClose, onSubmit, huEditar, currentUser, configE
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    if (submitting) return
+    setSubmitting(true)
     const ahora = new Date()
     const id = huEditar?.id || `hu-${Date.now()}`
     const usuario = currentUser || "Sistema"
@@ -142,13 +145,14 @@ export function HUForm({ open, onClose, onSubmit, huEditar, currentUser, configE
       comentarios: huEditar?.comentarios || [],
     }
     onSubmit(huFinal)
+    setSubmitting(false)
     onClose()
   }
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="cambio-form-modal" aria-describedby={undefined}>
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} aria-label={huEditar ? "Editar historia de usuario" : "Nueva historia de usuario"}>
           <div className="px-4 sm:px-7.5 py-6.5">
             {/* HEADER */}
             <div style={{ borderBottom:"1px solid var(--border)", paddingBottom:16, marginBottom:22, paddingRight:36 }}>
@@ -340,7 +344,7 @@ export function HUForm({ open, onClose, onSubmit, huEditar, currentUser, configE
                   const notaEtapas = etapas.length === 0
                     ? "Este tipo no tiene etapas de ejecución definidas."
                     : etapas.length === 1
-                    ? `Este tipo tiene 1 etapa: ${etapas[0].label}.`
+                    ? `Este tipo tiene 1 etapa: ${etapas[0]!.label}.`
                     : `Este tipo tiene ${etapas.length} etapas: ${etapas.map(e => e.label).join(" → ")}.`
                   return (
                     <div style={{ padding:"10px 14px", borderRadius:8,
@@ -357,9 +361,9 @@ export function HUForm({ open, onClose, onSubmit, huEditar, currentUser, configE
 
             {/* FOOTER */}
             <div style={{ display:"flex", justifyContent:"flex-end", gap:10, marginTop:22, paddingTop:16, borderTop:"1px solid var(--border)" }}>
-              <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
-              <Button type="submit" disabled={!hu.titulo || !hu.responsable || !hu.aplicacion || !hu.requiriente || !hu.areaSolicitante}>
-                {huEditar ? "Guardar cambios" : "Crear Historia de Usuario"}
+              <Button type="button" variant="outline" onClick={onClose} disabled={submitting}>Cancelar</Button>
+              <Button type="submit" disabled={submitting || !hu.titulo || !hu.responsable || !hu.aplicacion || !hu.requiriente || !hu.areaSolicitante}>
+                {submitting ? "Guardando..." : huEditar ? "Guardar cambios" : "Crear Historia de Usuario"}
               </Button>
             </div>
           </div>

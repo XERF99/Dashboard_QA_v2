@@ -1,21 +1,17 @@
 // ── GET /api/users  — listar usuarios
 // ── POST /api/users — crear usuario
 import { NextRequest, NextResponse } from "next/server"
-import { requireAdmin } from "@/lib/backend/middleware/auth.middleware"
+import { withAuthAdmin } from "@/lib/backend/middleware/with-auth"
 import { checkRateLimit, getClientIp, rlKey } from "@/lib/backend/middleware/rate-limit"
 import { createUserSchema } from "@/lib/backend/validators/auth.validator"
 import { createUserService } from "@/lib/backend/services/auth.service"
 import { prisma } from "@/lib/backend/prisma"
-import { logger } from "@/lib/backend/logger"
 import { audit } from "@/lib/backend/services/audit.service"
 
 // Roles que un admin (no owner) puede asignar
 const ROLES_ADMIN_PUEDE_CREAR = ["qa_lead", "qa", "viewer"]
 
-export async function GET(request: NextRequest) {
-  const payload = await requireAdmin(request)
-  if (payload instanceof NextResponse) return payload
-
+export const GET = withAuthAdmin(async (request, payload) => {
   // Owner: ve todos los usuarios excepto a sí mismo (ya está logueado, no necesita verse en la lista)
   // Admin: ve usuarios de su workspace + usuarios sin workspace (grupoId null).
   //   Incluir grupoId:null es INTENCIONAL: permite que el admin incorpore usuarios
@@ -36,35 +32,27 @@ export async function GET(request: NextRequest) {
   const limit = Math.min(200, Math.max(1, parseInt(searchParams.get("limit") ?? "50") || 50))
   const skip  = (page - 1) * limit
 
-  try {
-    const [users, total] = await prisma.$transaction([
-      prisma.user.findMany({
-        select: {
-          id: true, nombre: true, email: true, rol: true,
-          grupoId: true, activo: true, debeCambiarPassword: true,
-          bloqueado: true, fechaCreacion: true, historialConexiones: true,
-        },
-        where,
-        orderBy: { fechaCreacion: "asc" },
-        skip,
-        take: limit,
-      }),
-      prisma.user.count({ where }),
-    ])
-    return NextResponse.json({ users, total, page, limit, pages: Math.ceil(total / limit) })
-  } catch (e) {
-    logger.error("GET /api/users", "Error al obtener usuarios", e)
-    return NextResponse.json({ error: "Error al obtener usuarios" }, { status: 500 })
-  }
-}
+  const [users, total] = await prisma.$transaction([
+    prisma.user.findMany({
+      select: {
+        id: true, nombre: true, email: true, rol: true,
+        grupoId: true, activo: true, debeCambiarPassword: true,
+        bloqueado: true, fechaCreacion: true, historialConexiones: true,
+      },
+      where,
+      orderBy: { fechaCreacion: "asc" },
+      skip,
+      take: limit,
+    }),
+    prisma.user.count({ where }),
+  ])
+  return NextResponse.json({ users, total, page, limit, pages: Math.ceil(total / limit) })
+})
 
-export async function POST(request: NextRequest) {
-  const payload = await requireAdmin(request)
-  if (payload instanceof NextResponse) return payload
-
-  // Rate limiting: 20 usuarios por admin por hora
+export const POST = withAuthAdmin(async (request, payload) => {
+  // Rate limiting: 30 usuarios por admin por minuto
   const ip = getClientIp(request.headers)
-  const rl = checkRateLimit(rlKey(ip, `/api/users:${payload.sub}`), 20, 60 * 60 * 1000)
+  const rl = checkRateLimit(rlKey(ip, `POST /api/users:${payload.sub}`), 30, 60_000)
   if (!rl.allowed) {
     const retryAfterSecs = Math.ceil((rl.resetAt - Date.now()) / 1000)
     return NextResponse.json(
@@ -73,7 +61,7 @@ export async function POST(request: NextRequest) {
         status: 429,
         headers: {
           "Retry-After":           String(retryAfterSecs),
-          "X-RateLimit-Limit":     "20",
+          "X-RateLimit-Limit":     "30",
           "X-RateLimit-Remaining": "0",
         },
       }
@@ -110,4 +98,4 @@ export async function POST(request: NextRequest) {
     const msg = e instanceof Error ? e.message : "Error interno al crear usuario"
     return NextResponse.json({ error: msg }, { status: 500 })
   }
-}
+})

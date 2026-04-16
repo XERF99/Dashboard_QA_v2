@@ -61,7 +61,7 @@ describe("ResultadosConfig — estados base vs personalizados", () => {
     fireEvent.click(screen.getByTitle("Confirmar eliminación"))
 
     expect(onChange).toHaveBeenCalledOnce()
-    const resultado = onChange.mock.calls[0][0] as ResultadoDef[]
+    const resultado = onChange.mock.calls[0]![0] as ResultadoDef[]
     expect(resultado.find(r => r.id === "parcial")).toBeUndefined()
     expect(resultado).toHaveLength(BASE.length)
   })
@@ -78,7 +78,7 @@ describe("ResultadosConfig — toggle aceptado", () => {
     fireEvent.click(toggleExitoso)
 
     expect(onChange).toHaveBeenCalledOnce()
-    const updated = onChange.mock.calls[0][0] as ResultadoDef[]
+    const updated = onChange.mock.calls[0]![0] as ResultadoDef[]
     expect(updated.find(r => r.id === "exitoso")?.esAceptado).toBe(false)
   })
 
@@ -90,7 +90,7 @@ describe("ResultadosConfig — toggle aceptado", () => {
     fireEvent.click(screen.getByText("✗ No aceptado"))
 
     expect(onChange).toHaveBeenCalledOnce()
-    const updated = onChange.mock.calls[0][0] as ResultadoDef[]
+    const updated = onChange.mock.calls[0]![0] as ResultadoDef[]
     expect(updated.find(r => r.id === "fallido")?.esAceptado).toBe(true)
   })
 })
@@ -107,7 +107,7 @@ describe("ResultadosConfig — agregar estado personalizado", () => {
     fireEvent.click(screen.getByRole("button", { name: /agregar/i }))
 
     expect(onChange).toHaveBeenCalledOnce()
-    const resultado = onChange.mock.calls[0][0] as ResultadoDef[]
+    const resultado = onChange.mock.calls[0]![0] as ResultadoDef[]
     expect(resultado.at(-1)?.id).toBe("incompleto")
     expect(resultado.at(-1)?.label).toBe("Incompleto")
     expect(resultado.at(-1)?.esBase).toBe(false)
@@ -118,7 +118,7 @@ describe("ResultadosConfig — restaurar", () => {
   it("botón Restaurar aparece cuando hay diferencias y llama onChange con defaults", () => {
     const onChange = vi.fn()
     const modificados: ResultadoDef[] = [
-      { ...BASE[0], label: "Nombre cambiado" },
+      { ...BASE[0]!, label: "Nombre cambiado" },
       ...BASE.slice(1),
     ]
     render(<ResultadosConfig resultados={modificados} onChange={onChange} />)

@@ -161,8 +161,8 @@ export function useHistoriasFilters(historias: HistoriaUsuario[]) {
       switch (sortCampo) {
         case "codigo":      cmp = a.codigo.localeCompare(b.codigo); break
         case "titulo":      cmp = a.titulo.localeCompare(b.titulo); break
-        case "prioridad":   cmp = PRIORIDAD_ORDER[a.prioridad] - PRIORIDAD_ORDER[b.prioridad]; break
-        case "estado":      cmp = ESTADO_ORDER[a.estado] - ESTADO_ORDER[b.estado]; break
+        case "prioridad":   cmp = PRIORIDAD_ORDER[a.prioridad]! - PRIORIDAD_ORDER[b.prioridad]!; break
+        case "estado":      cmp = ESTADO_ORDER[a.estado]! - ESTADO_ORDER[b.estado]!; break
         case "responsable": cmp = a.responsable.localeCompare(b.responsable); break
         case "fecha": {
           const fa = a.fechaFinEstimada?.getTime() ?? Infinity

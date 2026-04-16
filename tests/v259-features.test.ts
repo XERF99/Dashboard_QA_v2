@@ -193,7 +193,7 @@ describe("logger", () => {
     logger.error("test-context", "algo falló", new Error("boom"))
 
     expect(spy).toHaveBeenCalledOnce()
-    const raw = spy.mock.calls[0][0] as string
+    const raw = spy.mock.calls[0]![0] as string
     const entry = JSON.parse(raw)
     expect(entry).toMatchObject({
       level:   "error",
@@ -214,7 +214,7 @@ describe("logger", () => {
     const spy = vi.spyOn(console, "warn").mockImplementation(() => {})
     logger.warn("auth", "token próximo a expirar")
 
-    const raw = spy.mock.calls[0][0] as string
+    const raw = spy.mock.calls[0]![0] as string
     expect(JSON.parse(raw)).toMatchObject({ level: "warn", context: "auth" })
 
     spy.mockRestore()
@@ -228,7 +228,7 @@ describe("logger", () => {
     const spy = vi.spyOn(console, "log").mockImplementation(() => {})
     logger.info("api", "solicitud recibida")
 
-    const output = spy.mock.calls[0][0] as string
+    const output = spy.mock.calls[0]![0] as string
     expect(() => JSON.parse(output)).toThrow() // no es JSON
     expect(output).toContain("api")
     expect(output).toContain("solicitud recibida")

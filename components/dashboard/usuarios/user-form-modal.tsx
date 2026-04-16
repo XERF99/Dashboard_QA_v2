@@ -41,6 +41,9 @@ export function UserFormModal({ open, userToEdit, onClose }: UserFormModalProps)
   const [loading,  setLoading]  = useState(false)
   const [apiError, setApiError] = useState<string | null>(null)
 
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+  const formValid  = nombre.trim().length > 0 && email.trim().length > 0 && emailValid
+
   const getRoleDef = (rolId: string) => roles.find(r => r.id === rolId)
 
   // Sync form state when target user or open state changes
@@ -117,7 +120,7 @@ export function UserFormModal({ open, userToEdit, onClose }: UserFormModalProps)
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} aria-label={userToEdit ? "Editar usuario" : "Nuevo usuario"}>
           <FieldGroup className="py-4">
             <Field>
               <FieldLabel>Nombre completo</FieldLabel>
@@ -140,6 +143,9 @@ export function UserFormModal({ open, userToEdit, onClose }: UserFormModalProps)
                 className="bg-secondary border-border"
                 required
               />
+              {email.length > 0 && !emailValid && (
+                <p className="text-xs text-destructive mt-1">Formato de email inválido</p>
+              )}
             </Field>
 
             <Field>
@@ -207,7 +213,7 @@ export function UserFormModal({ open, userToEdit, onClose }: UserFormModalProps)
             <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
               Cancelar
             </Button>
-            <Button type="submit" className="bg-primary hover:bg-primary/90" disabled={loading}>
+            <Button type="submit" className="bg-primary hover:bg-primary/90" disabled={loading || !formValid}>
               {loading
                 ? (userToEdit ? "Guardando..." : "Creando...")
                 : (userToEdit ? "Guardar Cambios" : "Crear Usuario")}

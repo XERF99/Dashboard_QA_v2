@@ -12,7 +12,7 @@ export async function PUT(request: NextRequest) {
   // Rate limiting: 10 intentos por usuario (sub) cada 15 minutos
   // Usa el sub del JWT como clave para no bloquear a todos los usuarios desde la misma IP
   const ip = getClientIp(request.headers)
-  const { allowed, resetAt } = checkRateLimit(rlKey(ip, `/api/auth/password:${payload.sub}`), 10, 15 * 60 * 1000)
+  const { allowed, resetAt } = checkRateLimit(rlKey(ip, `PUT /api/auth/password:${payload.sub}`), 10, 15 * 60 * 1000)
   if (!allowed) {
     const retryAfterSecs = Math.ceil((resetAt - Date.now()) / 1000)
     return NextResponse.json(
@@ -28,7 +28,8 @@ export async function PUT(request: NextRequest) {
     )
   }
 
-  const body = await request.json()
+  const body = await request.json().catch(() => null)
+  if (body === null) return NextResponse.json({ error: "Body JSON inválido" }, { status: 400 })
   const { error, value } = cambiarPasswordSchema.validate(body, { abortEarly: false })
   if (error) {
     return NextResponse.json(

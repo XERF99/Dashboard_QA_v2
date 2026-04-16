@@ -1,7 +1,8 @@
 import { crearEvento } from "@/lib/types"
-import type { Tarea, Bloqueo } from "@/lib/types"
+import type { Tarea, Bloqueo, BloqueoResuelto } from "@/lib/types"
 import type { DomainCtx } from "./types"
 import { api } from "@/lib/services/api/client"
+import { API } from "@/lib/constants/api-routes"
 
 /** Handlers de gestión de Tareas: CRUD, completar y bloqueos. */
 export function createTareaHandlers({ tareas, setHistorias, setCasos, setTareas, user, addToast }: DomainCtx) {
@@ -19,7 +20,7 @@ export function createTareaHandlers({ tareas, setHistorias, setCasos, setTareas,
   const handleEliminarTarea = (tareaId: string, casoId: string) => {
     setTareas(prev => prev.filter(t => t.id !== tareaId))
     setCasos(prev => prev.map(c => c.id === casoId ? { ...c, tareasIds: c.tareasIds.filter(id => id !== tareaId) } : c))
-    api.delete(`/api/tareas/${tareaId}`).catch(() => console.warn("[Tareas] Error al eliminar tarea en API"))
+    api.delete(API.tarea(tareaId)).catch(() => console.warn("[Tareas] Error al eliminar tarea en API"))
     addToast({ type: "warning", title: "Tarea eliminada" })
   }
 
@@ -42,15 +43,16 @@ export function createTareaHandlers({ tareas, setHistorias, setCasos, setTareas,
     const tarea = tareas.find(t => t.id === tareaId)
     if (!tarea) return
     const huId = tarea.huId
+    const userName = user?.nombre ?? "Sistema"
     setTareas(prev => prev.map(t => {
       if (t.id !== tareaId) return t
       const bloqueos = t.bloqueos.map(b => b.id === bloqueoId
-        ? { ...b, resuelto: true, fechaResolucion: new Date(), resueltoPor: user?.nombre }
+        ? { ...b, resuelto: true as const, fechaResolucion: new Date(), resueltoPor: userName } satisfies BloqueoResuelto
         : b
       )
-      return { ...t, bloqueos, estado: bloqueos.some(b => !b.resuelto) ? "bloqueada" : "en_progreso" }
+      return { ...t, bloqueos, estado: bloqueos.some(b => !b.resuelto) ? "bloqueada" as const : "en_progreso" as const }
     }))
-    const ev = crearEvento("tarea_desbloqueada", "Bloqueo de tarea resuelto", user?.nombre || "Sistema")
+    const ev = crearEvento("tarea_desbloqueada", "Bloqueo de tarea resuelto", userName)
     setHistorias(prev => prev.map(h => h.id === huId ? { ...h, historial: [...h.historial, ev] } : h))
     addToast({ type: "success", title: "Bloqueo resuelto" })
   }

@@ -6,13 +6,23 @@ import type { Tarea, HistoriaUsuario, Bloqueo } from "@/lib/types"
 // ── Factories ────────────────────────────────────────────────
 
 function makeBloqueo(resuelto = false): Bloqueo {
-  return {
-    id: `bl-${Math.random().toString(36).slice(2)}`,
-    descripcion: "Descripción del bloqueo",
-    reportadoPor: "QA",
-    fecha: new Date(),
-    resuelto,
-  }
+  return resuelto
+    ? {
+        id: `bl-${Math.random().toString(36).slice(2)}`,
+        descripcion: "Descripción del bloqueo",
+        reportadoPor: "QA",
+        fecha: new Date(),
+        resuelto: true,
+        fechaResolucion: new Date(),
+        resueltoPor: "Admin",
+      }
+    : {
+        id: `bl-${Math.random().toString(36).slice(2)}`,
+        descripcion: "Descripción del bloqueo",
+        reportadoPor: "QA",
+        fecha: new Date(),
+        resuelto: false,
+      }
 }
 
 function makeTarea(overrides: Partial<Tarea> = {}): Tarea {
@@ -121,11 +131,14 @@ describe("handleResolverBloqueoTarea", () => {
 
     createBloqueoHandlers(ctx).handleResolverBloqueoTarea("t1", bl.id, "Se corrigió el entorno")
 
-    const t = getTareas()[0]
-    expect(t.bloqueos[0].resuelto).toBe(true)
-    expect(t.bloqueos[0].notaResolucion).toBe("Se corrigió el entorno")
-    expect(t.bloqueos[0].fechaResolucion).toBeInstanceOf(Date)
-    expect(t.bloqueos[0].resueltoPor).toBe("Admin User")
+    const t = getTareas()[0]!
+    const b0 = t.bloqueos[0]!
+    expect(b0.resuelto).toBe(true)
+    if (b0.resuelto) {
+      expect(b0.notaResolucion).toBe("Se corrigió el entorno")
+      expect(b0.fechaResolucion).toBeInstanceOf(Date)
+      expect(b0.resueltoPor).toBe("Admin User")
+    }
   })
 
   it("cambia estado a en_progreso si no quedan bloqueos activos", () => {
@@ -135,7 +148,7 @@ describe("handleResolverBloqueoTarea", () => {
 
     createBloqueoHandlers(ctx).handleResolverBloqueoTarea("t1", bl.id, "Nota")
 
-    expect(getTareas()[0].estado).toBe("en_progreso")
+    expect(getTareas()[0]!.estado).toBe("en_progreso")
   })
 
   it("mantiene estado bloqueada si aún hay bloqueos activos", () => {
@@ -146,7 +159,7 @@ describe("handleResolverBloqueoTarea", () => {
 
     createBloqueoHandlers(ctx).handleResolverBloqueoTarea("t1", bl1.id, "Nota parcial")
 
-    expect(getTareas()[0].estado).toBe("bloqueada")
+    expect(getTareas()[0]!.estado).toBe("bloqueada")
   })
 
   it("registra evento en el historial de la HU (sin setTimeout)", () => {
@@ -157,8 +170,8 @@ describe("handleResolverBloqueoTarea", () => {
     // El historial debe actualizarse síncronamente, sin setTimeout
     createBloqueoHandlers(ctx).handleResolverBloqueoTarea("t1", bl.id, "Resuelto")
 
-    expect(getHistorias()[0].historial).toHaveLength(1)
-    expect(getHistorias()[0].historial[0].tipo).toBe("bloqueo_resuelto")
+    expect(getHistorias()[0]!.historial).toHaveLength(1)
+    expect(getHistorias()[0]!.historial[0]!.tipo).toBe("bloqueo_resuelto")
   })
 
   it("no hace nada si la tarea no existe", () => {
@@ -180,7 +193,7 @@ describe("handleResolverBloqueoTarea", () => {
 
     createBloqueoHandlers(ctx).handleResolverBloqueoTarea("t1", bl1.id, "Nota")
 
-    expect(getTareas()[1].bloqueos[0].resuelto).toBe(false)
+    expect(getTareas()[1]!.bloqueos[0]!.resuelto).toBe(false)
   })
 
   it("emite toast de success", () => {
@@ -225,7 +238,7 @@ describe("handleAddBloqueo", () => {
 
     createBloqueoHandlers(ctx).handleAddBloqueo("hu-1", bl)
 
-    expect(getHistorias()[0].bloqueos).toHaveLength(1)
+    expect(getHistorias()[0]!.bloqueos).toHaveLength(1)
     expect(ctx.addNotificacion).toHaveBeenCalledWith(
       "bloqueo_reportado",
       expect.any(String),

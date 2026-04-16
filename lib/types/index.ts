@@ -1,7 +1,19 @@
 // ═══════════════════════════════════════════════════════════
 //  TIPOS DE DOMINIO — Dashboard QA
-//  Solo interfaces y type aliases. Sin constantes ni datos.
+//  Interfaces, type aliases y constantes tipadas.
 // ═══════════════════════════════════════════════════════════
+
+// ── Branded types for nominal type safety ───────────────────
+// Branded types prevent accidentally passing a raw string where
+// a domain-specific identifier is expected. They are still strings
+// at runtime but enforced at compile time.
+declare const __brand: unique symbol
+type Brand<T, B extends string> = T & { readonly [__brand]: B }
+
+export type EntityId<T extends string = string> = Brand<string, T>
+export type HUId = EntityId<"HU">
+export type CasoId = EntityId<"Caso">
+export type TareaId = EntityId<"Tarea">
 
 // ── Etapas ──────────────────────────────────────────────────
 export type EtapaEjecucion = string
@@ -170,16 +182,26 @@ export interface Comentario {
   fecha: Date
 }
 
-export interface Bloqueo {
+// ── Bloqueo (discriminated union) ─────────────────────────────
+interface BloqueoBase {
   id: string
   descripcion: string
   reportadoPor: string
   fecha: Date
-  resuelto: boolean
-  fechaResolucion?: Date
-  resueltoPor?: string
+}
+
+export interface BloqueoActivo extends BloqueoBase {
+  resuelto: false
+}
+
+export interface BloqueoResuelto extends BloqueoBase {
+  resuelto: true
+  fechaResolucion: Date
+  resueltoPor: string
   notaResolucion?: string
 }
+
+export type Bloqueo = BloqueoActivo | BloqueoResuelto
 
 // ── Entidades de dominio ──────────────────────────────────────
 export interface Tarea {
@@ -301,3 +323,25 @@ export interface PaginatedResult<T> {
   pages: number
   data?: T[]
 }
+
+// ── API Routes (type-safe constants) ─────────────────────────
+export const API_ROUTES = {
+  HISTORIAS:      "/api/historias",
+  CASOS:          "/api/casos",
+  TAREAS:         "/api/tareas",
+  CONFIG:         "/api/config",
+  METRICAS:       "/api/metricas",
+  HEALTH:         "/api/health",
+  EXPORT:         "/api/export",
+  EXPORT_PDF:     "/api/export/pdf",
+  AUTH_LOGIN:     "/api/auth/login",
+  AUTH_LOGOUT:    "/api/auth/logout",
+  AUTH_ME:        "/api/auth/me",
+  AUTH_PASSWORD:  "/api/auth/password",
+  USERS:          "/api/users",
+  GRUPOS:         "/api/grupos",
+  SPRINTS:        "/api/sprints",
+  NOTIFICACIONES: "/api/notificaciones",
+  AUDIT:          "/api/audit",
+} as const
+export type ApiRoute = (typeof API_ROUTES)[keyof typeof API_ROUTES]

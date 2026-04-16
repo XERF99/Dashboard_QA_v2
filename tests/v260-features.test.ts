@@ -25,30 +25,30 @@ import { logger } from "@/lib/backend/logger"
 async function makeRequest(method: string, path: string, body?: unknown, grupoId?: string) {
   const token = await signToken({ sub: "user-1", email: "user@test.com", nombre: "User", rol: "admin", grupoId: grupoId ?? "grupo-1" })
   const url    = `http://localhost${path}`
-  const init: RequestInit = {
+  const init = {
     method,
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     ...(body ? { body: JSON.stringify(body) } : {}),
   }
-  return new NextRequest(url, init)
+  return new NextRequest(url, init as ConstructorParameters<typeof NextRequest>[1])
 }
 
 async function makeOwnerRequest(method: string, path: string, body?: unknown) {
   const token = await signToken({ sub: "owner-1", email: "owner@test.com", nombre: "Owner", rol: "owner", grupoId: undefined })
   const url    = `http://localhost${path}`
-  const init: RequestInit = {
+  const init = {
     method,
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     ...(body ? { body: JSON.stringify(body) } : {}),
   }
-  return new NextRequest(url, init)
+  return new NextRequest(url, init as ConstructorParameters<typeof NextRequest>[1])
 }
 
 // ── Mocks ────────────────────────────────────────────────
 
 vi.mock("@/lib/backend/prisma", () => ({
   prisma: {
-    user:            { findUnique: vi.fn() },
+    user:            { findUnique: vi.fn(), count: vi.fn().mockResolvedValue(1) },
     historiaUsuario: { findUnique: vi.fn() },
     $queryRaw:       vi.fn(),
   },
@@ -87,6 +87,10 @@ async function mockAuthOk() {
 // ── 1. GET /api/health ───────────────────────────────────
 describe("GET /api/health", () => {
   it("returns 200 with status=ok when DB responds", async () => {
+    // Ensure env checks pass
+    process.env.JWT_SECRET = "test-secret"
+    process.env.DATABASE_URL = "postgresql://test"
+
     const { prisma } = await import("@/lib/backend/prisma")
     vi.mocked(prisma.$queryRaw).mockResolvedValueOnce([{ "?column?": 1 }])
 
@@ -96,7 +100,7 @@ describe("GET /api/health", () => {
 
     expect(res.status).toBe(200)
     expect(body.status).toBe("ok")
-    expect(body.db).toBe("ok")
+    expect(body.checks.db).toBe("ok")
     expect(typeof body.uptime).toBe("number")
     expect(typeof body.latency_ms).toBe("number")
   })
@@ -104,6 +108,7 @@ describe("GET /api/health", () => {
   it("returns 503 with status=degraded when DB throws", async () => {
     const { prisma } = await import("@/lib/backend/prisma")
     vi.mocked(prisma.$queryRaw).mockRejectedValueOnce(new Error("connection refused"))
+    vi.mocked(prisma.user.count).mockRejectedValueOnce(new Error("connection refused"))
 
     const { GET } = await import("@/app/api/health/route")
     const res  = await GET()
@@ -111,7 +116,7 @@ describe("GET /api/health", () => {
 
     expect(res.status).toBe(503)
     expect(body.status).toBe("degraded")
-    expect(body.db).toBe("error")
+    expect(body.checks.db).toBe("error")
   })
 })
 
@@ -275,21 +280,21 @@ describe("logger.error", () => {
   it("calls console.error with context and message", () => {
     logger.error("test-context", "something broke")
     expect(console.error).toHaveBeenCalledTimes(1)
-    const arg = (console.error as ReturnType<typeof vi.spyOn>).mock.calls[0][0] as string
+    const arg = (console.error as unknown as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string
     expect(arg).toContain("test-context")
     expect(arg).toContain("something broke")
   })
 
   it("includes error message when err is an Error instance", () => {
     logger.error("test-context", "db failed", new Error("connection timeout"))
-    const arg = (console.error as ReturnType<typeof vi.spyOn>).mock.calls[0][0] as string
+    const arg = (console.error as unknown as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string
     expect(arg).toContain("connection timeout")
   })
 
   it("produces JSON string in production", () => {
     vi.stubEnv("NODE_ENV", "production")
     logger.error("prod-ctx", "prod error", new Error("oops"))
-    const arg = (console.error as ReturnType<typeof vi.spyOn>).mock.calls[0][0] as string
+    const arg = (console.error as unknown as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string
     const parsed = JSON.parse(arg)
     expect(parsed.level).toBe("error")
     expect(parsed.context).toBe("prod-ctx")

@@ -29,6 +29,12 @@ const me401 = {
   json: async () => ({ error: "No autenticado" }),
 } as unknown as Response
 
+const refresh401 = {
+  ok: false, status: 401,
+  text: async () => JSON.stringify({ error: "No refresh token" }),
+  json: async () => ({ error: "No refresh token" }),
+} as unknown as Response
+
 const empty = {
   ok: true, status: 200,
   text: async () => "{}",
@@ -71,6 +77,7 @@ describe("auth-context — expiración de sesión", () => {
     let meCount = 0
     vi.stubGlobal("fetch", async (url: string) => {
       if ((url as string).includes("/api/auth/me")) return meCount++ === 0 ? meOk : me401
+      if ((url as string).includes("/api/auth/refresh")) return refresh401
       return empty
     })
 
@@ -96,8 +103,9 @@ describe("auth-context — expiración de sesión", () => {
   it("login exitoso después de expirar → sessionExpired=false, isAuthenticated=true", async () => {
     vi.useFakeTimers()
     let meCount = 0
-    vi.stubGlobal("fetch", async (url: string, options?: RequestInit) => {
+    vi.stubGlobal("fetch", async (url: string, _options?: RequestInit) => {
       if ((url as string).includes("/api/auth/me")) return meCount++ === 0 ? meOk : me401
+      if ((url as string).includes("/api/auth/refresh")) return refresh401
       if ((url as string).includes("/api/auth/login")) return loginOk
       return empty
     })
@@ -128,6 +136,7 @@ describe("auth-context — expiración de sesión", () => {
     // /api/auth/me siempre 401 → user nunca se establece
     vi.stubGlobal("fetch", async (url: string) => {
       if ((url as string).includes("/api/auth/me")) return me401
+      if ((url as string).includes("/api/auth/refresh")) return refresh401
       return empty
     })
 

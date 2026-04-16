@@ -5,6 +5,7 @@
 // ═══════════════════════════════════════════════════════════
 
 import { prisma } from "@/lib/backend/prisma"
+import { logger } from "@/lib/backend/logger"
 
 // ── CRUD ──────────────────────────────────────────────────
 
@@ -126,7 +127,14 @@ export async function getMetricasGrupo(grupoId: string) {
 
 export async function getMetricasGlobales() {
   const grupos = await prisma.grupo.findMany({ orderBy: { createdAt: "asc" } })
-  // All N group metric queries run fully in parallel (N×7 concurrent DB queries)
-  const metricas = await Promise.all(grupos.map(g => getMetricasGrupo(g.id)))
-  return grupos.map((g, i) => ({ grupo: g, metricas: metricas[i] }))
+  // Promise.allSettled: un grupo con error no tumba las métricas de los demás
+  const results = await Promise.allSettled(grupos.map(g => getMetricasGrupo(g.id)))
+  return grupos
+    .map((g, i) => {
+      const r = results[i]!
+      if (r.status === "fulfilled") return { grupo: g, metricas: r.value }
+      logger.error("grupo.service", `Error obteniendo métricas del grupo ${g.id}`, r.reason)
+      return null
+    })
+    .filter((item): item is NonNullable<typeof item> => item !== null)
 }

@@ -135,7 +135,7 @@ describe("PATCH /api/casos/batch", () => {
 
     await PATCH(makeReq({ ids: ["c-1"], accion: "aprobar" }, ownerToken))
 
-    const callArg = vi.mocked(prisma.casoPrueba.updateMany).mock.calls[0][0] as {
+    const callArg = vi.mocked(prisma.casoPrueba.updateMany).mock.calls[0]![0] as {
       where: Record<string, unknown>
     }
     expect(callArg.where).not.toHaveProperty("hu")

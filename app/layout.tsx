@@ -4,6 +4,7 @@ import { Analytics } from '@vercel/analytics/next'
 import { AuthProvider } from '@/lib/contexts/auth-context'
 import { ThemeProvider } from '@/lib/contexts/theme-context'
 import { ErrorBoundary } from '@/components/layout/error-boundary'
+import { QueryProvider } from '@/lib/providers/query-provider'
 import './globals.css'
 
 const _geist = Geist({ subsets: ["latin"] });
@@ -27,11 +28,13 @@ export default function RootLayout({
     <html lang="es" suppressHydrationWarning>
       <body className="font-sans antialiased">
         <ErrorBoundary>
-          <ThemeProvider>
-            <AuthProvider>
-              {children}
-            </AuthProvider>
-          </ThemeProvider>
+          <QueryProvider>
+            <ThemeProvider>
+              <AuthProvider>
+                {children}
+              </AuthProvider>
+            </ThemeProvider>
+          </QueryProvider>
         </ErrorBoundary>
         <Analytics />
       </body>

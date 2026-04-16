@@ -60,14 +60,14 @@ describe("useHistoriasFilters — filtros", () => {
     const { result } = renderHook(() => useHistoriasFilters(HISTORIAS))
     act(() => { result.current.setFiltroEstado("en_progreso") })
     expect(result.current.historiasFiltradas).toHaveLength(1)
-    expect(result.current.historiasFiltradas[0].id).toBe("a")
+    expect(result.current.historiasFiltradas[0]!.id).toBe("a")
   })
 
   it("filtro por prioridad devuelve solo las HUs con esa prioridad", () => {
     const { result } = renderHook(() => useHistoriasFilters(HISTORIAS))
     act(() => { result.current.setFiltroPrioridad("baja") })
     expect(result.current.historiasFiltradas).toHaveLength(1)
-    expect(result.current.historiasFiltradas[0].id).toBe("c")
+    expect(result.current.historiasFiltradas[0]!.id).toBe("c")
   })
 
   it("filtro por responsable devuelve solo sus HUs", () => {
@@ -81,28 +81,28 @@ describe("useHistoriasFilters — filtros", () => {
     const { result } = renderHook(() => useHistoriasFilters(HISTORIAS))
     act(() => { result.current.setFiltroTipo("infraestructura") })
     expect(result.current.historiasFiltradas).toHaveLength(1)
-    expect(result.current.historiasFiltradas[0].id).toBe("b")
+    expect(result.current.historiasFiltradas[0]!.id).toBe("b")
   })
 
   it("filtro por sprint devuelve HUs de ese sprint", () => {
     const { result } = renderHook(() => useHistoriasFilters(HISTORIAS))
     act(() => { result.current.setFiltroSprint("Sprint 1") })
     expect(result.current.historiasFiltradas).toHaveLength(1)
-    expect(result.current.historiasFiltradas[0].id).toBe("a")
+    expect(result.current.historiasFiltradas[0]!.id).toBe("a")
   })
 
   it("filtro __sin_sprint__ devuelve HUs sin sprint asignado", () => {
     const { result } = renderHook(() => useHistoriasFilters(HISTORIAS))
     act(() => { result.current.setFiltroSprint("__sin_sprint__") })
     expect(result.current.historiasFiltradas).toHaveLength(1)
-    expect(result.current.historiasFiltradas[0].id).toBe("c")
+    expect(result.current.historiasFiltradas[0]!.id).toBe("c")
   })
 
   it("filtro por ambiente devuelve solo ese ambiente", () => {
     const { result } = renderHook(() => useHistoriasFilters(HISTORIAS))
     act(() => { result.current.setFiltroAmbiente("preproduccion") })
     expect(result.current.historiasFiltradas).toHaveLength(1)
-    expect(result.current.historiasFiltradas[0].id).toBe("b")
+    expect(result.current.historiasFiltradas[0]!.id).toBe("b")
   })
 
   it("filtros combinados aplican condición AND", () => {

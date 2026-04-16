@@ -122,6 +122,7 @@ model HistoriaUsuario {
   @@index([sprint])
   @@index([responsable])
   @@index([deletedAt])
+  @@index([grupoId, deletedAt])
   @@map("historias_usuario")
 }
 
@@ -158,6 +159,7 @@ model CasoPrueba {
   @@index([huId])
   @@index([estadoAprobacion])
   @@index([deletedAt])
+  @@index([huId, deletedAt])
   @@map("casos_prueba")
 }
 
@@ -191,6 +193,7 @@ model Tarea {
   @@index([asignado])
   @@index([estado])
   @@index([deletedAt])
+  @@index([casoPruebaId, deletedAt])
   @@map("tareas")
 }
 
@@ -257,6 +260,8 @@ model AuditLog {
   @@index([grupoId])
   @@index([resource, resourceId])
   @@index([timestamp])
+  @@index([action])
+  @@index([grupoId, action])
   @@map("audit_log")
 }
 

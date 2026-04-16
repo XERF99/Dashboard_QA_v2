@@ -1,8 +1,6 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
 import {
   TrendingUp, CheckCircle, XCircle, Clock, AlertTriangle,
   BarChart2, RefreshCw, Layers, Target, Users, Zap,
@@ -16,6 +14,10 @@ import {
   type EstadoHU, type PrioridadHU,
   type ConfigEtapas, type TipoAplicacionDef, type AmbienteDef, type TipoPruebaDef,
 } from "@/lib/types"
+import { KpiCard, COLOR } from "./kpi-card"
+import { EstadoHUChart } from "./charts/estado-hu-chart"
+import { VelocidadSprintChart } from "./charts/velocidad-sprint-chart"
+import { TasaDefectosChart } from "./charts/tasa-defectos-chart"
 
 interface AnalyticsKPIsProps {
   historias: HistoriaUsuario[]
@@ -28,60 +30,6 @@ interface AnalyticsKPIsProps {
   tiposAplicacion?: TipoAplicacionDef[]
   ambientes?: AmbienteDef[]
   tiposPrueba?: TipoPruebaDef[]
-}
-
-// ── Helpers visuales ──────────────────────────────────────
-function MiniBar({ value, max, color }: { value: number; max: number; color: string }) {
-  const pct = max > 0 ? Math.round((value / max) * 100) : 0
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      <div style={{ flex: 1, height: 6, borderRadius: 3, background: "var(--secondary)", overflow: "hidden" }}>
-        <div style={{ width: `${pct}%`, height: "100%", background: color, borderRadius: 3, transition: "width 0.4s ease" }} />
-      </div>
-      <span style={{ fontSize: 11, fontWeight: 700, color, minWidth: 22, textAlign: "right" }}>{value}</span>
-    </div>
-  )
-}
-
-function KpiCard({ label, value, sub, color, icon, big }: {
-  label: string; value: string | number; sub?: string; color: string; icon: React.ReactNode; big?: boolean
-}) {
-  return (
-    <div style={{ padding: "16px 18px", borderRadius: 12, border: "1px solid var(--border)", background: "var(--card)" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-        <p style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--muted-foreground)", fontWeight: 700, lineHeight: 1.3 }}>{label}</p>
-        <div style={{ color, opacity: 0.65 }}>{icon}</div>
-      </div>
-      <p style={{ fontSize: big ? 34 : 28, fontWeight: 700, color, lineHeight: 1, marginBottom: 4 }}>{value}</p>
-      {sub && <p style={{ fontSize: 11, color: "var(--muted-foreground)", lineHeight: 1.3 }}>{sub}</p>}
-    </div>
-  )
-}
-
-function SectionTitle({ icon, title }: { icon: React.ReactNode; title: string }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 12 }}>
-      <div style={{ color: "var(--primary)", opacity: 0.8 }}>{icon}</div>
-      <p style={{ fontSize: 13, fontWeight: 700, color: "var(--foreground)" }}>{title}</p>
-    </div>
-  )
-}
-
-// ── Colores semánticos ────────────────────────────────────
-const COLOR: Record<string, string> = {
-  sin_iniciar: "var(--muted-foreground)",
-  en_progreso: "var(--chart-1)",
-  exitosa:     "var(--chart-2)",
-  fallida:     "var(--chart-4)",
-  cancelada:   "#9ca3af",
-  critica:     "#dc2626",
-  alta:        "var(--chart-4)",
-  media:       "var(--chart-3)",
-  baja:        "var(--chart-2)",
-  aprobado:    "var(--chart-2)",
-  rechazado:   "var(--chart-4)",
-  pendiente_aprobacion: "var(--chart-3)",
-  borrador:    "var(--muted-foreground)",
 }
 
 // ── Pills de navegación por persona ──────────────────────
@@ -120,18 +68,11 @@ export function AnalyticsKPIs({ historias, casos, tareas, isQA, currentUserName,
   const [personaSeleccionada, setPersonaSeleccionada] = useState<string | null>(null)
 
   // ── Lógica de visibilidad por rol ──
-  // filtroNombres undefined → admin/viewer (ve todo)
-  // filtroNombres [x]       → QA (solo su propia vista)
-  // filtroNombres [x,y,...] → QA Lead (puede cambiar entre equipo e individuales)
   const isMulti  = filtroNombres !== undefined && filtroNombres.length > 1
   const isSingle = filtroNombres?.length === 1
 
-  // Nombre efectivo para filtrar: persona seleccionada (pill) ó el único QA ó null
   const nombreEfectivo = personaSeleccionada ?? (isSingle ? filtroNombres![0] : null)
-
-  // isPersonalView: vista individual (bloqueos + story points, sin tabla de responsables)
   const isPersonalView = !!nombreEfectivo
-  // Para el banner/etiqueta del título
   const nombreVista = nombreEfectivo ?? (isMulti ? "Equipo" : null)
 
   const husFiltradas = useMemo(() => {
@@ -141,14 +82,12 @@ export function AnalyticsKPIs({ historias, casos, tareas, isQA, currentUserName,
     if (filtroNombres) {
       return historias.filter(h => filtroNombres.some(n => h.responsable.toLowerCase() === n.toLowerCase()))
     }
-    // fallback legacy: isQA + currentUserName
     if (isQA && currentUserName) {
       return historias.filter(h => h.responsable.toLowerCase() === currentUserName.toLowerCase())
     }
     return historias
   }, [historias, nombreEfectivo, filtroNombres, isQA, currentUserName])
 
-  // Casos y tareas de las HUs filtradas
   const casosIds = useMemo(() => new Set(husFiltradas.flatMap(h => h.casosIds)), [husFiltradas])
   const casosFiltrados = useMemo(() => casos.filter(c => casosIds.has(c.id)), [casos, casosIds])
   const tareasFiltradas = useMemo(() => tareas.filter(t => husFiltradas.some(h => h.id === t.huId)), [tareas, husFiltradas])
@@ -170,25 +109,20 @@ export function AnalyticsKPIs({ historias, casos, tareas, isQA, currentUserName,
     const casosRechazados   = casosFiltrados.filter(c => c.estadoAprobacion === "rechazado").length
     const casosBorrador     = casosFiltrados.filter(c => c.estadoAprobacion === "borrador").length
 
-    // Bloqueos activos (HU + casos + tareas)
     const bloqueoHU    = husFiltradas.reduce((s, h) => s + h.bloqueos.filter(b => !b.resuelto).length, 0)
     const bloqueoCaso  = casosFiltrados.reduce((s, c) => s + c.bloqueos.filter(b => !b.resuelto).length, 0)
     const bloqueoTarea = tareasFiltradas.reduce((s, t) => s + t.bloqueos.filter(b => !b.resuelto).length, 0)
     const bloqueos     = bloqueoHU + bloqueoCaso + bloqueoTarea
 
-    // Retesteos (intentos > 1 en alguna etapa)
     const retesteos = casosFiltrados.reduce((s, c) =>
       s + c.resultadosPorEtapa.reduce((ss, r) => ss + Math.max(0, (r.intentos?.length ?? 1) - 1), 0), 0)
 
-    // Horas estimadas
     const horasHU     = casosFiltrados.reduce((s, c) => s + (c.horasEstimadas || 0), 0)
     const horasTareas = tareasFiltradas.reduce((s, t) => s + (t.horasEstimadas || 0), 0)
 
-    // Puntos story
     const puntosTotales = husFiltradas.reduce((s, h) => s + (h.puntos || 0), 0)
     const puntosEntregados = husFiltradas.filter(h => h.estado === "exitosa").reduce((s, h) => s + (h.puntos || 0), 0)
 
-    // Casos con retesteo
     const casosConRetesteo = casosFiltrados.filter(c =>
       c.resultadosPorEtapa.some(r => (r.intentos?.length ?? 1) > 1)
     ).length
@@ -207,7 +141,7 @@ export function AnalyticsKPIs({ historias, casos, tareas, isQA, currentUserName,
       key: e,
       label: ESTADO_HU_CFG[e].label,
       count: husFiltradas.filter(h => h.estado === e).length,
-      color: COLOR[e],
+      color: COLOR[e] ?? "#888",
     })).filter(x => x.count > 0)
   }, [husFiltradas])
 
@@ -217,7 +151,7 @@ export function AnalyticsKPIs({ historias, casos, tareas, isQA, currentUserName,
       key: p,
       label: PRIORIDAD_CFG[p].label,
       count: husFiltradas.filter(h => h.prioridad === p).length,
-      color: COLOR[p],
+      color: COLOR[p] ?? "#888",
     })).filter(x => x.count > 0)
   }, [husFiltradas])
 
@@ -359,243 +293,36 @@ export function AnalyticsKPIs({ historias, casos, tareas, isQA, currentUserName,
         <KpiCard label="Horas Estimadas" value={`${kpi.horasHU}h`} sub={`${kpi.horasTareas}h en tareas`} color="var(--primary)" icon={<BarChart2 size={16} />} />
       </div>
 
-      {/* ── Fila 3: Distribuciones ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-
-        {/* Distribución por estado */}
-        <div style={{ padding: "18px 20px", borderRadius: 12, border: "1px solid var(--border)", background: "var(--card)" }}>
-          <SectionTitle icon={<BarChart2 size={14} />} title="HUs por Estado" />
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {byEstado.map(({ key, label, count, color }) => (
-              <div key={key}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                  <span style={{ fontSize: 12, color: "var(--foreground)" }}>{label}</span>
-                  <span style={{ fontSize: 11, fontWeight: 700, color }}>{Math.round((count / kpi.total) * 100)}%</span>
-                </div>
-                <MiniBar value={count} max={maxEstado} color={color} />
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Distribución por prioridad */}
-        <div style={{ padding: "18px 20px", borderRadius: 12, border: "1px solid var(--border)", background: "var(--card)" }}>
-          <SectionTitle icon={<AlertTriangle size={14} />} title="HUs por Prioridad" />
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {byPrioridad.map(({ key, label, count, color }) => (
-              <div key={key}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                  <span style={{ fontSize: 12, color: "var(--foreground)" }}>{label}</span>
-                  <span style={{ fontSize: 11, fontWeight: 700, color }}>{Math.round((count / kpi.total) * 100)}%</span>
-                </div>
-                <MiniBar value={count} max={maxPrio} color={color} />
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+      {/* ── Fila 3: Distribuciones por estado y prioridad ── */}
+      <EstadoHUChart
+        byEstado={byEstado}
+        byPrioridad={byPrioridad}
+        totalHUs={kpi.total}
+        maxEstado={maxEstado}
+        maxPrio={maxPrio}
+      />
 
       {/* ── Fila 4: Casos + tipo/ambiente/tipoPrueba ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <VelocidadSprintChart
+        casosByAprobacion={casosByAprobacion}
+        byTipo={byTipo}
+        byAmbiente={byAmbiente}
+        byTipoPrueba={byTipoPrueba}
+        totalCasos={kpi.totalCasos}
+        totalHUs={kpi.total}
+      />
 
-        {/* Casos por estado de aprobación */}
-        <div style={{ padding: "18px 20px", borderRadius: 12, border: "1px solid var(--border)", background: "var(--card)" }}>
-          <SectionTitle icon={<CheckCircle size={14} />} title="Casos por Aprobación" />
-          {kpi.totalCasos === 0 ? (
-            <p style={{ fontSize: 12, color: "var(--muted-foreground)", fontStyle: "italic" }}>Sin casos creados</p>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {casosByAprobacion.map(({ key, label, count, color }) => (
-                <div key={key}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                    <span style={{ fontSize: 12, color: "var(--foreground)" }}>{label}</span>
-                    <span style={{ fontSize: 11, fontWeight: 700, color }}>{Math.round((count / kpi.totalCasos) * 100)}%</span>
-                  </div>
-                  <MiniBar value={count} max={kpi.totalCasos} color={color} />
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Por tipo de aplicación */}
-        <div style={{ padding: "18px 20px", borderRadius: 12, border: "1px solid var(--border)", background: "var(--card)" }}>
-          <SectionTitle icon={<Layers size={14} />} title="HUs por Tipo" />
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {byTipo.map(({ key, label, count }) => (
-              <div key={key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontSize: 12, color: "var(--foreground)" }}>{label}</span>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <div style={{ width: 60, height: 5, borderRadius: 3, background: "var(--secondary)", overflow: "hidden" }}>
-                    <div style={{ width: `${Math.round((count / kpi.total) * 100)}%`, height: "100%", background: "var(--primary)", borderRadius: 3 }} />
-                  </div>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: "var(--primary)", minWidth: 16, textAlign: "right" }}>{count}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Por ambiente */}
-        <div style={{ padding: "18px 20px", borderRadius: 12, border: "1px solid var(--border)", background: "var(--card)" }}>
-          <SectionTitle icon={<Zap size={14} />} title="HUs por Ambiente" />
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {byAmbiente.map(({ key, label, count }) => {
-              const amb_color = key === "produccion" ? "var(--chart-4)" : key === "preproduccion" ? "var(--chart-3)" : "var(--chart-2)"
-              return (
-                <div key={key}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                    <span style={{ fontSize: 12, color: "var(--foreground)" }}>{label}</span>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: amb_color }}>{count}</span>
-                  </div>
-                  <div style={{ height: 5, borderRadius: 3, background: "var(--secondary)", overflow: "hidden" }}>
-                    <div style={{ width: `${Math.round((count / kpi.total) * 100)}%`, height: "100%", background: amb_color, borderRadius: 3 }} />
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* Por tipo de prueba */}
-        <div style={{ padding: "18px 20px", borderRadius: 12, border: "1px solid var(--border)", background: "var(--card)" }}>
-          <SectionTitle icon={<FlaskConical size={14} />} title="HUs por Tipo de Prueba" />
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {byTipoPrueba.length === 0 ? (
-              <p style={{ fontSize: 12, color: "var(--muted-foreground)", fontStyle: "italic" }}>Sin datos</p>
-            ) : byTipoPrueba.map(({ key, label, count }, i) => {
-              const CHART_COLORS = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)", "var(--primary)"]
-              const color = CHART_COLORS[i % CHART_COLORS.length]
-              return (
-                <div key={key}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                    <span style={{ fontSize: 12, color: "var(--foreground)" }}>{label}</span>
-                    <span style={{ fontSize: 11, fontWeight: 700, color }}>{count}</span>
-                  </div>
-                  <div style={{ height: 5, borderRadius: 3, background: "var(--secondary)", overflow: "hidden" }}>
-                    <div style={{ width: `${Math.round((count / kpi.total) * 100)}%`, height: "100%", background: color, borderRadius: 3 }} />
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      </div>
-
-      {/* ── Fila 5: Responsables (solo vista equipo/admin) + Story Points ── */}
-      {!isPersonalView && (
-        <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-4">
-
-          {/* Tabla responsables */}
-          <div style={{ padding: "18px 20px", borderRadius: 12, border: "1px solid var(--border)", background: "var(--card)" }}>
-            <SectionTitle icon={<Users size={14} />} title="Rendimiento por Responsable" />
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr>
-                    {["Responsable", "Total", "En prog.", "Exitosas", "Fallidas", "Bloqueos", "Tasa"].map(h => (
-                      <th key={h} style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--muted-foreground)", fontWeight: 700, textAlign: h === "Responsable" ? "left" : "center", padding: "0 6px 8px", whiteSpace: "nowrap" }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {byResponsable.map(({ nombre, total, enProgreso, exitosas, fallidas, bloqueos, tasaExito }) => (
-                    <tr key={nombre} style={{ borderTop: "1px solid var(--border)" }}>
-                      <td style={{ padding: "8px 6px", fontSize: 13, fontWeight: 600, color: "var(--foreground)" }}>{nombre}</td>
-                      <td style={{ padding: "8px 6px", fontSize: 13, fontWeight: 700, color: "var(--primary)", textAlign: "center" }}>{total}</td>
-                      <td style={{ padding: "8px 6px", fontSize: 12, color: "var(--chart-1)", textAlign: "center" }}>{enProgreso}</td>
-                      <td style={{ padding: "8px 6px", fontSize: 12, color: "var(--chart-2)", textAlign: "center" }}>{exitosas}</td>
-                      <td style={{ padding: "8px 6px", fontSize: 12, color: fallidas > 0 ? "var(--chart-4)" : "var(--muted-foreground)", textAlign: "center" }}>{fallidas}</td>
-                      <td style={{ padding: "8px 6px", fontSize: 12, color: bloqueos > 0 ? "var(--chart-4)" : "var(--muted-foreground)", textAlign: "center", fontWeight: bloqueos > 0 ? 700 : 400 }}>{bloqueos}</td>
-                      <td style={{ padding: "8px 6px", textAlign: "center" }}>
-                        {tasaExito !== null ? (
-                          <span style={{ fontSize: 12, fontWeight: 700, color: tasaExito >= 80 ? "var(--chart-2)" : tasaExito >= 50 ? "var(--chart-3)" : "var(--chart-4)" }}>
-                            {tasaExito}%
-                          </span>
-                        ) : (
-                          <span style={{ fontSize: 11, color: "var(--muted-foreground)" }}>—</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Story points */}
-          <div style={{ padding: "18px 20px", borderRadius: 12, border: "1px solid var(--border)", background: "var(--card)", display: "flex", flexDirection: "column", gap: 16 }}>
-            <SectionTitle icon={<TrendingUp size={14} />} title="Story Points" />
-            <div>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                <span style={{ fontSize: 12, color: "var(--muted-foreground)" }}>Entregados</span>
-                <span style={{ fontSize: 12, fontWeight: 700, color: "var(--chart-2)" }}>{kpi.puntosEntregados} / {kpi.puntosTotales}</span>
-              </div>
-              <Progress
-                value={kpi.puntosTotales > 0 ? Math.round((kpi.puntosEntregados / kpi.puntosTotales) * 100) : 0}
-                className="h-2.5"
-                style={{ background: "var(--secondary)" }}
-              />
-              <p style={{ fontSize: 11, color: "var(--muted-foreground)", marginTop: 6 }}>
-                {kpi.puntosTotales > 0 ? Math.round((kpi.puntosEntregados / kpi.puntosTotales) * 100) : 0}% completado
-              </p>
-            </div>
-
-            <div style={{ borderTop: "1px solid var(--border)", paddingTop: 14, display: "flex", flexDirection: "column", gap: 8 }}>
-              {[
-                { label: "Sin iniciar", pts: husFiltradas.filter(h => h.estado === "sin_iniciar").reduce((s, h) => s + h.puntos, 0), color: "var(--muted-foreground)" },
-                { label: "En progreso", pts: husFiltradas.filter(h => h.estado === "en_progreso").reduce((s, h) => s + h.puntos, 0), color: "var(--chart-1)" },
-                { label: "Fallidas",    pts: husFiltradas.filter(h => h.estado === "fallida").reduce((s, h) => s + h.puntos, 0),    color: "var(--chart-4)" },
-              ].map(({ label, pts, color }) => pts > 0 && (
-                <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: 12, color: "var(--muted-foreground)" }}>{label}</span>
-                  <Badge variant="outline" style={{ fontSize: 11, padding: "1px 8px", color, borderColor: color, background: `color-mix(in oklch, ${color} 12%, transparent)` }}>
-                    {pts} pts
-                  </Badge>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Vista personal: bloqueos + story points compactos ── */}
-      {isPersonalView && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div style={{ padding: "18px 20px", borderRadius: 12, border: "1px solid var(--border)", background: "var(--card)" }}>
-            <SectionTitle icon={<AlertTriangle size={14} />} title="Bloqueos activos" />
-            {kpi.bloqueos === 0 ? (
-              <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--chart-2)" }}>
-                <CheckCircle size={16} />
-                <p style={{ fontSize: 13, fontWeight: 600 }}>Sin bloqueos activos</p>
-              </div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {[
-                  { label: "En HUs",    val: husFiltradas.reduce((s, h) => s + h.bloqueos.filter(b => !b.resuelto).length, 0), color: "var(--chart-4)" },
-                  { label: "En Casos",  val: casosFiltrados.reduce((s, c) => s + c.bloqueos.filter(b => !b.resuelto).length, 0), color: "var(--chart-3)" },
-                  { label: "En Tareas", val: tareasFiltradas.reduce((s, t) => s + t.bloqueos.filter(b => !b.resuelto).length, 0), color: "var(--chart-3)" },
-                ].filter(x => x.val > 0).map(({ label, val, color }) => (
-                  <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 10px", borderRadius: 8, background: "color-mix(in oklch, var(--chart-4) 8%, transparent)", border: "1px solid color-mix(in oklch, var(--chart-4) 20%, transparent)" }}>
-                    <span style={{ fontSize: 12, color: "var(--foreground)" }}>{label}</span>
-                    <span style={{ fontSize: 14, fontWeight: 700, color }}>{val}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          <div style={{ padding: "18px 20px", borderRadius: 12, border: "1px solid var(--border)", background: "var(--card)" }}>
-            <SectionTitle icon={<TrendingUp size={14} />} title="Story Points asignados" />
-            <p style={{ fontSize: 32, fontWeight: 700, color: "var(--primary)", lineHeight: 1 }}>{kpi.puntosTotales}<span style={{ fontSize: 14, fontWeight: 400, color: "var(--muted-foreground)" }}> pts</span></p>
-            <p style={{ fontSize: 11, color: "var(--muted-foreground)", marginTop: 4, marginBottom: 12 }}>{kpi.puntosEntregados} pts entregados</p>
-            <Progress
-              value={kpi.puntosTotales > 0 ? Math.round((kpi.puntosEntregados / kpi.puntosTotales) * 100) : 0}
-              className="h-2"
-              style={{ background: "var(--secondary)" }}
-            />
-          </div>
-        </div>
-      )}
+      {/* ── Fila 5: Responsables / Personal view ── */}
+      <TasaDefectosChart
+        isPersonalView={isPersonalView}
+        byResponsable={byResponsable}
+        kpiBloqueos={kpi.bloqueos}
+        kpiPuntosTotales={kpi.puntosTotales}
+        kpiPuntosEntregados={kpi.puntosEntregados}
+        husFiltradas={husFiltradas}
+        casosFiltrados={casosFiltrados}
+        tareasFiltradas={tareasFiltradas}
+      />
 
     </div>
   )

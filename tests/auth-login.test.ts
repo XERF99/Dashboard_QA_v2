@@ -161,7 +161,7 @@ describe("login — bloqueo por intentos fallidos", () => {
     }
 
     expect(result.current.pendingBlockEvents.length).toBeGreaterThan(0)
-    expect(result.current.pendingBlockEvents[0].nombre).toBeTruthy()
+    expect(result.current.pendingBlockEvents[0]!.nombre).toBeTruthy()
   })
 })
 

@@ -6,13 +6,23 @@ import type { Tarea, HistoriaUsuario, Bloqueo } from "@/lib/types"
 // ── Factories ────────────────────────────────────────────────
 
 function makeBloqueo(resuelto = false): Bloqueo {
-  return {
-    id: `bl-${Math.random().toString(36).slice(2)}`,
-    descripcion: "Bloqueo de prueba",
-    reportadoPor: "QA",
-    fecha: new Date(),
-    resuelto,
-  }
+  return resuelto
+    ? {
+        id: `bl-${Math.random().toString(36).slice(2)}`,
+        descripcion: "Bloqueo de prueba",
+        reportadoPor: "QA",
+        fecha: new Date(),
+        resuelto: true,
+        fechaResolucion: new Date(),
+        resueltoPor: "Admin",
+      }
+    : {
+        id: `bl-${Math.random().toString(36).slice(2)}`,
+        descripcion: "Bloqueo de prueba",
+        reportadoPor: "QA",
+        fecha: new Date(),
+        resuelto: false,
+      }
 }
 
 function makeTarea(overrides: Partial<Tarea> = {}): Tarea {
@@ -121,10 +131,10 @@ describe("handleBloquearTarea", () => {
 
     createTareaHandlers(ctx).handleBloquearTarea("t1", bloqueo)
 
-    const t = getTareas()[0]
+    const t = getTareas()[0]!
     expect(t.estado).toBe("bloqueada")
     expect(t.bloqueos).toHaveLength(1)
-    expect(t.bloqueos[0].id).toBe(bloqueo.id)
+    expect(t.bloqueos[0]!.id).toBe(bloqueo.id)
   })
 
   it("registra evento en el historial de la HU correspondiente (sin setTimeout)", () => {
@@ -135,8 +145,8 @@ describe("handleBloquearTarea", () => {
     // Sin setTimeout: el historial debe actualizarse en la misma llamada síncrona
     createTareaHandlers(ctx).handleBloquearTarea("t1", bloqueo)
 
-    expect(getHistorias()[0].historial).toHaveLength(1)
-    expect(getHistorias()[0].historial[0].tipo).toBe("tarea_bloqueada")
+    expect(getHistorias()[0]!.historial).toHaveLength(1)
+    expect(getHistorias()[0]!.historial[0]!.tipo).toBe("tarea_bloqueada")
   })
 
   it("no hace nada si la tarea no existe", () => {
@@ -167,7 +177,7 @@ describe("handleBloquearTarea", () => {
 
     createTareaHandlers(ctx).handleBloquearTarea("t1", makeBloqueo())
 
-    expect(getTareas()[1].estado).toBe("en_progreso")
+    expect(getTareas()[1]!.estado).toBe("en_progreso")
   })
 })
 
@@ -183,9 +193,10 @@ describe("handleDesbloquearTarea", () => {
 
     createTareaHandlers(ctx).handleDesbloquearTarea("t1", bloqueo.id)
 
-    const t = getTareas()[0]
-    expect(t.bloqueos[0].resuelto).toBe(true)
-    expect(t.bloqueos[0].fechaResolucion).toBeInstanceOf(Date)
+    const t = getTareas()[0]!
+    const b0 = t.bloqueos[0]!
+    expect(b0.resuelto).toBe(true)
+    if (b0.resuelto) expect(b0.fechaResolucion).toBeInstanceOf(Date)
   })
 
   it("cambia estado a en_progreso cuando no quedan bloqueos activos", () => {
@@ -195,7 +206,7 @@ describe("handleDesbloquearTarea", () => {
 
     createTareaHandlers(ctx).handleDesbloquearTarea("t1", bl.id)
 
-    expect(getTareas()[0].estado).toBe("en_progreso")
+    expect(getTareas()[0]!.estado).toBe("en_progreso")
   })
 
   it("mantiene estado bloqueada si aún quedan bloqueos activos", () => {
@@ -206,7 +217,7 @@ describe("handleDesbloquearTarea", () => {
 
     createTareaHandlers(ctx).handleDesbloquearTarea("t1", bl1.id)
 
-    expect(getTareas()[0].estado).toBe("bloqueada")
+    expect(getTareas()[0]!.estado).toBe("bloqueada")
   })
 
   it("registra evento en historial de la HU (sin setTimeout)", () => {
@@ -217,8 +228,8 @@ describe("handleDesbloquearTarea", () => {
     // Sin setTimeout: el historial se actualiza síncronamente
     createTareaHandlers(ctx).handleDesbloquearTarea("t1", bl.id)
 
-    expect(getHistorias()[0].historial).toHaveLength(1)
-    expect(getHistorias()[0].historial[0].tipo).toBe("tarea_desbloqueada")
+    expect(getHistorias()[0]!.historial).toHaveLength(1)
+    expect(getHistorias()[0]!.historial[0]!.tipo).toBe("tarea_desbloqueada")
   })
 
   it("no hace nada si la tarea no existe", () => {

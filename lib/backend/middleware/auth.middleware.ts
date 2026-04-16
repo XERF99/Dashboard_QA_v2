@@ -19,11 +19,16 @@ if (!rawSecret && process.env.NODE_ENV === "production") {
   )
 }
 
+// Support secret rotation: JWT_SECRET_PREVIOUS allows verifying tokens signed
+// with the previous secret during rotation. New tokens always use the current secret.
 const JWT_SECRET = new TextEncoder().encode(
   rawSecret ?? "tcs-dashboard-dev-secret-only-for-local-dev"
 )
+const rawPrevious = process.env.JWT_SECRET_PREVIOUS
+const JWT_SECRET_PREVIOUS = rawPrevious ? new TextEncoder().encode(rawPrevious) : null
 
 export const JWT_EXPIRY = "2h"
+export const REFRESH_EXPIRY = "7d"
 
 export interface JWTPayload {
   sub: string      // user id
@@ -44,12 +49,29 @@ export async function signToken(payload: Omit<JWTPayload, "iat" | "exp">): Promi
     .sign(JWT_SECRET)
 }
 
+// ── Firmar un refresh token (larga duración) ─────────────
+export async function signRefreshToken(payload: Omit<JWTPayload, "iat" | "exp">): Promise<string> {
+  return new SignJWT({ ...payload, type: "refresh" })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime(REFRESH_EXPIRY)
+    .sign(JWT_SECRET)
+}
+
 // ── Verificar token y devolver payload ───────────────────
+// Tries current secret first, then previous secret (for rotation).
 export async function verifyToken(token: string): Promise<JWTPayload | null> {
   try {
     const { payload } = await jwtVerify(token, JWT_SECRET)
     return payload as unknown as JWTPayload
   } catch {
+    // Fallback to previous secret during rotation window
+    if (JWT_SECRET_PREVIOUS) {
+      try {
+        const { payload } = await jwtVerify(token, JWT_SECRET_PREVIOUS)
+        return payload as unknown as JWTPayload
+      } catch { /* both secrets failed */ }
+    }
     return null
   }
 }

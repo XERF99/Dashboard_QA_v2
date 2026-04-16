@@ -8,8 +8,8 @@ export function ConfirmDeleteModal({ open, titulo, subtitulo, onConfirm, onCance
 }) {
   if (!open) return null
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 14, maxWidth: 400, width: "calc(100% - 32px)", boxShadow: "0 20px 60px rgba(0,0,0,0.25)", overflow: "hidden" }}>
+    <div style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center" }} role="presentation">
+      <div role="alertdialog" aria-modal="true" aria-label={titulo} style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 14, maxWidth: 400, width: "calc(100% - 32px)", boxShadow: "0 20px 60px rgba(0,0,0,0.25)", overflow: "hidden" }}>
         <div style={{ height: 4, background: "var(--chart-4)" }} />
         <div style={{ padding: "20px 22px 18px" }}>
           <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 14 }}>

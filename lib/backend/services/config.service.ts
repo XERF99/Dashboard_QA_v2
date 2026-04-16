@@ -6,6 +6,7 @@
 // ═══════════════════════════════════════════════════════════
 
 import { prisma } from "@/lib/backend/prisma"
+import type { Prisma } from "@prisma/client"
 
 const DEFAULT_GRUPO_ID = "grupo-default"
 
@@ -16,21 +17,22 @@ export async function getConfig(grupoId: string = DEFAULT_GRUPO_ID) {
   )
 }
 
+export interface ConfigUpdateData {
+  etapas?:          Prisma.InputJsonValue
+  resultados?:      Prisma.InputJsonValue
+  tiposAplicacion?: Prisma.InputJsonValue
+  ambientes?:       Prisma.InputJsonValue
+  tiposPrueba?:     Prisma.InputJsonValue
+  aplicaciones?:    Prisma.InputJsonValue
+}
+
 export async function updateConfig(
   grupoId: string = DEFAULT_GRUPO_ID,
-  data: {
-    etapas?:          object
-    resultados?:      unknown[]
-    tiposAplicacion?: unknown[]
-    ambientes?:       unknown[]
-    tiposPrueba?:     unknown[]
-    aplicaciones?:    string[]
-  }
+  data: ConfigUpdateData
 ) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return prisma.config.upsert({
     where:  { grupoId },
-    update: data as any,
-    create: { grupoId, ...(data as any) },
+    update: data,
+    create: { grupoId, ...data },
   })
 }

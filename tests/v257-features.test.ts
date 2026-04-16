@@ -159,7 +159,7 @@ beforeEach(() => {
   vi.mocked(updateSprint).mockResolvedValue({} as never)
   vi.mocked(deleteSprint).mockResolvedValue(undefined as never)
   vi.mocked(marcarLeida).mockResolvedValue({} as never)
-  vi.mocked(rolToDestinatario).mockImplementation((rol: string) => rol)
+  vi.mocked(rolToDestinatario).mockImplementation(((rol: string) => rol) as typeof rolToDestinatario)
   // Reset $transaction
   mockPrisma.$transaction.mockImplementation((fn: unknown) => {
     if (typeof fn === "function") {
@@ -191,7 +191,7 @@ describe("Retry-After headers en respuestas 429", () => {
     const res = await syncHistorias(makeReq("POST", "/api/historias/sync", { historias: [] }, adminToken))
     expect(res.status).toBe(429)
     expect(res.headers.get("Retry-After")).toBeTruthy()
-    expect(res.headers.get("X-RateLimit-Limit")).toBe("30")
+    expect(res.headers.get("X-RateLimit-Limit")).toBe("10")
     expect(res.headers.get("X-RateLimit-Remaining")).toBe("0")
   })
 
@@ -200,7 +200,7 @@ describe("Retry-After headers en respuestas 429", () => {
     const res = await syncCasos(makeReq("POST", "/api/casos/sync", { casos: [] }, adminToken))
     expect(res.status).toBe(429)
     expect(res.headers.get("Retry-After")).toBeTruthy()
-    expect(res.headers.get("X-RateLimit-Limit")).toBe("30")
+    expect(res.headers.get("X-RateLimit-Limit")).toBe("10")
     expect(res.headers.get("X-RateLimit-Remaining")).toBe("0")
   })
 
@@ -209,7 +209,7 @@ describe("Retry-After headers en respuestas 429", () => {
     const res = await syncTareas(makeReq("POST", "/api/tareas/sync", { tareas: [] }, adminToken))
     expect(res.status).toBe(429)
     expect(res.headers.get("Retry-After")).toBeTruthy()
-    expect(res.headers.get("X-RateLimit-Limit")).toBe("30")
+    expect(res.headers.get("X-RateLimit-Limit")).toBe("10")
     expect(res.headers.get("X-RateLimit-Remaining")).toBe("0")
   })
 

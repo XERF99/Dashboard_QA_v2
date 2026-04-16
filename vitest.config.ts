@@ -9,6 +9,12 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./tests/setup.ts"],
     exclude: ["**/node_modules/**", "**/tests/e2e/**"],
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "lcov"],
+      include: ["lib/backend/**", "app/api/**", "components/**"],
+      exclude: ["**/node_modules/**", "tests/**", "prisma/**", "scripts/**"],
+    },
   },
   resolve: {
     alias: {

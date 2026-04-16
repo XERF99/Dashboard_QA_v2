@@ -1,10 +1,6 @@
-// ═══════════════════════════════════════════════════════════
-//  HISTORIA SERVICE — lógica de negocio para HUs
-//  grupoId: undefined = owner (ve todo), string = filtra al grupo
-// ═══════════════════════════════════════════════════════════
-
 import { prisma } from "@/lib/backend/prisma"
 import { Prisma } from "@prisma/client"
+import { notDeleted, paginatedQuery, createRecord, updateRecord } from "./base-crud.service"
 
 function grupoFilter(grupoId?: string) {
   return grupoId ? { grupoId } : {}
@@ -14,53 +10,82 @@ export async function getAllHistorias(
   grupoId?: string,
   page    = 1,
   limit   = 50,
-  filters?: { sprint?: string; responsable?: string }
+  filters?: { sprint?: string; responsable?: string; q?: string; cursor?: string }
 ) {
-  const skip  = (page - 1) * limit
-  const where = {
+  const where: Prisma.HistoriaUsuarioWhereInput = {
+    ...notDeleted,
     ...grupoFilter(grupoId),
     ...(filters?.sprint      ? { sprint:      filters.sprint }      : {}),
     ...(filters?.responsable ? { responsable: filters.responsable } : {}),
   }
-  const [historias, total] = await prisma.$transaction([
-    prisma.historiaUsuario.findMany({
-      where,
-      orderBy: { fechaCreacion: "desc" },
-      skip,
-      take: limit,
-    }),
-    prisma.historiaUsuario.count({ where }),
-  ])
-  return { historias, total, page, limit, pages: Math.ceil(total / limit) }
+
+  if (filters?.q) {
+    const terms = filters.q.split(/\s+/).filter(Boolean)
+    where.AND = terms.map(term => ({
+      OR: [
+        { codigo:      { contains: term, mode: "insensitive" as const } },
+        { titulo:      { contains: term, mode: "insensitive" as const } },
+        { descripcion: { contains: term, mode: "insensitive" as const } },
+        { responsable: { contains: term, mode: "insensitive" as const } },
+        { aplicacion:  { contains: term, mode: "insensitive" as const } },
+      ],
+    }))
+  }
+
+  // Cursor-based pagination when cursor provided
+  if (filters?.cursor) {
+    const [historias, total] = await prisma.$transaction([
+      prisma.historiaUsuario.findMany({
+        where,
+        orderBy: { fechaCreacion: "desc" },
+        cursor: { id: filters.cursor },
+        skip: 1,
+        take: limit,
+      }),
+      prisma.historiaUsuario.count({ where }),
+    ])
+    return { historias, total, page, limit, pages: Math.ceil(total / limit) }
+  }
+
+  const result = await paginatedQuery(prisma.historiaUsuario, where, page, limit)
+  return { historias: result.data, total: result.total, page: result.page, limit: result.limit, pages: result.pages }
 }
 
 export async function getHistoriaById(id: string) {
-  return prisma.historiaUsuario.findUnique({ where: { id }, include: { casos: true } })
+  return prisma.historiaUsuario.findFirst({
+    where: { id, ...notDeleted },
+    include: { casos: { where: { deletedAt: null } } },
+  })
 }
 
 export async function createHistoria(data: Prisma.HistoriaUsuarioUncheckedCreateInput) {
-  return prisma.historiaUsuario.create({ data })
+  return createRecord(prisma.historiaUsuario, data)
 }
 
 export async function updateHistoria(id: string, data: Prisma.HistoriaUsuarioUncheckedUpdateInput) {
-  return prisma.historiaUsuario.update({ where: { id }, data })
+  return updateRecord(prisma.historiaUsuario, id, data)
 }
 
 export async function deleteHistoria(id: string) {
-  // onDelete: Cascade en CasoPrueba elimina casos y tareas en cascada
-  return prisma.historiaUsuario.delete({ where: { id } })
+  const now = new Date()
+  return prisma.$transaction(async (tx) => {
+    const hu = await tx.historiaUsuario.update({ where: { id }, data: { deletedAt: now } })
+    await tx.casoPrueba.updateMany({ where: { huId: id, deletedAt: null }, data: { deletedAt: now } })
+    await tx.tarea.updateMany({ where: { huId: id, deletedAt: null }, data: { deletedAt: now } })
+    return hu
+  })
 }
 
 export async function getHistoriasBySprint(sprint: string, grupoId?: string) {
   return prisma.historiaUsuario.findMany({
-    where: { sprint, ...grupoFilter(grupoId) },
+    where: { ...notDeleted, sprint, ...grupoFilter(grupoId) },
     orderBy: { fechaCreacion: "desc" },
   })
 }
 
 export async function getHistoriasByResponsable(responsable: string, grupoId?: string) {
   return prisma.historiaUsuario.findMany({
-    where: { responsable, ...grupoFilter(grupoId) },
+    where: { ...notDeleted, responsable, ...grupoFilter(grupoId) },
     orderBy: { fechaCreacion: "desc" },
   })
 }

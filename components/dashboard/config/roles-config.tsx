@@ -31,7 +31,7 @@ function RoleEditPanel({
 }) {
   const [label, setLabel] = useState(role.label ?? "")
   const [description, setDescription] = useState(role.description ?? "")
-  const [cls, setCls] = useState(role.cls ?? BADGE_PALETA[4].cls)
+  const [cls, setCls] = useState(role.cls ?? BADGE_PALETA[4]!.cls)
   const [permisos, setPermisos] = useState<PermisoId[]>(role.permisos ?? [])
 
   const togglePermiso = (p: PermisoId) => {

@@ -1,3 +1,9 @@
+import bundleAnalyzer from "@next/bundle-analyzer"
+
+const withBundleAnalyzer = bundleAnalyzer({
+  enabled: process.env.ANALYZE === "true",
+})
+
 /** @type {import('next').NextConfig} */
 
 // 'unsafe-eval' solo es necesario en desarrollo para el hot-reload de Next.js.
@@ -35,6 +41,7 @@ const securityHeaders = [
 ]
 
 const nextConfig = {
+  output: process.env.DOCKER_BUILD === "1" ? "standalone" : undefined,
   images: {
     // En producción Vercel optimiza imágenes automáticamente (mejor performance y ancho de banda).
     // Solo desactivar en desarrollo para evitar el daemon de optimización local.
@@ -51,4 +58,4 @@ const nextConfig = {
   },
 }
 
-export default nextConfig
+export default withBundleAnalyzer(nextConfig)

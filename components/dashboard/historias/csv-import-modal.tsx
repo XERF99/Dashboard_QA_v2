@@ -9,6 +9,7 @@ import {
   type HistoriaUsuario, type EstadoHU, type PrioridadHU,
   type TipoAplicacionDef, type AmbienteDef,
 } from "@/lib/types"
+import { parsearCSV, invertirCfg, parsearFechaCSV } from "@/lib/csv-utils"
 
 interface Props {
   open: boolean
@@ -30,50 +31,8 @@ interface FilaPreview {
 }
 
 // ── Helpers de parseo ────────────────────────────────────────
-const MESES_CSV = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"]
-
-function parsearFechaCSV(s: string): Date | undefined {
-  if (!s) return undefined
-  const partes = s.trim().split(" ")
-  if (partes.length !== 3) return undefined
-  const [dia, mes, anio] = partes
-  const iMes = MESES_CSV.indexOf(mes.toLowerCase())
-  if (iMes === -1) return undefined
-  const fecha = new Date(parseInt(anio), iMes, parseInt(dia))
-  return isNaN(fecha.getTime()) ? undefined : fecha
-}
-
-function invertirCfg<T extends Record<string, { label: string }>>(cfg: T): Record<string, string> {
-  return Object.entries(cfg).reduce((acc, [k, v]) => ({ ...acc, [v.label.toLowerCase()]: k }), {})
-}
-
 const ESTADO_LABEL_TO_KEY = invertirCfg(ESTADO_HU_CFG)
 const PRIORIDAD_LABEL_TO_KEY = invertirCfg(PRIORIDAD_CFG)
-
-function parsearCSV(texto: string): string[][] {
-  const filas: string[][] = []
-  const lineas = texto.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n")
-  for (const linea of lineas) {
-    if (!linea.trim()) continue
-    const cols: string[] = []
-    let enComillas = false
-    let actual = ""
-    for (let i = 0; i < linea.length; i++) {
-      const c = linea[i]
-      if (c === '"') {
-        if (enComillas && linea[i+1] === '"') { actual += '"'; i++ }
-        else enComillas = !enComillas
-      } else if (c === "," && !enComillas) {
-        cols.push(actual.trim()); actual = ""
-      } else {
-        actual += c
-      }
-    }
-    cols.push(actual.trim())
-    filas.push(cols)
-  }
-  return filas
-}
 
 // ── Componente principal ─────────────────────────────────────
 export function CSVImportModal({ open, onClose, onImport, tiposAplicacion, ambientes, currentUser, codigosExistentes = [] }: Props) {
@@ -102,22 +61,22 @@ export function CSVImportModal({ open, onClose, onImport, tiposAplicacion, ambie
         const titulo = cols[1]
         if (!titulo) return { index: i, datos: cols, error: "Título vacío" }
 
-        const estadoKey = ESTADO_LABEL_TO_KEY[cols[2]?.toLowerCase()] as EstadoHU | undefined
-        const prioridadKey = PRIORIDAD_LABEL_TO_KEY[cols[4]?.toLowerCase()] as PrioridadHU | undefined
-        const tipoAppDef = tiposDisp.find(t => t.label.toLowerCase() === cols[6]?.toLowerCase())
-        const ambienteDef = ambientesDisp.find(a => a.label.toLowerCase() === cols[7]?.toLowerCase())
+        const estadoKey = ESTADO_LABEL_TO_KEY[(cols[2] ?? "").toLowerCase()] as EstadoHU | undefined
+        const prioridadKey = PRIORIDAD_LABEL_TO_KEY[(cols[4] ?? "").toLowerCase()] as PrioridadHU | undefined
+        const tipoAppDef = tiposDisp.find(t => t.label.toLowerCase() === (cols[6] ?? "").toLowerCase())
+        const ambienteDef = ambientesDisp.find(a => a.label.toLowerCase() === (cols[7] ?? "").toLowerCase())
 
         const hu: Partial<HistoriaUsuario> = {
           titulo,
-          responsable: cols[5] || "",
+          responsable: cols[5] ?? "",
           estado: estadoKey || "sin_iniciar",
           prioridad: prioridadKey || "media",
-          puntos: parseInt(cols[8]) || 5,
-          tipoAplicacion: tipoAppDef?.id || TIPOS_APLICACION_PREDETERMINADOS[0].id,
-          ambiente: ambienteDef?.id || AMBIENTES_PREDETERMINADOS[0].id,
-          tipoPrueba: TIPOS_PRUEBA_PREDETERMINADOS[0].id,
-          fechaFinEstimada: parsearFechaCSV(cols[12]),
-          fechaCreacion: parsearFechaCSV(cols[13]) || new Date(),
+          puntos: parseInt(cols[8] ?? "") || 5,
+          tipoAplicacion: tipoAppDef?.id || TIPOS_APLICACION_PREDETERMINADOS[0]!.id,
+          ambiente: ambienteDef?.id || AMBIENTES_PREDETERMINADOS[0]!.id,
+          tipoPrueba: TIPOS_PRUEBA_PREDETERMINADOS[0]!.id,
+          fechaFinEstimada: parsearFechaCSV(cols[12] ?? ""),
+          fechaCreacion: parsearFechaCSV(cols[13] ?? "") || new Date(),
           descripcion: "",
           criteriosAceptacion: "",
           aplicacion: "",
@@ -185,8 +144,8 @@ export function CSVImportModal({ open, onClose, onImport, tiposAplicacion, ambie
   if (!open) return null
 
   return (
-    <div style={{ position:"fixed", inset:0, zIndex:100, background:"rgba(0,0,0,0.5)", display:"flex", alignItems:"center", justifyContent:"center", padding:"16px" }}>
-      <div style={{
+    <div style={{ position:"fixed", inset:0, zIndex:100, background:"rgba(0,0,0,0.5)", display:"flex", alignItems:"center", justifyContent:"center", padding:"16px" }} role="presentation">
+      <div role="dialog" aria-modal="true" aria-label="Importar historias desde CSV" style={{
         background:"var(--card)", borderRadius:14, width:"100%", maxWidth:680,
         boxShadow:"0 20px 60px rgba(0,0,0,0.25)", overflow:"hidden", maxHeight:"90vh", display:"flex", flexDirection:"column",
       }}>
@@ -206,7 +165,7 @@ export function CSVImportModal({ open, onClose, onImport, tiposAplicacion, ambie
               </p>
             </div>
           </div>
-          <button onClick={handleClose} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--muted-foreground)", padding:4 }}>
+          <button onClick={handleClose} aria-label="Cerrar importación" style={{ background:"none", border:"none", cursor:"pointer", color:"var(--muted-foreground)", padding:4 }}>
             <X size={16}/>
           </button>
         </div>

@@ -392,10 +392,10 @@ export function CasosTable({ casos, historias, onVerHU, tiposPrueba, onImportCSV
       )}
 
       {/* ── Vista desktop: tabla grid (≥ sm) ── */}
-      <div className="hidden sm:block overflow-x-auto -mx-1 px-1">
+      <div className="hidden sm:block overflow-x-auto -mx-1 px-1" role="table" aria-label="Casos de prueba">
       <div style={{ minWidth: 700 }}>
       {casosOrdenados.length > 0 && (
-        <div style={{
+        <div role="row" aria-label="Cabecera de casos" style={{
           display:"grid",
           gridTemplateColumns:"120px 1fr 160px 148px 80px 80px 56px",
           gap:12, padding:"5px 16px", borderRadius:8,

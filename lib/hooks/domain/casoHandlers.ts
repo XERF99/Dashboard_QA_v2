@@ -2,6 +2,7 @@ import { crearEvento } from "@/lib/types"
 import type { CasoPrueba, EstadoAprobacion, EtapaEjecucion } from "@/lib/types"
 import type { DomainCtx } from "./types"
 import { api } from "@/lib/services/api/client"
+import { API } from "@/lib/constants/api-routes"
 
 /** Handlers de gestión de Casos de Prueba: CRUD, aprobación y ejecución. */
 export function createCasoHandlers({ historias, casos, tareas, setHistorias, setCasos, setTareas, user, addToast, addNotificacion }: DomainCtx) {
@@ -28,7 +29,7 @@ export function createCasoHandlers({ historias, casos, tareas, setHistorias, set
     setHistorias(prev => prev.map(h => h.id !== huId ? h : {
       ...h, casosIds: h.casosIds.filter(id => id !== casoId), historial: [...h.historial, ev],
     }))
-    api.delete(`/api/casos/${casoId}`).catch(() => console.warn("[Casos] Error al eliminar caso en API"))
+    api.delete(API.caso(casoId)).catch(() => console.warn("[Casos] Error al eliminar caso en API"))
     addToast({ type: "warning", title: "Caso eliminado" })
   }
 
@@ -193,7 +194,7 @@ export function createCasoHandlers({ historias, casos, tareas, setHistorias, set
           if (r.etapa !== etapa || r.resultado === "pendiente") return r
           const intentosUpd = [...(r.intentos || [])]
           if (intentosUpd.length > 0) {
-            intentosUpd[intentosUpd.length - 1] = { ...intentosUpd[intentosUpd.length - 1], comentarioCorreccion }
+            intentosUpd[intentosUpd.length - 1] = { ...intentosUpd[intentosUpd.length - 1]!, comentarioCorreccion }
           }
           return { ...r, estado: "en_ejecucion" as const, resultado: "pendiente" as const, fechaFin: undefined, intentos: intentosUpd }
         }),

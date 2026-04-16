@@ -180,7 +180,7 @@ describe("OwnerPanel — formulario crear grupo", () => {
     render(<OwnerPanel />)
     // "Nuevo grupo" button is in the sidebar; click the first occurrence
     await waitFor(() => screen.getAllByText("Nuevo grupo"))
-    fireEvent.click(screen.getAllByText("Nuevo grupo")[0])
+    fireEvent.click(screen.getAllByText("Nuevo grupo")[0]!)
     fireEvent.change(screen.getByPlaceholderText(/Ej: Equipo/i), { target: { value: "Equipo Gamma" } })
     fireEvent.click(screen.getByRole("button", { name: /crear grupo/i }))
 
@@ -205,7 +205,7 @@ describe("OwnerPanel — eliminar grupo", () => {
     // Alpha appears in sidebar + detail panel; wait for either
     await waitFor(() => screen.getAllByText("Equipo Alpha"))
     const deleteButtons = document.querySelectorAll("button[title='Eliminar grupo']")
-    fireEvent.click(deleteButtons[0])
+    fireEvent.click(deleteButtons[0]!)
     // Dialog title + confirm button both say "Eliminar grupo"
     expect(screen.getAllByText("Eliminar grupo").length).toBeGreaterThan(0)
     expect(screen.getByText(/Esta acción es irreversible/i)).toBeInTheDocument()
@@ -215,7 +215,7 @@ describe("OwnerPanel — eliminar grupo", () => {
     render(<OwnerPanel />)
     await waitFor(() => screen.getAllByText("Equipo Alpha"))
     const deleteButtons = document.querySelectorAll("button[title='Eliminar grupo']")
-    fireEvent.click(deleteButtons[0])
+    fireEvent.click(deleteButtons[0]!)
     fireEvent.click(screen.getByRole("button", { name: /cancelar/i }))
     expect(screen.queryByText(/Esta acción es irreversible/i)).not.toBeInTheDocument()
   })

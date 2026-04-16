@@ -75,19 +75,19 @@ describe("getAllHistorias — paginación", () => {
     )
   })
 
-  it("con grupoId → where incluye grupoId", async () => {
+  it("con grupoId → where incluye grupoId y deletedAt: null", async () => {
     await getAllHistorias("grupo-abc", 1, 20)
 
     expect(prisma.historiaUsuario.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { grupoId: "grupo-abc" } })
+      expect.objectContaining({ where: { deletedAt: null, grupoId: "grupo-abc" } })
     )
   })
 
-  it("sin grupoId → where vacío (owner ve todo)", async () => {
+  it("sin grupoId → where solo tiene deletedAt: null (owner ve todo)", async () => {
     await getAllHistorias(undefined, 1, 20)
 
     expect(prisma.historiaUsuario.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: {} })
+      expect.objectContaining({ where: { deletedAt: null } })
     )
   })
 
@@ -111,11 +111,11 @@ describe("getAllCasos — paginación", () => {
     expect(result.pages).toBe(1)
   })
 
-  it("con grupoId → where filtra por hu.grupoId", async () => {
+  it("con grupoId → where filtra por hu.grupoId y deletedAt: null", async () => {
     await getAllCasos("grupo-xyz", 1, 10)
 
     expect(prisma.casoPrueba.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { hu: { grupoId: "grupo-xyz" } } })
+      expect.objectContaining({ where: { deletedAt: null, hu: { grupoId: "grupo-xyz" } } })
     )
   })
 })
@@ -145,16 +145,17 @@ describe("getAllTareas — paginación y filtro asignado", () => {
   it("sin asignado → where no incluye asignado", async () => {
     await getAllTareas(undefined, undefined, 1, 50)
 
-    const callWhere = (vi.mocked(prisma.tarea.findMany).mock.calls[0][0] as { where: Record<string, unknown> }).where
+    const callWhere = (vi.mocked(prisma.tarea.findMany).mock.calls[0]![0] as { where: Record<string, unknown> }).where
     expect(callWhere).not.toHaveProperty("asignado")
   })
 
-  it("combina grupoId y asignado en el where", async () => {
+  it("combina grupoId, asignado y deletedAt en el where", async () => {
     await getAllTareas("grupo-test", "Carlos Lopez", 1, 50)
 
     expect(prisma.tarea.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
+          deletedAt: null,
           caso: { hu: { grupoId: "grupo-test" } },
           asignado: "Carlos Lopez",
         },

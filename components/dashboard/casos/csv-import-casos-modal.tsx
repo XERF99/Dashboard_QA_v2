@@ -9,6 +9,7 @@ import {
   type CasoPrueba, type ComplejidadCaso, type EntornoCaso,
   type TipoPruebaDef, type HistoriaUsuario,
 } from "@/lib/types"
+import { parsearCSV } from "@/lib/csv-utils"
 
 interface Props {
   open: boolean
@@ -29,31 +30,6 @@ interface FilaPreview {
 }
 
 // ── Helpers ──────────────────────────────────────────────────
-
-function parsearCSV(texto: string): string[][] {
-  const filas: string[][] = []
-  const lineas = texto.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n")
-  for (const linea of lineas) {
-    if (!linea.trim()) continue
-    const cols: string[] = []
-    let enComillas = false
-    let actual = ""
-    for (let i = 0; i < linea.length; i++) {
-      const c = linea[i]
-      if (c === '"') {
-        if (enComillas && linea[i + 1] === '"') { actual += '"'; i++ }
-        else enComillas = !enComillas
-      } else if (c === "," && !enComillas) {
-        cols.push(actual.trim()); actual = ""
-      } else {
-        actual += c
-      }
-    }
-    cols.push(actual.trim())
-    filas.push(cols)
-  }
-  return filas
-}
 
 const COMPLEJIDAD_MAP: Record<string, ComplejidadCaso> = {
   alta: "alta", alto: "alta", high: "alta",
@@ -112,7 +88,7 @@ export function CSVImportCasosModal({ open, onClose, onImport, historias, tiposP
           descripcion:          cols[2]?.trim() || "",
           tipoPrueba:           tipoPruebaId,
           complejidad:          COMPLEJIDAD_MAP[complejidadRaw] ?? "media",
-          horasEstimadas:       Math.max(1, parseInt(cols[5]) || 1),
+          horasEstimadas:       Math.max(1, parseInt(cols[5] ?? "1") || 1),
           entorno:              ENTORNO_MAP[entornoRaw] ?? "test",
           estadoAprobacion:     "borrador",
           archivosAnalizados:   [],
@@ -166,8 +142,8 @@ export function CSVImportCasosModal({ open, onClose, onImport, historias, tiposP
   if (!open) return null
 
   return (
-    <div style={{ position:"fixed", inset:0, zIndex:100, background:"rgba(0,0,0,0.5)", display:"flex", alignItems:"center", justifyContent:"center", padding:"16px" }}>
-      <div style={{
+    <div style={{ position:"fixed", inset:0, zIndex:100, background:"rgba(0,0,0,0.5)", display:"flex", alignItems:"center", justifyContent:"center", padding:"16px" }} role="presentation">
+      <div role="dialog" aria-modal="true" aria-label="Importar casos de prueba desde CSV" style={{
         background:"var(--card)", borderRadius:14, width:"100%", maxWidth:680,
         boxShadow:"0 20px 60px rgba(0,0,0,0.25)", overflow:"hidden", maxHeight:"90vh", display:"flex", flexDirection:"column",
       }}>
@@ -187,7 +163,7 @@ export function CSVImportCasosModal({ open, onClose, onImport, historias, tiposP
               </p>
             </div>
           </div>
-          <button onClick={handleClose} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--muted-foreground)", padding:4 }}>
+          <button onClick={handleClose} aria-label="Cerrar importación" style={{ background:"none", border:"none", cursor:"pointer", color:"var(--muted-foreground)", padding:4 }}>
             <X size={16}/>
           </button>
         </div>

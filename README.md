@@ -1,4 +1,4 @@
-# QAControl — Dashboard de Gestión de Pruebas · v2.61
+# QAControl — Dashboard de Gestión de Pruebas · v2.68
 
 Sistema integral de gestión de calidad para equipos QA. Permite administrar Historias de Usuario, casos de prueba, flujos de aprobación, bloqueos y carga ocupacional del equipo, con control de acceso basado en roles.
 
@@ -15,10 +15,17 @@ Sistema integral de gestión de calidad para equipos QA. Permite administrar His
 | Iconos | Lucide React |
 | Gráficos | Recharts 2.15 |
 | Persistencia | PostgreSQL + Prisma ORM (fuente de verdad) / localStorage (caché de UI) |
+| Data fetching | TanStack Query (React Query) v5 |
+| PDF server-side | jsPDF 4 |
+| Keyboard shortcuts | react-hotkeys-hook 5 |
 | Tests unitarios | Vitest 3 + React Testing Library 16 |
+| Tests accesibilidad | axe-core 4 |
 | Tests E2E | Playwright 1.58 |
+| Pre-commit hooks | Husky 9 + lint-staged 16 |
+| Bundle analysis | @next/bundle-analyzer |
 | Package manager | pnpm |
-| Despliegue | Vercel |
+| Drag & Drop | @dnd-kit 6 |
+| Despliegue | Vercel / Docker |
 
 ---
 
@@ -40,7 +47,8 @@ Sistema integral de gestión de calidad para equipos QA. Permite administrar His
 - **Vista por Sprint**: tabs de selección de sprint con cards de progreso y distribución de estados *(nuevo en v2.2)*
 - **Importación CSV**: carga de HUs desde archivo CSV compatible con la exportación del sistema *(nuevo en v2.2)*
 - **Acciones masivas**: cambio de estado, reasignación de responsable y eliminación en lote
-- Búsqueda global que abarca título, código, responsable, descripción y casos de prueba
+- Búsqueda global que abarca título, código, responsable, descripción y casos de prueba (full-text search en API con parámetro `?q=`)
+- **Atajos de teclado**: `Alt+1..8` navega tabs, `Alt+N` nueva HU, `/` o `Alt+B` enfoca búsqueda *(nuevo en v2.64)*
 - Creación y edición con formulario completo: prioridad, tipo de aplicación, ambiente, tipo de prueba, fecha estimada, story points, descripción
 - **Plantillas de HU**: autocompletado de campos técnicos al crear una nueva HU con 5 plantillas predefinidas *(nuevo en v2.2)*
 
@@ -82,6 +90,7 @@ Sistema integral de gestión de calidad para equipos QA. Permite administrar His
 #### Auditoría
 - Historial completo de eventos de todas las HUs
 - Filtrado por tipo de evento y responsable
+- **Audit Log** *(nuevo en v2.67)*: visor de audit log con React Query, filtros por acción y recurso, búsqueda por usuario/detalle/ID, paginación y skeleton loading. Accesible para Owner (ve todo) y Admin (scoped a su workspace)
 
 #### Gestión de Usuarios
 - CRUD completo de usuarios (Owner y Admin)
@@ -126,7 +135,8 @@ dashboard_v22/
 │   │   ├── notificaciones/           ← GET/POST/PATCH/DELETE notificaciones
 │   │   ├── metricas/                 ← GET métricas agregadas
 │   │   ├── config/                   ← GET/PUT config por grupo
-│   │   └── export/                   ← GET export CSV/PDF
+│   │   ├── export/                   ← GET export CSV
+│   │   │   └── pdf/                  ← GET export PDF (server-side jsPDF)
 │   ├── globals.css
 │   ├── layout.tsx
 │   └── page.tsx                      ← SPA principal (login + dashboard)
@@ -143,17 +153,18 @@ dashboard_v22/
 │   │   ├── casos/                    ← CasosTable, CasoPruebaCard, CSVImportCasosModal
 │   │   ├── config/                   ← Roles, Etapas, Resultados, Sprints, Ambientes, etc.
 │   │   ├── historias/                ← HistoriasTable, HUDetail, HUForm, CSVImportModal
-│   │   ├── owner/                    ← OwnerPanel (gestión de grupos)
+│   │   ├── owner/                    ← OwnerPanel + shared/dialogs/members/detail ← v2.68
 │   │   ├── shared/                   ← Header, NavTabGroup, BloqueosPanel, AuditoriaPanel,
-│   │   │                               CommentThread, PanelRiesgos, SprintPanel, ToastContainer
+│   │   │                               AuditLogViewer, CommandPalette, CommentThread,
+│   │   │                               PanelRiesgos, SprintPanel, ToastContainer
 │   │   └── usuarios/                 ← UserManagement, UserFormModal, PerfilDialog
 │   └── ui/                           ← shadcn/ui primitives (Button, Dialog, Select, etc.)
 │
 ├── lib/
 │   ├── backend/                      ← Código server-side exclusivo (no importar desde cliente)
 │   │   ├── middleware/               ← auth.middleware.ts, rate-limit.ts
-│   │   ├── services/                 ← auth, historia, caso, tarea, config, notificacion,
-│   │   │                               sprint, metricas, grupo
+│   │   ├── services/                 ← base-crud, auth, historia, caso, tarea, config,
+│   │   │                               notificacion, sprint, metricas, grupo, audit
 │   │   ├── validators/               ← Joi: auth, historia, caso, tarea, config
 │   │   ├── metricas-cache.ts         ← Caché en memoria por workspace
 │   │   └── prisma.ts                 ← Singleton Prisma Client
@@ -161,10 +172,17 @@ dashboard_v22/
 │   │   ├── auth-context.tsx          ← AuthProvider, useAuth, permisos, PASSWORD_GENERICA
 │   │   ├── theme-context.tsx         ← ThemeProvider, useTheme
 │   │   └── hu-detail-context.tsx     ← HUDetailProvider (estado del panel de detalle)
+│   ├── providers/
+│   │   └── query-provider.tsx        ← TanStack Query provider (staleTime 2min, gcTime 5min)
 │   ├── hooks/                        ← Hooks de dominio y UI
 │   │   ├── domain/                   ← Handlers: huHandlers, casoHandlers, tareaHandlers,
 │   │   │                               bloqueoHandlers, comentarioHandlers, types
-│   │   ├── useDomainData.ts          ← Carga y sincronización de datos principales
+│   │   ├── useDomainData.ts          ← Facade que compone useHistoriasData + useCasosData + useTareasData
+│   │   ├── useHistoriasData.ts       ← Hook independiente: fetch + parse de historias
+│   │   ├── useCasosData.ts           ← Hook independiente: fetch + parse de casos
+│   │   ├── useTareasData.ts          ← Hook independiente: fetch + parse de tareas
+│   │   ├── useAuditLog.ts            ← React Query hook para GET /api/audit
+│   │   ├── useKeyboardShortcuts.ts   ← Atajos de teclado globales (Alt+1..8, Alt+N, Ctrl+K)
 │   │   ├── useHistoriasVisibles.ts   ← Scoping de HUs por rol
 │   │   ├── useHistoriasFilters.ts    ← Filtros, búsqueda y ordenamiento
 │   │   ├── useConfig.ts              ← Config del workspace (roles, etapas, sprints, etc.)
@@ -180,8 +198,8 @@ dashboard_v22/
 │   │   └── api/                      ← client.ts (apiFetch helper con manejo de errores)
 │   ├── data/                         ← Datos de seed y fixtures estáticas
 │   ├── types/                        ← Tipos TypeScript del dominio (index.ts)
-│   ├── utils/                        ← date-utils, domain, user-utils, asignaciones
-│   ├── constants/                    ← badge-paleta, constantes de dominio
+│   ├── utils/                        ← date-utils, domain, user-utils, asignaciones, parsers
+│   ├── constants/                    ← badge-paleta, constantes de dominio, api-routes
 │   ├── export/                       ← Exportación a CSV/PDF (hu-export, analytics-export)
 │   └── storage.ts                    ← localStorage helpers + STORAGE_KEYS
 │
@@ -193,7 +211,11 @@ dashboard_v22/
 ├── public/                           ← Assets estáticos (favicon, iconos)
 ├── playwright.config.ts              ← Configuración Playwright (E2E)
 ├── vitest.config.ts                  ← Configuración Vitest (unit tests)
-└── tests/                            ← 700 tests Vitest + 14 tests E2E Playwright
+├── .husky/
+│   └── pre-commit                    ← Husky pre-commit hook (lint-staged)
+└── tests/                            ← Tests Vitest + 14 tests E2E Playwright
+    ├── helpers/axe-helper.ts         ← axe-core wrapper para tests de accesibilidad
+    ├── accessibility.test.tsx        ← Tests WCAG con axe-core
     └── e2e/                          ← flujo-completo.spec.ts (Playwright)
 ```
 
@@ -210,6 +232,8 @@ app/api/
   auth/logout/route.ts             ← POST  /api/auth/logout
   auth/me/route.ts                 ← GET   /api/auth/me
   auth/password/route.ts           ← PUT   /api/auth/password
+  auth/refresh/route.ts            ← POST  /api/auth/refresh
+  audit/route.ts                   ← GET   /api/audit  (owner: todo, admin: su workspace)
   users/route.ts                   ← GET   /api/users  · POST  /api/users
   users/[id]/route.ts              ← PUT   /api/users/[id] · DELETE /api/users/[id]
   historias/route.ts               ← GET   /api/historias  · POST  /api/historias
@@ -226,17 +250,23 @@ app/api/
   sprints/route.ts                 ← GET   /api/sprints  · POST  /api/sprints
   sprints/[id]/route.ts            ← GET · PUT · DELETE  /api/sprints/[id]
   export/route.ts                  ← GET   /api/export?tipo=historias|casos[&sprint=...][&estado=...]
+  export/pdf/route.ts              ← GET   /api/export/pdf?tipo=historias|casos[&sprint=...][&estado=...]
   historias/[id]/historial/route.ts ← GET  /api/historias/[id]/historial[?page=1&limit=20]
   grupos/route.ts                  ← GET   /api/grupos  · POST  /api/grupos          (owner)
   grupos/[id]/route.ts             ← GET · PUT · DELETE  /api/grupos/[id]             (owner)
   grupos/[id]/metricas/route.ts    ← GET   /api/grupos/[id]/metricas                 (owner)
   users/[id]/asignaciones/route.ts ← GET   /api/users/[id]/asignaciones               (admin/owner)
   casos/batch/route.ts             ← PATCH /api/casos/batch                            (admin/owner)
+  historias/sync/route.ts          ← POST  /api/historias/sync                          (sync batch)
+  casos/sync/route.ts              ← POST  /api/casos/sync                              (sync batch)
+  tareas/sync/route.ts             ← POST  /api/tareas/sync                             (sync batch)
+  audit/route.ts                   ← GET   /api/audit                                   (owner: todo, admin: workspace)
+  health/route.ts                  ← GET   /api/health                                  (public)
 ```
 
 ### Schema Prisma
 
-Modelos: `Grupo`, `User`, `Role`, `HistoriaUsuario`, `CasoPrueba`, `Tarea`, `Sprint`, `Notificacion`, `Config`.
+Modelos: `Grupo`, `User`, `Role`, `HistoriaUsuario`, `CasoPrueba`, `Tarea`, `Sprint`, `Notificacion`, `Config`, `AuditLog`.
 
 Los campos con arrays complejos (`bloqueos`, `historial`, `comentarios`, `resultadosPorEtapa`) se almacenan como `Json` para preservar los tipos TypeScript sin cambios en el frontend.
 
@@ -248,6 +278,7 @@ Cada tabla tiene índices de rendimiento definidos con `@@index` en el schema. *
 # 1. Ajustar credenciales en .env
 #    DATABASE_URL="postgresql://usuario:password@localhost:5432/tcs_dashboard"
 #    JWT_SECRET="un-string-aleatorio-largo"
+#    JWT_SECRET_PREVIOUS=""  ← (opcional) para rotación de secreto sin downtime
 
 # 2. Aplicar migraciones (tablas + índices de rendimiento)
 npx prisma migrate dev
@@ -332,7 +363,7 @@ next.config.mjs         ← Headers de seguridad HTTP
 
 ## Tests
 
-El proyecto cuenta con **700 tests automatizados** en 49 archivos usando Vitest 3 + React Testing Library 16. Los tests de API routes corren en entorno `node`; los de UI/hooks en `jsdom`.
+El proyecto cuenta con **905 tests automatizados** en 55 archivos usando Vitest 3 + React Testing Library 16. Los tests de API routes corren en entorno `node`; los de UI/hooks en `jsdom`.
 
 ### Comandos
 
@@ -398,6 +429,9 @@ npx playwright test --headed     # Con ventana del navegador visible
 | `tests/v256-features.test.ts` | node | 24 | `rlKey`: unicidad de clave ip:ruta, independencia de contadores por endpoint; sync historias/casos/tareas: 401, 403, 429, límites de array (501→400, 1001→400, 2001→400), payload válido→200, workspace isolation→500 |
 | `tests/v257-features.test.ts` | node | 45 | Retry-After + X-RateLimit-* en 429 de sync/export/batch; rate limit en PUT /api/auth/password con clave por usuario; bug fix fechas parciales en PUT /api/sprints/[id]; límites `.max()` en validators de auth; try/catch 500 en GET/PUT /api/config; fusión double-query en GET/DELETE /api/historias/[id]; resolveNotif helper en PATCH/DELETE /api/notificaciones/[id] |
 | `tests/v258-features.test.ts` | node | 43 | Fusión double-query en GET/DELETE /api/casos/[id] y GET/DELETE /api/tareas/[id]; requireAuth 1 query (include grupo); rate limit POST /api/users (20/h) + POST /api/historias (60/h) con Retry-After; try/catch 500 en GET/PUT/DELETE /api/users y GET /api/export |
+| `tests/v265-refactoring.test.ts` | node | 48 | withAuth/withAuthAdmin wrapper, checkHUAccess/checkCasoAccess/checkTareaAccess, rate limiting en PUT/DELETE, split de page.tsx en tab components, split de analytics-kpis, tipos nominales |
+| `tests/v266-features.test.ts` | node | 38 | Command palette, refresh token endpoint, CSRF middleware, Docker config, CI E2E workflow, Kanban DnD |
+| `tests/v267-features.test.ts` | node | 26 | base-crud exports (notDeleted, paginatedQuery, softDelete, createRecord, updateRecord), services usando base-crud, split hooks (useHistoriasData, useCasosData, useTareasData), useDomainData composición, audit API admin access, AuditLogViewer component, useAuditLog React Query hook, PaginatedResult type |
 | `tests/e2e/flujo-completo.spec.ts` | **Playwright** | 14 | Login, navegación entre tabs, crear HU, crear caso de prueba, agregar tarea, agregar comentario, tab Casos, Analytics, crear usuario, eliminar usuario, Bloqueos, Carga Ocupacional, Logout, credenciales incorrectas |
 
 Los tests de API usan **Prisma y servicios mockeados** con `vi.mock` y generan JWTs reales con `signToken` — no requieren base de datos activa.
@@ -407,6 +441,260 @@ Los tests E2E **sí requieren** el servidor en `localhost:3000` y la base de dat
 ---
 
 ## Changelog
+
+### v2.68 — Type Safety, Centralized Parsers, API Route Constants, Refactoring Roadmap
+
+#### Cambios completados
+
+| Area | Archivo | Descripcion |
+|---|---|---|
+| **Parsers centralizados** | `lib/utils/parsers.ts` | Nuevo archivo con `d()`, `dOpt()`, `parseBloqueo()` — elimina duplicacion en 3 hooks |
+| **Parsers** | `lib/hooks/useHistoriasData.ts`, `useCasosData.ts`, `useTareasData.ts` | Importan parsers centralizados en vez de definirlos localmente |
+| **TS Fix** | `lib/hooks/domain/bloqueoHandlers.ts` | Helper `resolveBloqueo()` con `satisfies BloqueoResuelto` — elimina 3 errores TS |
+| **TS Fix** | `lib/hooks/domain/tareaHandlers.ts` | `as const` + coerce `string` en `handleDesbloquearTarea` |
+| **TS Fix** | `components/dashboard/shared/bloqueos-panel.tsx` | Guards `b.resuelto ?` antes de acceder a `fechaResolucion`/`resueltoPor`/`notaResolucion` — elimina 9 errores TS |
+| **TS Fix** | `components/dashboard/historias/historia-usuario-detail.tsx` | Type predicates en `.filter()`: `b is BloqueoResuelto` / `b is BloqueoActivo` — elimina 4 errores TS |
+| **TS Fix** | `components/dashboard/shared/command-palette.tsx` | `TAB_ITEMS` con tipo explicito `{ tab: string }` en vez de `as const` — elimina 4 errores TS |
+| **TS Fix** | `app/api/auth/refresh/route.ts` | Typed cast de payload con `& { type?: string }` — elimina 1 error TS |
+| **API Routes** | `lib/constants/api-routes.ts` | Constantes type-safe para todas las rutas API (35 rutas, estaticas y dinamicas) |
+| **API Routes** | `lib/hooks/domain/*.ts`, `lib/hooks/use*Data.ts`, `lib/hooks/useAuditLog.ts` | String literals `/api/...` reemplazados por `API.xxx` |
+| **Testing** | `tests/v267-features.test.ts` | Actualizado: tests verifican import de parsers centralizados y constantes API |
+
+#### Phase 3 — Component splits completados
+
+| Area | Archivos creados | Descripcion |
+|---|---|---|
+| **HU Detail split** | `hu-detail-shared.ts`, `hu-bloqueos.tsx`, `hu-historial.tsx`, `hu-casos-panel.tsx` | `historia-usuario-detail.tsx` de 812→344 LOC. Sub-componentes autocontenidos con shared constants |
+| **Owner Panel split** | `owner-panel-shared.ts`, `owner-panel-dialogs.tsx`, `owner-panel-members.tsx`, `owner-panel-detail.tsx` | `owner-panel.tsx` de 903→200 LOC. Tipos, helpers, dialogs, tabla de miembros y detalle extraidos |
+| **User Management split** | `user-management-shared.ts`, `user-stats-cards.tsx`, `user-connections-panel.tsx` | `user-management.tsx` de 774→530 LOC. Stats cards, connections panel y helpers extraidos |
+| **Testing** | `tests/v268-phase3-splits.test.ts` | 17 tests verifican estructura de archivos extraidos e imports correctos |
+
+#### Phase 4 — Architecture
+
+| Area | Archivo | Descripcion |
+|---|---|---|
+| **Facade Hook** | `lib/hooks/useDashboardState.ts` | Extrae TODA la composicion de hooks de page.tsx: auth, config, domain, modals, visibility, keyboard shortcuts |
+| **Facade Hook** | `app/page.tsx` | Reducido a thin render layer — usa `useDashboardState()`, sin useState/useEffect/useMemo directos |
+| **Auth Split** | `lib/contexts/auth-types.ts` | Tipos, constantes, roles predeterminados, usuarios iniciales (~100 LOC extraidos) |
+| **Auth Split** | `lib/contexts/auth-crud.ts` | `useUserCrud` + `useRoleCrud` — toda la logica CRUD de usuarios y roles (~170 LOC) |
+| **Auth Split** | `lib/contexts/auth-context.tsx` | Reducido de 553 a ~180 LOC — solo session management + provider |
+| **React Query** | `lib/hooks/useApiQuery.ts` | Reemplaza `useApiMirroredState` — useQuery para fetch, useMutation para sync, misma interfaz |
+| **React Query** | `lib/hooks/useHistoriasData.ts` | Migrado a `useApiQuery` |
+| **React Query** | `lib/hooks/useCasosData.ts` | Migrado a `useApiQuery` |
+| **React Query** | `lib/hooks/useTareasData.ts` | Migrado a `useApiQuery` |
+| **Testing** | `tests/v268-phase4-architecture.test.ts` | 15 tests verifican facade hook, auth split, y migracion React Query |
+
+**Resultado: 0 errores TypeScript en produccion. 937 tests pasando.**
+
+#### Phase 5 — Quality
+
+| Area | Archivo | Descripcion |
+|---|---|---|
+| **Tailwind** | `components/dashboard/shared/audit-log-viewer.tsx` | Reescrito con utilidades Tailwind — dynamic colors (ACTION_STYLES) permanecen inline |
+| **Tailwind** | `components/dashboard/shared/bloqueos-panel.tsx` | Reescrito con utilidades Tailwind — NIVEL_CFG colors y `color-mix(in oklch)` inline |
+| **Tailwind** | `components/dashboard/analytics/home-dashboard.tsx` | Reescrito con `CARD_CLS`, `border-l-chart-*` utilities — datos dinamicos inline |
+| **Test Factories** | `tests/factories/index.ts` | Factories compartidas: `makeBloqueoActivo`, `makeBloqueoResuelto`, `makeTarea`, `makeHU`, `makeCaso` |
+| **Test Hygiene** | 30+ archivos `tests/*` | 210 TS errors corregidos — non-null assertions para `noUncheckedIndexedAccess`, factories tipadas para discriminated unions |
+| **Testing** | `tests/v268-phase5-quality.test.ts` | 9 tests verifican conversion Tailwind y estructura de factories |
+
+**Resultado: 0 errores TypeScript (produccion + tests). 946 tests pasando.**
+
+#### Roadmap v2.68 — Refactors completados
+
+| # | Phase | Task | Estado | Descripcion |
+|---|---|---|---|---|
+| 7 | 1 | Centralizar parsers | ✅ Completado | `lib/utils/parsers.ts` con `d()`, `dOpt()`, `parseBloqueo()` |
+| 12 | 1 | Eliminar `as any` en prod | ✅ N/A | Ya no habia ocurrencias en produccion |
+| 1 | 2 | Fix 22 TS errors en prod | ✅ Completado | 0 errores TS en produccion |
+| 8 | 2 | API route constants | ✅ Completado | `lib/constants/api-routes.ts` |
+| 2 | 3 | Split `historia-usuario-detail.tsx` (812→344 LOC) | ✅ Completado | `hu-detail-shared.ts`, `hu-bloqueos.tsx`, `hu-historial.tsx`, `hu-casos-panel.tsx` |
+| 3 | 3 | Split `owner-panel.tsx` (903→200 LOC) | ✅ Completado | `owner-panel-shared.ts`, `owner-panel-dialogs.tsx`, `owner-panel-members.tsx`, `owner-panel-detail.tsx` |
+| 4 | 3 | Split `user-management.tsx` (774→530 LOC) | ✅ Completado | `user-management-shared.ts`, `user-stats-cards.tsx`, `user-connections-panel.tsx` |
+| 5 | 4 | Extraer `useDashboardState` de `page.tsx` | ✅ Completado | `lib/hooks/useDashboardState.ts` — facade hook, page.tsx es thin render layer |
+| 10 | 4 | Split `auth-context.tsx` (553→180 LOC) | ✅ Completado | `auth-types.ts` + `auth-crud.ts` — tipos/CRUD extraidos |
+| 6 | 4 | Migrar a React Query completo | ✅ Completado | `useApiQuery` con useQuery + useMutation reemplaza useApiMirroredState |
+| 9 | 5 | Inline styles → Tailwind | ✅ Completado | audit-log-viewer, bloqueos-panel, home-dashboard migrados |
+| 11 | 5 | Fix 210 TS errors en tests | ✅ Completado | `tests/factories/` con discriminated unions + non-null assertions |
+
+#### Decisiones de diseno
+
+- **`resolveBloqueo` helper en bloqueoHandlers**: elimina duplicacion del patron `{ ...b, resuelto: true, ... }` y garantiza type safety con `satisfies BloqueoResuelto`.
+- **Type predicates en filters**: `filter((b): b is BloqueoResuelto => b.resuelto)` propaga el narrowing del discriminated union a traves del `.filter()`, eliminando la necesidad de casts.
+- **API constants como objeto con funciones**: rutas dinamicas como `API.tarea(id)` son type-safe y autocompletan en el IDE. Rutas estaticas como `API.historias` son strings constantes.
+- **`TAB_ITEMS` sin `as const`**: el array necesita ser mutable para `.push()` condicional de tabs admin/grupos. Tipar explicitamente `{ tab: string }` es mas limpio que widening con casts.
+
+---
+
+### v2.67 — Base CRUD Service, Split Domain Hooks, Admin Audit Log, React Query
+
+#### Cambios
+
+| Area | Archivo | Descripcion |
+|---|---|---|
+| **Base CRUD** | `lib/backend/services/base-crud.service.ts` | Nuevo servicio generico: `notDeleted`, `paginatedQuery`, `softDelete`, `createRecord`, `updateRecord` — elimina duplicacion en 3 services |
+| **Base CRUD** | `lib/backend/services/historia.service.ts` | Refactorizado para usar `notDeleted`, `paginatedQuery`, `createRecord`, `updateRecord` de base-crud |
+| **Base CRUD** | `lib/backend/services/caso.service.ts` | Refactorizado para usar `softDelete`, `paginatedQuery` de base-crud |
+| **Base CRUD** | `lib/backend/services/tarea.service.ts` | Refactorizado para usar `softDelete`, `paginatedQuery` de base-crud |
+| **Split Hooks** | `lib/hooks/useHistoriasData.ts` | Hook independiente extraido de useDomainData — fetch + parse de historias |
+| **Split Hooks** | `lib/hooks/useCasosData.ts` | Hook independiente extraido de useDomainData — fetch + parse de casos |
+| **Split Hooks** | `lib/hooks/useTareasData.ts` | Hook independiente extraido de useDomainData — fetch + parse de tareas |
+| **Split Hooks** | `lib/hooks/useDomainData.ts` | Refactorizado: compone los 3 hooks independientes, ~60 LOC en vez de ~145 |
+| **Audit Admin** | `app/api/audit/route.ts` | Admin puede consultar audit log (scoped a su workspace); antes era solo owner |
+| **Audit UI** | `components/dashboard/shared/audit-log-viewer.tsx` | Visor de audit log con filtros por accion/recurso, busqueda, paginacion, skeletons |
+| **Audit UI** | `components/dashboard/tabs/tab-admin.tsx` | Nueva seccion "Audit Log" en sidebar de admin |
+| **React Query** | `lib/hooks/useAuditLog.ts` | Hook con `useQuery` de TanStack — query keys, `keepPreviousData`, `staleTime: 30s` |
+| **Testing** | `tests/v267-features.test.ts` | 26 tests cubriendo base-crud, split hooks, audit admin, React Query hook |
+| **Testing** | `tests/v262-features.test.ts` | Actualizado para refactoring de soft delete (ahora en base-crud) |
+| **Testing** | `tests/v261-features.test.ts` | Actualizado: admin ahora tiene acceso a audit log (200 en vez de 403) |
+
+#### Decisiones de diseno
+
+- **base-crud como funciones, no clase**: funciones exportadas son mas tree-shakeable y no requieren instanciacion. Cada servicio importa solo lo que necesita.
+- **Historia cascading delete queda fuera de softDelete generico**: la eliminacion de HU hace cascade a casos y tareas en una transaccion — caso especial que no encaja en un helper generico.
+- **Hooks de dominio autocontenidos**: cada hook tiene sus propias funciones de parseo y normalizacion de fechas. La duplicacion es intencional para que cada hook sea independiente y testeable en aislamiento.
+- **React Query para audit log, no para dominio**: `useApiMirroredState` esta profundamente integrado en el flujo de datos. Migrar a React Query mutations seria disruptivo. Se introduce React Query en paths de solo lectura como primer paso.
+- **Admin scoped por workspace**: el admin ve solo los registros de su `grupoId`. El owner puede ver todo o filtrar por grupo.
+
+---
+
+### v2.66 — Command Palette, Refresh Token, CSRF, Docker Production, E2E CI, Kanban DnD
+
+#### Cambios
+
+| Area | Archivo | Descripcion |
+|---|---|---|
+| **Command Palette** | `components/dashboard/shared/command-palette.tsx` | Paleta de comandos (Ctrl+K / Cmd+K) con navegacion por tabs, acciones rapidas y cambio de tema — usa cmdk ya instalado |
+| **Command Palette** | `lib/hooks/useKeyboardShortcuts.ts` | Nuevo binding `mod+k` para abrir paleta |
+| **Command Palette** | `components/dashboard/shared/header.tsx` | Boton trigger visible en header (icono Command + K) |
+| **Refresh Token** | `lib/backend/middleware/auth.middleware.ts` | `signRefreshToken()` con expiracion 7d y `type: "refresh"` en payload |
+| **Refresh Token** | `app/api/auth/refresh/route.ts` | Nuevo endpoint POST — valida refresh cookie, verifica usuario activo, rota ambos tokens |
+| **Refresh Token** | `app/api/auth/login/route.ts` | Login ahora emite cookie `tcs_refresh` (httpOnly, strict, scoped a `/api/auth/refresh`) |
+| **Refresh Token** | `lib/contexts/auth-context.tsx` | Silent refresh: polling 401 intenta refresh antes de marcar `sessionExpired` |
+| **Refresh Token** | `app/api/auth/logout/route.ts` | Logout limpia cookie `tcs_refresh` |
+| **CSRF** | `middleware.ts` | Validacion Origin/Referer en requests mutantes (POST/PUT/PATCH/DELETE) — 403 si origen no coincide con host |
+| **Docker** | `Dockerfile` | Multi-stage build (deps → builder → runner) con standalone output, non-root user, migrations en startup |
+| **Docker** | `docker-compose.yml` | Produccion: app + PostgreSQL con healthcheck, variables requeridas via `${VAR:?error}` |
+| **Docker** | `.dockerignore` | Excluye node_modules, .next, tests, .git del contexto de build |
+| **Docker** | `next.config.mjs` | `output: "standalone"` condicional via `DOCKER_BUILD=1` |
+| **CI/CD** | `.github/workflows/ci.yml` | Nuevo job `e2e`: PostgreSQL service container, migrate + seed, Playwright con upload de reporte en fallo |
+| **Kanban DnD** | `components/dashboard/historias/historias-kanban.tsx` | Drag-and-drop con @dnd-kit: arrastrar cards entre columnas cambia el estado de la HU |
+| **Kanban DnD** | `components/dashboard/historias/historias-table.tsx` | `onMoverHU` conectado a `onBulkCambiarEstado` para persistir cambios |
+| **Testing** | `tests/v266-features.test.ts` | 38 tests cubriendo todas las features de v2.66 |
+| **Testing** | `tests/auth-session-expiry.test.ts` | Actualizado para mock de refresh endpoint |
+
+#### Decisiones de diseno
+
+- **CSRF por Origin/Referer** en vez de double-submit cookie: mas simple, sin estado del lado del servidor, y funciona nativamente con cookies `sameSite: lax`. En produccion bloquea requests sin Origin/Referer; en dev permite herramientas como curl/Postman.
+- **Refresh token rotation**: cada uso del refresh token emite uno nuevo. Esto limita la ventana de explotacion si un refresh token es comprometido.
+- **Refresh cookie scoped a `/api/auth/refresh`**: el browser solo la envia a ese unico endpoint, minimizando la superficie de ataque.
+- **`output: "standalone"` condicional**: solo se activa con `DOCKER_BUILD=1` para no afectar el deploy en Vercel que usa su propio build pipeline.
+- **E2E como job separado en CI**: depende de `lint-typecheck-test`, no bloquea el feedback rapido de linting/types/unit tests.
+- **Kanban DnD con `defaultEstado` por columna**: la columna "Fallida/Cancelada" mapea a `cancelada` por defecto al soltar. El usuario puede cambiar despues si necesita `fallida`.
+
+---
+
+### v2.65 — Refactoring de escalabilidad: auth centralizado, split de componentes, tipos nominales, paginación cursor
+
+#### Cambios
+
+| Area | Archivo | Descripcion |
+|---|---|---|
+| **Auth centralizado** | `lib/backend/middleware/with-auth.ts` | Nuevo wrapper `withAuth()` / `withAuthAdmin()` elimina patrón repetido `requireAuth` + `instanceof NextResponse` en 24+ rutas API |
+| **Auth centralizado** | `lib/backend/middleware/with-auth.ts` | Helpers `checkHUAccess`, `checkCasoAccess`, `checkTareaAccess` para validación de workspace en una sola query |
+| **Auth centralizado** | Todas las rutas API (`app/api/**`) | Refactorizadas a `export const METHOD = withAuth(...)` — try/catch centralizado, rate limiting consistente |
+| **Rate limiting** | Rutas PUT/DELETE (historias, casos, tareas, users, config, sprints) | Rate limiting agregado a operaciones de escritura que no lo tenían; sync routes reducidos a 10/min |
+| **Split page.tsx** | `components/dashboard/tabs/` | 8 tab components extraídos (`TabInicio`, `TabHistorias`, `TabAnalytics`, `TabCarga`, `TabBloqueos`, `TabCasos`, `TabAdmin`, `TabGrupos`) — page.tsx reducido de 560 a 459 LOC |
+| **Split analytics** | `components/dashboard/analytics/` | `analytics-kpis.tsx` (602 LOC) dividido en `kpi-card.tsx`, `estado-hu-chart.tsx`, `velocidad-sprint-chart.tsx`, `tasa-defectos-chart.tsx` — reducido a 329 LOC |
+| **Split contextos** | `lib/contexts/roles-context.tsx`, `users-context.tsx` | `RolesProvider` y `UsersProvider` extraídos de `AuthProvider` — separación de responsabilidades |
+| **Tipos nominales** | `lib/types/index.ts` | Branded types (`HUId`, `CasoId`, `TareaId`) para prevenir mezcla de IDs; `Bloqueo` como discriminated union; `API_ROUTES` const assertion |
+| **Memoización** | `lib/hooks/useHistoriasVisibles.ts` | Set/Map memoizados para lookups O(1) en filtrado de HUs visibles (antes era O(n^2)) |
+| **Paginación cursor** | `lib/backend/services/historia.service.ts`, `app/api/historias/route.ts` | Soporte de paginación basada en cursor (`?cursor=`) como alternativa a offset para datasets grandes |
+| **Resiliencia** | `lib/backend/services/metricas.service.ts` | `Promise.allSettled` reemplaza `Promise.all` — un fallo en una agregación no bloquea las demás |
+| **Indices DB** | `prisma/migrations/20260413000000_v2_65_query_optimizations/` | 6 indices compuestos parciales (`WHERE deletedAt IS NULL`) para queries frecuentes en historias, casos, tareas y notificaciones |
+| **Testing** | `tests/v265-refactoring.test.ts` | Tests para rate limiting, API_ROUTES, branded types, Bloqueo union, withAuth structure |
+
+#### Decisiones de diseno
+
+- **`withAuth` como HOF (higher-order function)** en vez de middleware Next.js: permite acceso tipado al payload JWT dentro del handler sin casting ni globals. El try/catch centralizado captura errores no manejados y loguea con `logger.error`.
+- **`checkCasoAccess` incluye `huId` en el select**: elimina la necesidad de una segunda query en POST /api/tareas para validar coherencia huId-caso.
+- **Indices parciales con `WHERE deletedAt IS NULL`**: solo indexan registros activos, reduciendo tamaño del indice y mejorando performance en soft-delete queries.
+- **Cursor-based pagination** como opcion (no reemplazo): offset pagination sigue siendo el default. Cursor es mas eficiente para paginar datasets grandes donde el offset se vuelve costoso.
+- **Branded types con interseccion `& { __brand: T }`**: patron zero-runtime que previene pasar un `CasoId` donde se espera un `HUId` en tiempo de compilacion.
+
+---
+
+### v2.64 — Transacciones, rotación JWT, búsqueda full-text, atajos de teclado, PDF server-side, DX y accesibilidad
+
+#### Cambios
+
+| Área | Archivo | Descripción |
+|---|---|---|
+| **Integridad de datos** | `lib/backend/services/historia.service.ts` | `deleteHistoria()` ahora usa `$transaction()` para soft-delete en cascada: HU + todos sus casos + todas sus tareas en una operación atómica |
+| **Seguridad** | `middleware.ts` | Límite de body size (1 MB) — requests con `Content-Length` > 1 MB reciben 413 antes de procesarse |
+| **Seguridad** | `middleware.ts`, `lib/backend/middleware/auth.middleware.ts` | Rotación de JWT: soporta `JWT_SECRET_PREVIOUS` para verificar tokens firmados con el secreto anterior durante ventana de rotación |
+| **Observabilidad** | `app/api/health/route.ts` | Health check profundo: valida conectividad DB (`SELECT 1`), accesibilidad de tablas (`user.count`), variables de entorno, versión de Node. Status `degraded` (503) si algún check falla |
+| **Búsqueda** | `app/api/historias/route.ts`, `lib/backend/services/historia.service.ts` | Full-text search: parámetro `?q=` busca en `codigo`, `titulo`, `descripcion`, `responsable`, `aplicacion` (case-insensitive, multi-término) |
+| **Export** | `app/api/export/pdf/route.ts` | Nuevo endpoint `GET /api/export/pdf?tipo=historias\|casos` — genera PDF server-side con jsPDF (paginado, con footer, rate limited) |
+| **Data fetching** | `lib/providers/query-provider.tsx`, `app/layout.tsx` | TanStack Query provider configurado (staleTime 2min, gcTime 5min). Listo para migrar hooks progresivamente |
+| **UX** | `lib/hooks/useKeyboardShortcuts.ts`, `app/page.tsx` | Atajos de teclado globales: `Alt+1..8` navega tabs, `Alt+N` nueva HU, `/` o `Alt+B` enfoca búsqueda |
+| **UX** | `components/dashboard/shared/header.tsx` | Search input con ref y placeholder actualizado mostrando hint de atajo `/` |
+| **Accesibilidad** | `components/dashboard/historias/historias-table.tsx`, `casos/casos-table.tsx` | ARIA `role="table"`, `role="row"`, `aria-label` en tablas de datos principales |
+| **Accesibilidad** | Múltiples componentes | Lucide icons: `title` reemplazado por `aria-label` (compatible con Lucide v0.564+) |
+| **DX** | `.husky/pre-commit`, `package.json` | Husky 9 + lint-staged: pre-commit hook ejecuta ESLint con `--max-warnings 0` en archivos staged |
+| **DX** | `next.config.mjs`, `package.json` | `@next/bundle-analyzer` configurado — `pnpm analyze` genera reporte visual de tamaño de bundle |
+| **Testing** | `tests/accessibility.test.tsx`, `tests/helpers/axe-helper.ts` | Tests de accesibilidad con axe-core: validan WCAG en LoginScreen, TabSkeleton y ConfirmDeleteModal |
+| **Type safety** | Múltiples archivos (sync routes, componentes, hooks) | Corregidos todos los errores TS pre-existentes en código de aplicación (0 errores fuera de tests) |
+
+#### Decisiones de diseño
+
+- **`JWT_SECRET_PREVIOUS`** como variable separada (no array): más simple de configurar en Vercel/Docker. El flujo de rotación es: 1) copiar `JWT_SECRET` a `JWT_SECRET_PREVIOUS`, 2) cambiar `JWT_SECRET` al nuevo valor, 3) después de 2h (TTL del token) eliminar `JWT_SECRET_PREVIOUS`.
+- **Full-text search con Prisma `contains`** en vez de `tsvector`: funciona sin migración de schema ni columnas generadas. Para volúmenes grandes (>100K HUs), se puede migrar a `tsvector` con un índice GIN sin cambiar la API.
+- **TanStack Query como provider sin migrar hooks**: se instala el provider globalmente y se pueden migrar hooks individuales progresivamente sin romper nada.
+- **Body size limit en Edge Middleware**: se valida antes de que el request llegue al handler, protegiendo todas las rutas sin repetir código.
+- **axe-core con `color-contrast: disabled`**: jsdom no renderiza CSS real, así que los tests de contraste darían falsos positivos. Se validan estructura, roles y labels.
+
+---
+
+### v2.63 — Seguridad centralizada, observabilidad thread-safe, resiliencia, DX y rendimiento
+
+#### Cambios
+
+| Área | Archivo | Descripción |
+|---|---|---|
+| **Seguridad** | `middleware.ts` | Nuevo Next.js Edge Middleware centralizado — verifica JWT antes de llegar a cualquier handler; rutas públicas `/api/auth/login` y `/api/health` exentas |
+| **Seguridad** | `app/api/historias/route.ts`, `casos/route.ts`, `auth/password/route.ts`, `config/route.ts` | `request.json()` protegido con `.catch(() => null)` — body malformado retorna 400 en vez de 500 |
+| **Seguridad** | `app/api/export/route.ts` | `sanitizeFilename()` — parámetros `sprint`/`estado` sanitizados con regex `[^a-zA-Z0-9_-]` antes de inyectar en `Content-Disposition` |
+| **Observabilidad** | `lib/backend/logger.ts` | `AsyncLocalStorage` reemplaza variable global mutable — el `requestId` es thread-safe para requests concurrentes |
+| **Soft delete** | `lib/backend/services/historia.service.ts` | `getHistoriaById` ahora usa `findFirst` con `deletedAt: null` y filtra casos incluidos |
+| **Resiliencia** | `components/dashboard/shared/tab-error-boundary.tsx` | `TabErrorBoundary` por tab — un error en Analytics no tumba el dashboard completo |
+| **Resiliencia** | `lib/backend/services/grupo.service.ts` | `getMetricasGlobales` usa `Promise.allSettled` — un grupo con error no bloquea las métricas de los demás |
+| **Type safety** | `lib/backend/services/config.service.ts` | Eliminados `as any` — usa `ConfigUpdateData` con `Prisma.InputJsonValue` tipado |
+| **Type safety** | `tsconfig.json` | `noUncheckedIndexedAccess: true` — `arr[0]` retorna `T \| undefined` |
+| **Rendimiento** | `app/page.tsx` | `next/dynamic` lazy-load para `HomeDashboard`, `AnalyticsKPIs`, `CargaOcupacional`, `OwnerPanel` con `TabSkeleton` como fallback |
+| **Rendimiento** | `app/api/metricas/route.ts` | `Cache-Control: max-age=300` (alineado con `CACHE_TTL_MS = 300_000` del server) |
+| **DB** | `prisma/schema.prisma` | Nuevos índices en `AuditLog`: `@@index([action])`, `@@index([grupoId, action])` |
+| **DX** | `docker-compose.dev.yml` | PostgreSQL 16 local listo para `prisma migrate dev` |
+| **DX** | `.github/workflows/ci.yml` | Nuevo step `pnpm build` + `prisma migrate diff --exit-code` para detectar schema drift |
+| **DX** | `vitest.config.ts` | Coverage con `@vitest/coverage-v8` — reporter `text` + `lcov` |
+| **Infra** | `lib/backend/prisma.ts` | Handler `SIGINT` + `SIGTERM` — `Ctrl-C` local cierra la conexión DB correctamente |
+| **Code quality** | `lib/types.ts` | Barrel marcado `@deprecated` — nuevos imports deben ir directo al origen |
+| **Code quality** | Todas las rutas con rate limit | Keys normalizadas a formato `METHOD /path` consistente |
+| **UX** | `components/dashboard/shared/tab-skeleton.tsx` | Skeleton de carga por tab (cards + rows) como loading fallback para dynamic imports |
+| **Tests** | `tests/v263-features.test.ts` | 49 tests cubriendo las 24 mejoras: logger AsyncLocalStorage, middleware, request.json safety, coverage config, soft delete byId, ErrorBoundary, sanitize filename, CI, config types, lazy load, TTL, indexes, docker, tsconfig, SIGINT, allSettled, types deprecation, rate-limit keys, skeletons, service exports |
+
+#### Decisiones de diseño
+
+- **AsyncLocalStorage vs variable global**: en Node.js con requests concurrentes, una variable mutable `let _requestId` mezcla IDs entre requests. `AsyncLocalStorage` vincula el ID al call-chain async específico sin overhead medible.
+- **Edge Middleware como primera línea**: el middleware verifica el JWT antes de que el handler se ejecute. Esto elimina la posibilidad de que un desarrollador olvide llamar `requireAuth()` en una nueva ruta.
+- **`request.json().catch()`**: sin protección, un body no-JSON causa un `SyntaxError` que Next.js convierte en 500. El `.catch(() => null)` permite retornar un 400 limpio.
+- **TabErrorBoundary**: React class component con `getDerivedStateFromError` + botón "Reintentar". Cada tab es independiente — un crash en el chart de Recharts no afecta la tabla de HUs.
+- **`next/dynamic` con `{ ssr: false }`**: las tabs de Analytics y CargaOcupacional importan Recharts (~200KB). Lazy-load evita cargar ese peso en el bundle inicial.
+- **TTL alineado**: server cache 5min + HTTP `max-age=300` evita que el browser re-pida datos que el server ya tiene en caché.
+- **`noUncheckedIndexedAccess`**: previene bugs silenciosos como `const first = arr[0]; first.name` cuando el array podría estar vacío.
+
+**789 tests unitarios · 51 suites · 0 fallos + 14 tests E2E Playwright**
+
+---
 
 ### v2.61 — Observabilidad completa: audit log, soft delete, startup check, CSP endurecido, rate limiting GET-by-ID
 
@@ -439,9 +727,49 @@ Los tests E2E **sí requieren** el servidor en `localhost:3000` y la base de dat
 - **assertRequiredEnv en prisma.ts**: al ser importado en el arranque del servidor, cualquier variable faltante falla rápido y con mensaje claro, antes de que llegue la primera petición real.
 - **deletedAt nullable sin migración de datos**: los campos son opcionales, por lo que el deployment puede hacerse en cero downtime; los servicios pueden adoptar el filtro `deletedAt: null` de forma incremental.
 - **CSP unsafe-eval solo en dev**: Next.js usa `eval` durante el hot-reload de desarrollo pero no en producción. Separar los dos contextos reduce la superficie XSS en prod sin romper el DX local.
-- **GET /api/audit owner-only**: el log de auditoría contiene acciones de todos los workspaces; solo el owner tiene visibilidad global. Los admins pueden auditar su propio workspace a través de los endpoints normales.
+- **GET /api/audit owner+admin**: el owner tiene visibilidad global; los admins pueden ver el audit log scoped a su propio workspace *(actualizado en v2.67)*.
 
 **700 tests unitarios · 49 suites · 0 fallos + 14 tests E2E Playwright**
+
+---
+
+### v2.62 — Soft delete activo, logger mejorado, accesibilidad, ESLint, CI/CD, validación frontend
+
+#### Cambios
+
+| Área | Archivo | Descripción |
+|---|---|---|
+| Soft delete | `lib/backend/services/historia.service.ts` | Todas las queries filtran `deletedAt: null`; `deleteHistoria` hace UPDATE en vez de DELETE |
+| Soft delete | `lib/backend/services/caso.service.ts` | `getAllCasos`, `getCasosByHU` filtran `deletedAt: null`; `deleteCaso` → soft delete |
+| Soft delete | `lib/backend/services/tarea.service.ts` | `getAllTareas`, `getTareasByCaso`, `getTareasByHU` filtran `deletedAt: null`; `deleteTarea` → soft delete |
+| Soft delete | `lib/backend/services/metricas.service.ts` | Las 7 agregaciones (groupBy) excluyen registros soft-deleted |
+| Soft delete | `app/api/export/route.ts` | Export CSV filtra `deletedAt: null` en ambas ramas (historias y casos) |
+| DB indexes | `prisma/schema.prisma` | Nuevos índices compuestos: `[grupoId, deletedAt]` en HU, `[huId, deletedAt]` en Casos, `[casoPruebaId, deletedAt]` en Tareas |
+| Logger | `lib/backend/logger.ts` | Soporte `requestId` para correlacionar logs; incluye `stack` de errores en JSON de producción |
+| Health | `app/api/health/route.ts` | Respuesta incluye `memory` (rss, heapUsed, heapTotal, external) + `Cache-Control: no-store` |
+| Cache | `app/api/metricas/route.ts` | Header `Cache-Control: private, max-age=30, stale-while-revalidate=30` |
+| Cache | `app/api/config/route.ts` | Header `Cache-Control: private, max-age=60` en GET |
+| Type safety | `app/api/export/route.ts` | `Record<string, any>` → `Record<string, unknown>`; eliminados comentarios eslint-disable |
+| Frontend | `components/dashboard/historias/hu-form.tsx` | Estado `submitting` + botón "Guardando..." + `aria-label` en form |
+| Frontend | `components/dashboard/usuarios/user-form-modal.tsx` | Validación email en tiempo real + `aria-label` en form + botón disabled si email inválido |
+| Accesibilidad | `components/dashboard/shared/confirm-delete-modal.tsx` | `role="alertdialog"`, `aria-modal`, `aria-label` |
+| Accesibilidad | `components/dashboard/historias/csv-import-modal.tsx` | `role="dialog"`, `aria-modal`, `aria-label="Cerrar importación"` |
+| Accesibilidad | `components/dashboard/casos/csv-import-casos-modal.tsx` | `role="dialog"`, `aria-modal`, `aria-label="Cerrar importación"` |
+| Refactor | `lib/csv-utils.ts` | `parsearCSV`, `invertirCfg`, `parsearFechaCSV` extraídos de los 2 CSV importers |
+| Refactor | `csv-import-modal.tsx`, `csv-import-casos-modal.tsx` | Usan `lib/csv-utils.ts` en vez de funciones duplicadas |
+| ESLint | `eslint.config.mjs` | Flat config con typescript-eslint, reglas no-unused-vars y no-explicit-any como warn |
+| CI/CD | `.github/workflows/ci.yml` | Pipeline: pnpm install → prisma generate → lint → tsc --noEmit → vitest run |
+| Tests | `tests/v262-features.test.ts` | 40 tests: soft delete filters (5), composite indexes (3), logger requestId (3), health memory (3), Cache-Control (2), CSV utils (7), ESLint (2), CI (3), a11y (5), loading states (2), CSV shared (3), type safety (1), CSP (1) |
+
+#### Decisiones de diseño
+
+- **Soft delete UPDATE en vez de DELETE**: los registros marcados con `deletedAt` se pueden recuperar. Las queries agregan `deletedAt: null` mediante una constante `notDeleted` compartida para consistencia.
+- **Índices compuestos**: las queries más frecuentes son `WHERE grupoId = X AND deletedAt IS NULL`. Sin un índice compuesto, PostgreSQL haría un index merge costoso.
+- **CSV utils extraído**: la función `parsearCSV` era idéntica en ambos importers (HU y Casos). Moverla a `lib/csv-utils.ts` elimina ~50 líneas duplicadas y centraliza el mantenimiento.
+- **ESLint flat config**: ESLint 9 requiere flat config. Se optó por typescript-eslint directo en vez de `eslint-config-next` (problemas de compatibilidad con ESLint 9 + FlatCompat).
+- **CI pipeline mínimo**: lint + typecheck + tests cubren el 80% de regresiones. Se ejecuta en push a main/dev_1 y en PRs.
+
+**740 tests unitarios · 50 suites · 0 fallos + 14 tests E2E Playwright**
 
 ---
 
@@ -2123,6 +2451,8 @@ dashboard_v22/
 │   │   │   ├── bloqueos-panel.tsx
 │   │   │   ├── comment-thread.tsx
 │   │   │   ├── auditoria-panel.tsx
+│   │   │   ├── audit-log-viewer.tsx  # Visor de audit log con React Query ← v2.67
+│   │   │   ├── command-palette.tsx   # Paleta de comandos Ctrl+K ← v2.66
 │   │   │   ├── sprint-panel.tsx
 │   │   │   ├── panel-riesgos.tsx
 │   │   │   ├── nav-tab-group.tsx   # Navegación lateral reutilizable ← v2.2opt
@@ -2130,7 +2460,11 @@ dashboard_v22/
 │   │   ├── historias/        # Módulo Historias de Usuario
 │   │   │   ├── historias-table.tsx
 │   │   │   ├── historias-kanban.tsx
-│   │   │   ├── historia-usuario-detail.tsx
+│   │   │   ├── historia-usuario-detail.tsx  # Componente principal (344 LOC) ← v2.68
+│   │   │   ├── hu-detail-shared.ts          # PNL, SLBL, fmt() compartidos ← v2.68
+│   │   │   ├── hu-bloqueos.tsx              # Sub-componente HUBloqueos ← v2.68
+│   │   │   ├── hu-historial.tsx             # Sub-componente HUHistorialPanel ← v2.68
+│   │   │   ├── hu-casos-panel.tsx           # Sub-componente HUCasosPanel + CasoFormFields ← v2.68
 │   │   │   ├── hu-form.tsx
 │   │   │   ├── hu-stats-cards.tsx
 │   │   │   ├── hu-templates.tsx
@@ -2148,9 +2482,12 @@ dashboard_v22/
 │   │   │   ├── carga-ocupacional.tsx
 │   │   │   └── index.ts
 │   │   ├── usuarios/         # Módulo Usuarios
-│   │   │   ├── user-management.tsx
-│   │   │   ├── user-form-modal.tsx     # Dialog crear/editar usuario ← v2.2opt10
-│   │   │   ├── user-confirm-dialogs.tsx # AlertDialogs de confirmación ← v2.2opt10
+│   │   │   ├── user-management.tsx          # Componente principal (530 LOC) ← v2.68
+│   │   │   ├── user-management-shared.ts    # Helpers: formatFecha, getRoleIcon ← v2.68
+│   │   │   ├── user-stats-cards.tsx         # Cards de estadísticas por rol ← v2.68
+│   │   │   ├── user-connections-panel.tsx   # Panel de conexiones (Owner) ← v2.68
+│   │   │   ├── user-form-modal.tsx          # Dialog crear/editar usuario ← v2.2opt10
+│   │   │   ├── user-confirm-dialogs.tsx     # AlertDialogs de confirmación ← v2.2opt10
 │   │   │   ├── perfil-dialog.tsx
 │   │   │   └── index.ts
 │   │   └── config/           # Módulo Configuración
@@ -2170,7 +2507,11 @@ dashboard_v22/
 │   ├── hooks/
 │   │   ├── useAuth.ts
 │   │   ├── useConfig.ts
-│   │   ├── useDomainData.ts        # Facade de datos del dominio
+│   │   ├── useDomainData.ts        # Facade que compone hooks de dominio ← v2.67
+│   │   ├── useHistoriasData.ts     # Hook independiente: historias ← v2.67
+│   │   ├── useCasosData.ts         # Hook independiente: casos ← v2.67
+│   │   ├── useTareasData.ts        # Hook independiente: tareas ← v2.67
+│   │   ├── useAuditLog.ts          # React Query hook para audit log ← v2.67
 │   │   ├── useHistoriasVisibles.ts
 │   │   ├── useHUModals.ts
 │   │   ├── useListConfig.ts        # Hook CRUD genérico para listas ← v2.2opt
@@ -2181,7 +2522,7 @@ dashboard_v22/
 │       ├── hu-export.ts            # Exportación de HUs
 │       ├── analytics-export.ts     # Exportación de Analíticas
 │       └── utils.ts
-├── tests/                        # Suite de tests (Vitest + RTL) — 99 tests
+├── tests/                        # Suite de tests (Vitest + RTL) — 904 tests
 │   ├── setup.ts                  # Mock de localStorage + jest-dom
 │   ├── casoHandlers.test.ts      # Tests del flujo de aprobación (jsdom)
 │   ├── useHistoriasVisibles.test.ts # Tests de scoping por rol (jsdom)
@@ -2217,5 +2558,5 @@ dashboard_v22/
 
 ## Variables de entorno
 
-Actualmente el proyecto no requiere variables de entorno. Si en el futuro se conecta a una API externa, crear un archivo `.env.local` con las claves necesarias (no incluir en el repositorio).
+Ver la sección [Variables de entorno requeridas en producción](#variables-de-entorno-requeridas-en-producción) para las variables necesarias (`DATABASE_URL`, `JWT_SECRET`, etc.). Para desarrollo local, copiar `.env.example` a `.env` y ajustar las credenciales de PostgreSQL.
 

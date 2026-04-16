@@ -318,12 +318,12 @@ async function poblar() {
     totalHUs++
 
     // Plantilla de casos según tipoPrueba
-    const casoPlantilla = plantillasCasos[def.tipoPrueba] ?? plantillasCasos["default"]
-    const casosACrear   = casoPlantilla.slice(0, def.numCasos)
+    const casoPlantilla = plantillasCasos[def.tipoPrueba] ?? plantillasCasos["default"]!
+    const casosACrear   = casoPlantilla!.slice(0, def.numCasos)
     const estadoCaso    = estadosCaso[def.estado] ?? "borrador"
 
     for (let ci = 0; ci < casosACrear.length; ci++) {
-      const cp = casosACrear[ci]
+      const cp = casosACrear[ci]!
       const caso = await prisma.casoPrueba.create({
         data: {
           huId:             hu.id,
@@ -355,14 +355,14 @@ async function poblar() {
       // Tareas para cada caso
       const numTareas = def.estado === "completada" ? 3 : def.estado === "en_progreso" ? 2 : 1
       for (let ti = 0; ti < numTareas && ti < plantillasTareas.length; ti++) {
-        const tp = plantillasTareas[ti]
+        const tp = plantillasTareas[ti]!
         await prisma.tarea.create({
           data: {
             casoPruebaId:   caso.id,
             huId:           hu.id,
             titulo:         `${DEMO_TAG} ${tp.titulo}`,
             descripcion:    `Tarea de demo — ${tp.titulo.toLowerCase()}`,
-            asignado:       [sofia.nombre, daniel.nombre][ti % 2],
+            asignado:       [sofia.nombre, daniel.nombre][ti % 2]!,
             estado:         def.estado === "completada" ? "completada" : def.estado === "en_progreso" && ti === 0 ? "completada" : "pendiente",
             resultado:      def.estado === "completada" ? "exitoso" : "pendiente",
             tipo:           tp.tipo as "ejecucion",

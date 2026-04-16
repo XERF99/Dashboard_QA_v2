@@ -13,6 +13,7 @@ export async function POST(request: NextRequest) {
     void audit({ actor: payload, action: "LOGOUT", resource: "auth", resourceId: payload.sub })
     const response = NextResponse.json({ success: true })
     response.cookies.delete("tcs_token")
+    response.cookies.delete({ name: "tcs_refresh", path: "/api/auth/refresh" })
     return response
   } catch (error) {
     return NextResponse.json({ error: "Error al cerrar sesión" }, { status: 500 })

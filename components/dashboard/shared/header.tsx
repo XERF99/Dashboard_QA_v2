@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Search, Bell, LogOut, Check, CheckCheck, Clock, X, UserCircle, Lock } from "lucide-react"
+import { Search, Bell, LogOut, Check, CheckCheck, Clock, X, UserCircle, Lock, Command } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import {
@@ -42,6 +42,8 @@ interface HeaderProps {
   notificaciones: Notificacion[]
   onMarcarLeida: (id: string) => void
   onMarcarTodasLeidas: () => void
+  searchInputRef?: React.RefObject<HTMLInputElement | null>
+  onOpenCommandPalette?: () => void
 }
 
 // ── colores / íconos por tipo de notificación ────────────
@@ -52,9 +54,11 @@ const NOTIF_CFG: Record<TipoNotificacion, { color: string; bg: string; label: st
   caso_rechazado:          { color:"var(--chart-4)",  bg:"color-mix(in oklch, var(--chart-4) 10%, transparent)",  label:"Caso rechazado", icon:<X size={13}/> },
   modificacion_habilitada: { color:"var(--chart-1)",  bg:"color-mix(in oklch, var(--chart-1) 10%, transparent)",  label:"Modificación habilitada", icon:<Check size={13}/> },
   cuenta_bloqueada:        { color:"var(--chart-4)",  bg:"color-mix(in oklch, var(--chart-4) 10%, transparent)",  label:"Cuenta bloqueada",         icon:<Lock size={13}/> },
+  bloqueo_reportado:       { color:"var(--chart-4)",  bg:"color-mix(in oklch, var(--chart-4) 10%, transparent)",  label:"Bloqueo reportado",        icon:<Lock size={13}/> },
+  bloqueo_resuelto:        { color:"var(--chart-2)",  bg:"color-mix(in oklch, var(--chart-2) 10%, transparent)",  label:"Bloqueo resuelto",         icon:<Check size={13}/> },
 }
 
-export function Header({ busqueda, onBusquedaChange, notificaciones, onMarcarLeida, onMarcarTodasLeidas }: HeaderProps) {
+export function Header({ busqueda, onBusquedaChange, notificaciones, onMarcarLeida, onMarcarTodasLeidas, searchInputRef, onOpenCommandPalette }: HeaderProps) {
   const { user, logout, roles } = useAuth()
   const [confirmLogoutOpen, setConfirmLogoutOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
@@ -77,7 +81,8 @@ export function Header({ busqueda, onBusquedaChange, notificaciones, onMarcarLei
     <div className="relative w-full max-w-md">
       <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
       <Input
-        placeholder="Buscar por código, título, responsable, caso..."
+        ref={searchInputRef}
+        placeholder="Buscar por código, título, responsable, caso... (/ para buscar)"
         value={busqueda}
         onChange={(e) => onBusquedaChange(e.target.value)}
         autoFocus={autoFocus}
@@ -216,6 +221,19 @@ export function Header({ busqueda, onBusquedaChange, notificaciones, onMarcarLei
                 </div>
               </PopoverContent>
             </Popover>
+
+            {/* Cmd+K trigger */}
+            {onOpenCommandPalette && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="hidden sm:inline-flex items-center gap-1.5 text-xs text-muted-foreground h-8 px-2"
+                onClick={onOpenCommandPalette}
+              >
+                <Command className="h-3 w-3" />
+                <span className="text-[11px]">K</span>
+              </Button>
+            )}
 
             <ThemeSwitcher />
 

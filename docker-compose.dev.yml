@@ -1,0 +1,30 @@
+# ═══════════════════════════════════════════════════════════
+#  Docker Compose — Entorno de desarrollo local
+#  Levanta PostgreSQL listo para usar con Prisma.
+#
+#  Uso:
+#    docker compose -f docker-compose.dev.yml up -d
+#    npx prisma migrate dev
+#    pnpm dev
+# ═══════════════════════════════════════════════════════════
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: tcs
+      POSTGRES_PASSWORD: tcs_local
+      POSTGRES_DB: tcs_dashboard
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tcs"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  pgdata:

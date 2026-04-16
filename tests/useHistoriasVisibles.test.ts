@@ -107,7 +107,7 @@ describe("useHistoriasVisibles — filtrado por rol", () => {
       useHistoriasVisibles({ ...baseOptions, verSoloPropios: true, user: QA_USER }),
     )
     expect(result.current.historiasVisibles).toHaveLength(1)
-    expect(result.current.historiasVisibles[0].responsable).toBe("QA User")
+    expect(result.current.historiasVisibles[0]!.responsable).toBe("QA User")
   })
 
   it("qa lead ve sus propias HUs + las de todos los usuarios qa del workspace", () => {
@@ -133,7 +133,7 @@ describe("useHistoriasVisibles — filtrado por rol", () => {
       }),
     )
     expect(result.current.historiasVisibles).toHaveLength(1)
-    expect(result.current.historiasVisibles[0].responsable).toBe("Laura Lead")
+    expect(result.current.historiasVisibles[0]!.responsable).toBe("Laura Lead")
   })
 })
 
@@ -225,7 +225,7 @@ describe("useHistoriasVisibles — búsqueda", () => {
       useHistoriasVisibles({ ...baseOptions, busqueda: "login" }),
     )
     expect(result.current.historiasVisibles).toHaveLength(1)
-    expect(result.current.historiasVisibles[0].titulo).toBe("Login con Google")
+    expect(result.current.historiasVisibles[0]!.titulo).toBe("Login con Google")
   })
 
   it("filtra por código", () => {
@@ -233,7 +233,7 @@ describe("useHistoriasVisibles — búsqueda", () => {
       useHistoriasVisibles({ ...baseOptions, busqueda: "HU-002" }),
     )
     expect(result.current.historiasVisibles).toHaveLength(1)
-    expect(result.current.historiasVisibles[0].codigo).toBe("HU-002")
+    expect(result.current.historiasVisibles[0]!.codigo).toBe("HU-002")
   })
 
   it("sin búsqueda devuelve todas", () => {
@@ -259,6 +259,6 @@ describe("useHistoriasVisibles — búsqueda", () => {
       useHistoriasVisibles({ ...baseOptions, historias: historiasMixed, busqueda: "Juan" }),
     )
     expect(result.current.historiasVisibles).toHaveLength(1)
-    expect(result.current.historiasVisibles[0].responsable).toBe("Juan Perez")
+    expect(result.current.historiasVisibles[0]!.responsable).toBe("Juan Perez")
   })
 })

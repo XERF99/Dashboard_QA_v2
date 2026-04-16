@@ -8,10 +8,9 @@
 //  Ejemplo: GET /api/export?tipo=historias&sprint=Sprint+3
 
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth } from "@/lib/backend/middleware/auth.middleware"
+import { withAuth } from "@/lib/backend/middleware/with-auth"
 import { checkRateLimit, getClientIp, rlKey } from "@/lib/backend/middleware/rate-limit"
 import { prisma } from "@/lib/backend/prisma"
-import { logger } from "@/lib/backend/logger"
 
 // ── Utilidades CSV ────────────────────────────────────────
 
@@ -24,6 +23,11 @@ function escapeCsv(value: unknown): string {
   return str
 }
 
+/** Sanitiza un valor para uso seguro en Content-Disposition filename */
+function sanitizeFilename(s: string): string {
+  return s.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64)
+}
+
 function toCsv(headers: string[], rows: unknown[][]): string {
   const head = headers.map(escapeCsv).join(",")
   const body = rows.map(row => row.map(escapeCsv).join(",")).join("\n")
@@ -32,12 +36,9 @@ function toCsv(headers: string[], rows: unknown[][]): string {
 
 // ── Handler ───────────────────────────────────────────────
 
-export async function GET(request: NextRequest) {
-  const payload = await requireAuth(request)
-  if (payload instanceof NextResponse) return payload
-
+export const GET = withAuth(async (request, payload) => {
   const ip = getClientIp(request.headers)
-  const rl = checkRateLimit(rlKey(ip, "/api/export"), 20, 60_000) // 20 exports per minute
+  const rl = checkRateLimit(rlKey(ip, "GET /api/export"), 20, 60_000) // 20 exports per minute
   if (!rl.allowed) {
     const retryAfterSecs = Math.ceil((rl.resetAt - Date.now()) / 1000)
     return NextResponse.json(
@@ -69,67 +70,60 @@ export async function GET(request: NextRequest) {
   let csv: string
   let filename: string
 
-  try {
-    if (tipo === "historias") {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const where: Record<string, any> = {}
-      if (sprint) where.sprint = sprint
-      if (estado) where.estado = estado
-      if (payload.grupoId) where.grupoId = payload.grupoId
+  if (tipo === "historias") {
+    const where: Record<string, unknown> = { deletedAt: null }
+    if (sprint) where.sprint = sprint
+    if (estado) where.estado = estado
+    if (payload.grupoId) where.grupoId = payload.grupoId
 
-      const historias = await prisma.historiaUsuario.findMany({
-        where,
-        orderBy: { fechaCreacion: "desc" },
-        take: exportLimit,
-      })
+    const historias = await prisma.historiaUsuario.findMany({
+      where,
+      orderBy: { fechaCreacion: "desc" },
+      take: exportLimit,
+    })
 
-      const headers = [
-        "id", "codigo", "titulo", "estado", "prioridad", "sprint",
-        "responsable", "puntos", "etapa", "ambiente", "tipoPrueba",
-        "aplicacion", "requiriente", "areaSolicitante",
-        "fechaCreacion", "fechaFinEstimada", "fechaCierre",
-      ]
-      const rows = historias.map(h => [
-        h.id, h.codigo, h.titulo, h.estado, h.prioridad, h.sprint ?? "",
-        h.responsable, h.puntos, h.etapa, h.ambiente, h.tipoPrueba,
-        h.aplicacion, h.requiriente, h.areaSolicitante,
-        h.fechaCreacion?.toISOString() ?? "",
-        h.fechaFinEstimada?.toISOString() ?? "",
-        h.fechaCierre?.toISOString() ?? "",
-      ])
+    const headers = [
+      "id", "codigo", "titulo", "estado", "prioridad", "sprint",
+      "responsable", "puntos", "etapa", "ambiente", "tipoPrueba",
+      "aplicacion", "requiriente", "areaSolicitante",
+      "fechaCreacion", "fechaFinEstimada", "fechaCierre",
+    ]
+    const rows = historias.map(h => [
+      h.id, h.codigo, h.titulo, h.estado, h.prioridad, h.sprint ?? "",
+      h.responsable, h.puntos, h.etapa, h.ambiente, h.tipoPrueba,
+      h.aplicacion, h.requiriente, h.areaSolicitante,
+      h.fechaCreacion?.toISOString() ?? "",
+      h.fechaFinEstimada?.toISOString() ?? "",
+      h.fechaCierre?.toISOString() ?? "",
+    ])
 
-      csv = toCsv(headers, rows)
-      filename = `historias${sprint ? `-${sprint.replace(/\s+/g, "_")}` : ""}${estado ? `-${estado}` : ""}.csv`
-    } else {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const where: Record<string, any> = {}
-      if (estado) where.estadoAprobacion = estado
-      if (payload.grupoId) where.hu = { grupoId: payload.grupoId }
+    csv = toCsv(headers, rows)
+    filename = `historias${sprint ? `-${sanitizeFilename(sprint)}` : ""}${estado ? `-${sanitizeFilename(estado)}` : ""}.csv`
+  } else {
+    const where: Record<string, unknown> = { deletedAt: null }
+    if (estado) where.estadoAprobacion = estado
+    if (payload.grupoId) where.hu = { grupoId: payload.grupoId }
 
-      const casos = await prisma.casoPrueba.findMany({
-        where,
-        orderBy: { fechaCreacion: "desc" },
-        take: exportLimit,
-      })
+    const casos = await prisma.casoPrueba.findMany({
+      where,
+      orderBy: { fechaCreacion: "desc" },
+      take: exportLimit,
+    })
 
-      const headers = [
-        "id", "huId", "titulo", "estadoAprobacion", "tipoPrueba",
-        "entorno", "complejidad", "horasEstimadas",
-        "aprobadoPor", "fechaAprobacion", "creadoPor", "fechaCreacion",
-      ]
-      const rows = casos.map(c => [
-        c.id, c.huId, c.titulo, c.estadoAprobacion, c.tipoPrueba,
-        c.entorno, c.complejidad, c.horasEstimadas,
-        c.aprobadoPor ?? "", c.fechaAprobacion?.toISOString() ?? "",
-        c.creadoPor, c.fechaCreacion?.toISOString() ?? "",
-      ])
+    const headers = [
+      "id", "huId", "titulo", "estadoAprobacion", "tipoPrueba",
+      "entorno", "complejidad", "horasEstimadas",
+      "aprobadoPor", "fechaAprobacion", "creadoPor", "fechaCreacion",
+    ]
+    const rows = casos.map(c => [
+      c.id, c.huId, c.titulo, c.estadoAprobacion, c.tipoPrueba,
+      c.entorno, c.complejidad, c.horasEstimadas,
+      c.aprobadoPor ?? "", c.fechaAprobacion?.toISOString() ?? "",
+      c.creadoPor, c.fechaCreacion?.toISOString() ?? "",
+    ])
 
-      csv = toCsv(headers, rows)
-      filename = `casos${estado ? `-${estado}` : ""}.csv`
-    }
-  } catch (e) {
-    logger.error("GET /api/export", "Error al exportar datos", e)
-    return NextResponse.json({ error: "Error al exportar datos" }, { status: 500 })
+    csv = toCsv(headers, rows)
+    filename = `casos${estado ? `-${sanitizeFilename(estado)}` : ""}.csv`
   }
 
   return new NextResponse(csv, {
@@ -139,4 +133,4 @@ export async function GET(request: NextRequest) {
       "Content-Disposition": `attachment; filename="${filename}"`,
     },
   })
-}
+})
