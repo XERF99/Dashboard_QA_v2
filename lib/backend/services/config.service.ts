@@ -36,3 +36,14 @@ export async function updateConfig(
     create: { grupoId, ...data },
   })
 }
+
+// ── Interface (v2.78) ─────────────────────────────────────────
+export interface ConfigService {
+  get:    typeof getConfig
+  update: typeof updateConfig
+}
+
+export const configService: ConfigService = {
+  get:    getConfig,
+  update: updateConfig,
+}

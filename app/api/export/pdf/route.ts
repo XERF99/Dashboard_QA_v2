@@ -5,9 +5,10 @@
 //    sprint  = <nombre>                (filtro opcional, solo historias)
 //    estado  = <valor>                 (filtro opcional)
 
-import { NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import { withAuth } from "@/lib/backend/middleware/with-auth"
-import { checkRateLimit, getClientIp, rlKey } from "@/lib/backend/middleware/rate-limit"
+import { requireRateLimit } from "@/lib/backend/middleware/guards"
+import { ValidationError } from "@/lib/backend/errors"
 import { prisma } from "@/lib/backend/prisma"
 import { jsPDF } from "jspdf"
 
@@ -35,14 +36,7 @@ const APROBACION_LABELS: Record<string, string> = {
 // ── Handler ──────────────────────────────────────────────
 
 export const GET = withAuth(async (request, payload) => {
-  const ip = getClientIp(request.headers)
-  const rl = checkRateLimit(rlKey(ip, "GET /api/export/pdf"), 10, 60_000)
-  if (!rl.allowed) {
-    return NextResponse.json(
-      { error: "Demasiadas peticiones. Intenta en un momento." },
-      { status: 429, headers: { "Retry-After": String(Math.ceil((rl.resetAt - Date.now()) / 1000)) } },
-    )
-  }
+  await requireRateLimit(request, "GET /api/export/pdf", 10, 60_000)
 
   const { searchParams } = request.nextUrl
   const tipo = searchParams.get("tipo")
@@ -51,10 +45,7 @@ export const GET = withAuth(async (request, payload) => {
   const exportLimit = Math.min(500, Math.max(1, parseInt(searchParams.get("limit") ?? "500") || 500))
 
   if (tipo !== "historias" && tipo !== "casos") {
-    return NextResponse.json(
-      { error: "El parámetro 'tipo' debe ser 'historias' o 'casos'" },
-      { status: 400 },
-    )
+    throw new ValidationError("El parámetro 'tipo' debe ser 'historias' o 'casos'")
   }
 
   const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" })

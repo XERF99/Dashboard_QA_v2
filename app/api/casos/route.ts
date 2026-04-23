@@ -1,8 +1,8 @@
 // ── GET  /api/casos — listar todos
 // ── POST /api/casos — crear nuevo
-import { NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import { withAuth, checkHUAccess } from "@/lib/backend/middleware/with-auth"
-import { checkRateLimit, getClientIp, rlKey } from "@/lib/backend/middleware/rate-limit"
+import { requireRateLimit, requireBody, requireHU } from "@/lib/backend/middleware/guards"
 import { createCasoSchema } from "@/lib/backend/validators/caso.validator"
 import { getAllCasos, createCaso, getCasosByHU } from "@/lib/backend/services/caso.service"
 import { invalidateMetricasCache } from "@/lib/backend/metricas-cache"
@@ -15,7 +15,7 @@ export const GET = withAuth(async (request, payload) => {
   const limit = Math.min(500, Math.max(1, parseInt(searchParams.get("limit") ?? "100") || 100))
 
   if (huId) {
-    // Validar que la HU pertenezca al workspace del usuario (owner ve todo)
+    // Owner (grupoId undefined) ve todo; workspaces filtran por grupo
     if (payload.grupoId) {
       const hu = await checkHUAccess(huId, payload.grupoId)
       if (!hu) return NextResponse.json({ casos: [] })
@@ -29,24 +29,10 @@ export const GET = withAuth(async (request, payload) => {
 })
 
 export const POST = withAuth(async (request, payload) => {
-  const ip = getClientIp(request.headers)
-  const rl = checkRateLimit(rlKey(ip, "POST /api/casos"), 120, 60_000)
-  if (!rl.allowed) {
-    return NextResponse.json({ error: "Demasiadas peticiones. Intenta en un momento." }, { status: 429 })
-  }
+  await requireRateLimit(request, "POST /api/casos", 120, 60_000)
 
-  const body = await request.json().catch(() => null)
-  if (body === null) return NextResponse.json({ error: "Body JSON inválido" }, { status: 400 })
-  const { error, value } = createCasoSchema.validate(body, { abortEarly: false })
-  if (error) {
-    return NextResponse.json({ error: error.details.map(d => d.message).join(", ") }, { status: 400 })
-  }
-
-  // Verificar que la HU existe y pertenece al workspace
-  const hu = await checkHUAccess(value.huId, payload.grupoId)
-  if (!hu) {
-    return NextResponse.json({ error: "La Historia de Usuario no existe o no pertenece a tu workspace" }, { status: 422 })
-  }
+  const value = await requireBody(request, createCasoSchema)
+  await requireHU(value.huId, payload.grupoId, { asUnprocessable: true })
 
   const caso = await createCaso(value)
   invalidateMetricasCache(payload.grupoId)

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useAuth, type User } from "@/lib/contexts/auth-context"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -9,30 +9,15 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
-  DropdownMenuSeparator, DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import {
-  Users, MoreHorizontal, Edit, Trash2, Eye,
-  UserPlus, KeyRound, Info, CheckCircle2, XCircle,
-  Lock, Unlock, Layers, UserCheck2, UserMinus,
+  Users, UserPlus, Info, CheckCircle2, Layers, UserCheck2,
 } from "lucide-react"
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
-import {
-  Dialog, DialogContent, DialogDescription, DialogFooter,
-  DialogHeader, DialogTitle,
-} from "@/components/ui/dialog"
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select"
-import { UserFormModal } from "./user-form-modal"
-import { UserConfirmDialogs } from "./user-confirm-dialogs"
-import { UserStatsCards } from "./user-stats-cards"
-import { UserConnectionsPanel } from "./user-connections-panel"
-import { getRoleIcon } from "./user-management-shared"
+import { UserFormModal }         from "./user-form-modal"
+import { UserConfirmDialogs }    from "./user-confirm-dialogs"
+import { UserStatsCards }        from "./user-stats-cards"
+import { UserConnectionsPanel }  from "./user-connections-panel"
+import { UserRow }               from "./user-row"
+import { UserWorkspaceDialogs }  from "./user-workspace-dialogs"
+import { getRoleIcon }           from "./user-management-shared"
 
 export function UserManagement() {
   const {
@@ -81,14 +66,14 @@ export function UserManagement() {
     ? users.filter(u => !isOwnerUser(u) && !u.grupoId)
     : []
 
-  // Quitar del workspace
+  // ── Quitar del workspace ──
   const [quitarDialogOpen, setQuitarDialogOpen]   = useState(false)
   const [userToQuitar, setUserToQuitar]           = useState<User | null>(null)
   const [quitting, setQuitting]                   = useState(false)
   const [asignaciones, setAsignaciones]           = useState<{ historias: number; tareas: number } | null>(null)
   const [loadingAsignaciones, setLoadingAsignaciones] = useState(false)
 
-  const abrirQuitarDialog = (u: User) => {
+  const abrirQuitarDialog = useCallback((u: User) => {
     setUserToQuitar(u)
     setAsignaciones(null)
     setQuitarDialogOpen(true)
@@ -98,7 +83,7 @@ export function UserManagement() {
       .then((d: { historias: number; tareas: number } | null) => { if (d) setAsignaciones(d) })
       .catch(() => {})
       .finally(() => setLoadingAsignaciones(false))
-  }
+  }, [])
 
   const handleQuitarWorkspace = async () => {
     if (!userToQuitar) return
@@ -117,7 +102,7 @@ export function UserManagement() {
     }
   }
 
-  // Asignar a workspace
+  // ── Asignar a workspace ──
   const [asignarDialogOpen, setAsignarDialogOpen] = useState(false)
   const [userToAsignar, setUserToAsignar]         = useState<User | null>(null)
   const [targetGrupoId, setTargetGrupoId]         = useState<string>("")
@@ -142,11 +127,11 @@ export function UserManagement() {
     }
   }
 
-  // Modal state
+  // ── Modal state ──
   const [formOpen, setFormOpen]     = useState(false)
   const [userToEdit, setUserToEdit] = useState<User | null>(null)
 
-  // Confirm-dialog state
+  // ── Confirm-dialog state ──
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [userToDelete, setUserToDelete]         = useState<User | null>(null)
   const [resetDialogOpen, setResetDialogOpen]   = useState(false)
@@ -183,136 +168,11 @@ export function UserManagement() {
     if (userToUnlock) { desbloquearUsuario(userToUnlock.id); setUnlockDialogOpen(false); setUserToUnlock(null) }
   }
 
-  const renderUserRow = (u: User) => {
-    const rolDef = getRoleDef(u.rol)
-    return (
-      <TableRow key={u.id} className="border-border hover:bg-secondary/50">
-        <TableCell className="pl-4">
-          <div className="flex items-center gap-3">
-            <div className={`h-9 w-9 rounded-full flex items-center justify-center shrink-0 font-semibold text-sm ${getAvatarCls(u.rol)}`}>
-              {u.nombre.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
-            </div>
-            <div className="min-w-0">
-              <p className="font-medium text-foreground text-sm leading-tight">
-                {u.nombre}
-                {u.id === currentUser?.id && (
-                  <span className="ml-1.5 text-[10px] text-muted-foreground font-normal">(Tú)</span>
-                )}
-              </p>
-              <p className="text-[11px] text-muted-foreground truncate md:hidden">{u.email}</p>
-            </div>
-          </div>
-        </TableCell>
-
-        <TableCell className="text-sm text-muted-foreground hidden md:table-cell">{u.email}</TableCell>
-
-        <TableCell>
-          <div className="flex flex-col gap-0.5">
-            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-              <Badge variant="outline" className={`${rolDef?.cls ?? "bg-muted text-muted-foreground border-border"} flex items-center gap-1 w-fit text-[11px] px-2 py-0.5`}>
-                {getRoleIcon(u.rol)}
-                {rolDef?.label ?? u.rol}
-              </Badge>
-              {isOwner && getNombreGrupo(u) && (
-                <span style={{
-                  display: "inline-flex", alignItems: "center", gap: 3,
-                  fontSize: 10, fontWeight: 600,
-                  color: "var(--primary)",
-                  background: "color-mix(in oklch, var(--primary) 10%, transparent)",
-                  padding: "1px 6px", borderRadius: 6,
-                  border: "1px solid color-mix(in oklch, var(--primary) 25%, transparent)",
-                }}>
-                  <Layers size={9} />
-                  {getNombreGrupo(u)}
-                </span>
-              )}
-            </div>
-            <p className="text-[11px] text-muted-foreground leading-tight line-clamp-2 hidden sm:block" title={rolDef?.description ?? ""}>
-              {rolDef?.description ?? ""}
-            </p>
-          </div>
-        </TableCell>
-
-        <TableCell className="hidden sm:table-cell">
-          <div className="flex flex-col gap-1">
-            {u.activo ? (
-              <div className="flex items-center gap-1.5 text-chart-2">
-                <CheckCircle2 className="h-4 w-4" />
-                <span className="text-xs font-medium">Activo</span>
-              </div>
-            ) : (
-              <div className="flex items-center gap-1.5 text-muted-foreground">
-                <XCircle className="h-4 w-4" />
-                <span className="text-xs font-medium">Inactivo</span>
-              </div>
-            )}
-            {u.bloqueado && (
-              <div className="flex items-center gap-1.5 text-chart-4">
-                <Lock className="h-3.5 w-3.5" />
-                <span className="text-[11px] font-medium">Bloqueado</span>
-              </div>
-            )}
-          </div>
-        </TableCell>
-
-        <TableCell className="hidden sm:table-cell">
-          {u.debeCambiarPassword ? (
-            <Badge variant="outline" className="bg-chart-3/15 text-chart-3 border-chart-3/30 text-[10px] px-2">
-              Pendiente cambio
-            </Badge>
-          ) : (
-            <Badge variant="outline" className="bg-chart-2/15 text-chart-2 border-chart-2/30 text-[10px] px-2">
-              Configurada
-            </Badge>
-          )}
-        </TableCell>
-
-        <TableCell className="pr-3">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground">
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44">
-              <DropdownMenuItem onClick={() => { setUserToEdit(u); setFormOpen(true) }}>
-                <Edit className="mr-2 h-4 w-4" /> Editar
-              </DropdownMenuItem>
-              {u.id !== currentUser?.id && (
-                <DropdownMenuItem onClick={() => { setUserToReset(u); setResetDialogOpen(true) }}>
-                  <KeyRound className="mr-2 h-4 w-4" /> Resetear contraseña
-                </DropdownMenuItem>
-              )}
-              {u.bloqueado && u.id !== currentUser?.id && (
-                <DropdownMenuItem onClick={() => { setUserToUnlock(u); setUnlockDialogOpen(true) }}>
-                  <Unlock className="mr-2 h-4 w-4" /> Desbloquear cuenta
-                </DropdownMenuItem>
-              )}
-              {(isOwner || isAdmin) && !!u.grupoId && u.id !== currentUser?.id && !isOwnerUser(u) && (
-                <DropdownMenuItem
-                  onClick={() => abrirQuitarDialog(u)}
-                  className="text-chart-3 focus:text-chart-3"
-                >
-                  <UserMinus className="mr-2 h-4 w-4" /> Quitar del workspace
-                </DropdownMenuItem>
-              )}
-              {canDeleteTarget(u) && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={() => { setUserToDelete(u); setDeleteDialogOpen(true) }}
-                    className="text-destructive focus:text-destructive"
-                  >
-                    <Trash2 className="mr-2 h-4 w-4" /> Eliminar
-                  </DropdownMenuItem>
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </TableCell>
-      </TableRow>
-    )
-  }
+  // Handlers estables para React.memo en UserRow.
+  const openEdit   = useCallback((u: User) => { setUserToEdit(u); setFormOpen(true) }, [])
+  const openReset  = useCallback((u: User) => { setUserToReset(u); setResetDialogOpen(true) }, [])
+  const openUnlock = useCallback((u: User) => { setUserToUnlock(u); setUnlockDialogOpen(true) }, [])
+  const openDelete = useCallback((u: User) => { setUserToDelete(u); setDeleteDialogOpen(true) }, [])
 
   return (
     <div className="space-y-6">
@@ -377,7 +237,24 @@ export function UserManagement() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {workspaceUsers.map(u => renderUserRow(u))}
+              {workspaceUsers.map(u => (
+                <UserRow
+                  key={u.id}
+                  u={u}
+                  currentUserId={currentUser?.id}
+                  isOwner={isOwner}
+                  rolDef={getRoleDef(u.rol)}
+                  avatarCls={getAvatarCls(u.rol)}
+                  grupoNombre={getNombreGrupo(u)}
+                  canDelete={canDeleteTarget(u)}
+                  canQuitWorkspace={(isOwner || isAdmin) && !!u.grupoId && u.id !== currentUser?.id && !isOwnerUser(u)}
+                  onEdit={openEdit}
+                  onReset={openReset}
+                  onUnlock={openUnlock}
+                  onQuitar={abrirQuitarDialog}
+                  onDelete={openDelete}
+                />
+              ))}
             </TableBody>
           </Table>
         </CardContent>
@@ -447,101 +324,25 @@ export function UserManagement() {
         </div>
       )}
 
-      <Dialog
-        open={asignarDialogOpen}
-        onOpenChange={open => { if (!open) { setAsignarDialogOpen(false); setUserToAsignar(null); setTargetGrupoId("") } }}
-      >
-        <DialogContent className="bg-card border-border sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="text-foreground">Asignar a Workspace</DialogTitle>
-            <DialogDescription>
-              {isOwner
-                ? <>Selecciona el workspace al que quieres asignar a <strong>{userToAsignar?.nombre}</strong>.</>
-                : <>¿Confirmas que quieres incorporar a <strong>{userToAsignar?.nombre}</strong> al workspace <strong>{grupoNombre}</strong>?</>
-              }
-            </DialogDescription>
-          </DialogHeader>
-          {isOwner && (
-            <Select value={targetGrupoId} onValueChange={setTargetGrupoId}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Seleccionar workspace..." />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(gruposMap).map(([id, nombre]) => (
-                  <SelectItem key={id} value={id}>{nombre}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => { setAsignarDialogOpen(false); setUserToAsignar(null); setTargetGrupoId("") }}
-            >
-              Cancelar
-            </Button>
-            <Button
-              disabled={asignando || (isOwner && !targetGrupoId)}
-              onClick={handleAsignarWorkspace}
-              className="bg-primary hover:bg-primary/90"
-            >
-              <UserCheck2 className="h-4 w-4 mr-2" />
-              {asignando ? "Asignando..." : "Confirmar asignación"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <AlertDialog open={quitarDialogOpen} onOpenChange={open => { if (!open) { setQuitarDialogOpen(false); setUserToQuitar(null) } }}>
-        <AlertDialogContent className="bg-card border-border sm:max-w-sm">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-foreground">Quitar del Workspace</AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div className="space-y-3 text-sm text-muted-foreground">
-                <p>
-                  <strong className="text-foreground">{userToQuitar?.nombre}</strong> quedará sin workspace asignado.
-                  Su cuenta no se eliminará, pero <strong className="text-foreground">perderá el acceso al sistema de inmediato</strong>:
-                  no podrá iniciar sesión ni ver datos hasta que se le asigne un nuevo workspace.
-                </p>
-
-                {loadingAsignaciones && (
-                  <p className="text-xs text-muted-foreground">Verificando asignaciones...</p>
-                )}
-                {!loadingAsignaciones && asignaciones && (asignaciones.historias > 0 || asignaciones.tareas > 0) && (
-                  <div className="rounded-md border border-chart-4/30 bg-chart-4/10 px-3 py-2 text-xs text-chart-4">
-                    <p className="font-semibold mb-1">Asignaciones que quedarán sin responsable:</p>
-                    <ul className="list-disc list-inside space-y-0.5">
-                      {asignaciones.historias > 0 && (
-                        <li>{asignaciones.historias} Historia{asignaciones.historias !== 1 ? "s" : ""} de Usuario</li>
-                      )}
-                      {asignaciones.tareas > 0 && (
-                        <li>{asignaciones.tareas} Tarea{asignaciones.tareas !== 1 ? "s" : ""}</li>
-                      )}
-                    </ul>
-                    <p className="mt-1">Reasígnalas antes de continuar o hazlo después desde la lista de HUs.</p>
-                  </div>
-                )}
-                {!loadingAsignaciones && asignaciones && asignaciones.historias === 0 && asignaciones.tareas === 0 && (
-                  <p className="text-xs text-muted-foreground">Este usuario no tiene HUs ni tareas asignadas.</p>
-                )}
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => { setQuitarDialogOpen(false); setUserToQuitar(null) }}>
-              Cancelar
-            </AlertDialogCancel>
-            <AlertDialogAction
-              disabled={quitting}
-              onClick={handleQuitarWorkspace}
-              className="bg-chart-3 hover:bg-chart-3/90 text-white"
-            >
-              <UserMinus className="h-4 w-4 mr-2" />
-              {quitting ? "Quitando..." : "Quitar del workspace"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <UserWorkspaceDialogs
+        asignarDialogOpen={asignarDialogOpen}
+        userToAsignar={userToAsignar}
+        targetGrupoId={targetGrupoId}
+        onTargetGrupoId={setTargetGrupoId}
+        asignando={asignando}
+        grupoNombre={grupoNombre}
+        gruposMap={gruposMap}
+        isOwner={isOwner}
+        onConfirmAsignar={handleAsignarWorkspace}
+        onCancelAsignar={() => { setAsignarDialogOpen(false); setUserToAsignar(null); setTargetGrupoId("") }}
+        quitarDialogOpen={quitarDialogOpen}
+        userToQuitar={userToQuitar}
+        quitting={quitting}
+        loadingAsignaciones={loadingAsignaciones}
+        asignaciones={asignaciones}
+        onConfirmQuitar={handleQuitarWorkspace}
+        onCancelQuitar={() => { setQuitarDialogOpen(false); setUserToQuitar(null) }}
+      />
 
       <UserFormModal
         open={formOpen}

@@ -36,3 +36,24 @@ export async function updateTarea(id: string, data: Prisma.TareaUncheckedUpdateI
 export async function deleteTarea(id: string) {
   return softDelete(prisma.tarea, id)
 }
+
+// ── Interface (v2.73) ─────────────────────────────────────────
+export interface TareaService {
+  getAll:      typeof getAllTareas
+  getById:     typeof getTareaById
+  getByCaso:   typeof getTareasByCaso
+  getByHU:     typeof getTareasByHU
+  create:      typeof createTarea
+  update:      typeof updateTarea
+  delete:      typeof deleteTarea
+}
+
+export const tareaService: TareaService = {
+  getAll:      getAllTareas,
+  getById:     getTareaById,
+  getByCaso:   getTareasByCaso,
+  getByHU:     getTareasByHU,
+  create:      createTarea,
+  update:      updateTarea,
+  delete:      deleteTarea,
+}

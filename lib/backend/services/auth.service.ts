@@ -127,3 +127,22 @@ export async function desbloquearUsuarioService(userId: string) {
   })
   return { success: true }
 }
+
+// ── Interface (v2.78) ─────────────────────────────────────────
+export interface AuthService {
+  login:              typeof loginService
+  logout:             typeof logoutService
+  cambiarPassword:    typeof cambiarPasswordService
+  createUser:         typeof createUserService
+  resetPassword:      typeof resetPasswordService
+  desbloquearUsuario: typeof desbloquearUsuarioService
+}
+
+export const authService: AuthService = {
+  login:              loginService,
+  logout:             logoutService,
+  cambiarPassword:    cambiarPasswordService,
+  createUser:         createUserService,
+  resetPassword:      resetPasswordService,
+  desbloquearUsuario: desbloquearUsuarioService,
+}

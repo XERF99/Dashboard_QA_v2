@@ -368,6 +368,10 @@ vi.mock("@/lib/backend/logger", () => ({
     info: vi.fn(),
     debug: vi.fn(),
   },
+  runWithRequestId: <T>(_id: string, fn: () => T) => fn(),
+  getRequestId: () => undefined,
+  setRequestId: vi.fn(),
+  clearRequestId: vi.fn(),
 }))
 
 describe("withAuth middleware behavior (mocked)", () => {

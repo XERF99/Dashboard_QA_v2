@@ -138,3 +138,24 @@ export async function getMetricasGlobales() {
     })
     .filter((item): item is NonNullable<typeof item> => item !== null)
 }
+
+// ── Interface (v2.78) ─────────────────────────────────────────
+export interface GrupoService {
+  getAll:             typeof getAllGrupos
+  getById:            typeof getGrupoById
+  create:             typeof createGrupo
+  update:             typeof updateGrupo
+  delete:             typeof deleteGrupo
+  getMetricasGrupo:   typeof getMetricasGrupo
+  getMetricasGlobales: typeof getMetricasGlobales
+}
+
+export const grupoService: GrupoService = {
+  getAll:             getAllGrupos,
+  getById:            getGrupoById,
+  create:             createGrupo,
+  update:             updateGrupo,
+  delete:             deleteGrupo,
+  getMetricasGrupo:   getMetricasGrupo,
+  getMetricasGlobales: getMetricasGlobales,
+}

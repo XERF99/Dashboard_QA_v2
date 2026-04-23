@@ -1,21 +1,15 @@
 // ── GET /api/auth/me ──────────────────────────────────────
-import { NextRequest, NextResponse } from "next/server"
-import { requireAuth } from "@/lib/backend/middleware/auth.middleware"
+import { NextResponse } from "next/server"
+import { withAuth } from "@/lib/backend/middleware/with-auth"
+import { NotFoundError } from "@/lib/backend/errors"
 import { prisma } from "@/lib/backend/prisma"
 
-export async function GET(request: NextRequest) {
-  const payload = await requireAuth(request)
-  if (payload instanceof NextResponse) return payload
+export const GET = withAuth(async (_request, payload) => {
+  const user = await prisma.user.findUnique({
+    where: { id: payload.sub },
+    select: { id: true, nombre: true, email: true, rol: true, grupoId: true, activo: true, debeCambiarPassword: true, fechaCreacion: true },
+  })
 
-  try {
-    const user = await prisma.user.findUnique({
-      where: { id: payload.sub },
-      select: { id: true, nombre: true, email: true, rol: true, grupoId: true, activo: true, debeCambiarPassword: true, fechaCreacion: true },
-    })
-
-    if (!user) return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 })
-    return NextResponse.json({ user })
-  } catch (error) {
-    return NextResponse.json({ error: "Error al obtener datos del usuario" }, { status: 500 })
-  }
-}
+  if (!user) throw new NotFoundError("Usuario")
+  return NextResponse.json({ user })
+})

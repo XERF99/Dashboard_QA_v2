@@ -1,52 +1,62 @@
-import Joi from "joi"
+import { z } from "zod"
 
-const bloqueoSchema = Joi.object({
-  id:               Joi.string().required(),
-  descripcion:      Joi.string().required(),
-  reportadoPor:     Joi.string().required(),
-  fecha:            Joi.alternatives(Joi.date(), Joi.string().isoDate()).required(),
-  resuelto:         Joi.boolean().default(false),
-  fechaResolucion:  Joi.alternatives(Joi.date(), Joi.string().isoDate()).optional(),
-  resueltoPor:      Joi.string().optional(),
-  notaResolucion:   Joi.string().optional(),
+// ── Campos reutilizables ─────────────────────────────────────
+const isoDateLike = z.union([z.string().datetime({ offset: true }), z.string().datetime(), z.date()])
+  .or(z.string().refine(v => !isNaN(Date.parse(v)), "Fecha inválida"))
+
+const bloqueoSchema = z.object({
+  id:              z.string(),
+  descripcion:     z.string(),
+  reportadoPor:    z.string(),
+  fecha:           isoDateLike,
+  resuelto:        z.boolean().default(false),
+  fechaResolucion: isoDateLike.optional(),
+  resueltoPor:     z.string().optional(),
+  notaResolucion:  z.string().optional(),
 })
 
-const comentarioSchema = Joi.object({
-  id:     Joi.string().required(),
-  texto:  Joi.string().required(),
-  autor:  Joi.string().required(),
-  fecha:  Joi.alternatives(Joi.date(), Joi.string().isoDate()).required(),
+const comentarioSchema = z.object({
+  id:    z.string(),
+  texto: z.string(),
+  autor: z.string(),
+  fecha: isoDateLike,
 })
 
-export const createHistoriaSchema = Joi.object({
-  codigo:                  Joi.string().trim().max(50).required(),
-  titulo:                  Joi.string().trim().max(500).required(),
-  descripcion:             Joi.string().allow("").max(10000).default(""),
-  criteriosAceptacion:     Joi.string().allow("").max(5000).default(""),
-  responsable:             Joi.string().max(200).required(),
-  prioridad:               Joi.string().valid("critica", "alta", "media", "baja").default("media"),
-  puntos:                  Joi.number().integer().min(0).default(0),
-  sprint:                  Joi.string().optional().allow(null, ""),
-  aplicacion:              Joi.string().allow("").default(""),
-  tipoAplicacion:          Joi.string().max(100).required(),
-  requiriente:             Joi.string().allow("").default(""),
-  areaSolicitante:         Joi.string().allow("").default(""),
-  ambiente:                Joi.string().allow("").default(""),
-  tipoPrueba:              Joi.string().allow("").default(""),
-  creadoPor:               Joi.string().max(200).required(),
-  delegadoPor:             Joi.string().allow("").default(""),
-  permitirCasosAdicionales: Joi.boolean().default(false),
-  motivoCasosAdicionales:  Joi.string().optional().allow(null, ""),
-  fechaFinEstimada:        Joi.alternatives(Joi.date(), Joi.string().isoDate()).optional().allow(null),
+// ── Schema base ─────────────────────────────────────────────
+const createHistoriaBase = z.object({
+  codigo:                   z.string().trim().max(50),
+  titulo:                   z.string().trim().max(500),
+  descripcion:              z.string().max(10_000).default(""),
+  criteriosAceptacion:      z.string().max(5000).default(""),
+  responsable:              z.string().max(200),
+  prioridad:                z.enum(["critica", "alta", "media", "baja"]).default("media"),
+  puntos:                   z.number().int().min(0).default(0),
+  sprint:                   z.string().nullable().optional(),
+  aplicacion:               z.string().default(""),
+  tipoAplicacion:           z.string().max(100),
+  requiriente:              z.string().default(""),
+  areaSolicitante:          z.string().default(""),
+  ambiente:                 z.string().default(""),
+  tipoPrueba:               z.string().default(""),
+  creadoPor:                z.string().max(200),
+  delegadoPor:              z.string().default(""),
+  permitirCasosAdicionales: z.boolean().default(false),
+  motivoCasosAdicionales:   z.string().nullable().optional(),
+  fechaFinEstimada:         isoDateLike.nullable().optional(),
+  grupoId:                  z.string().nullable().optional(),
 })
 
-export const updateHistoriaSchema = createHistoriaSchema.keys({
-  estado:           Joi.string().valid("sin_iniciar", "en_progreso", "exitosa", "fallida", "cancelada").optional(),
-  etapa:            Joi.string().optional(),
-  motivoCancelacion: Joi.string().optional().allow(null, ""),
-  fechaCierre:      Joi.alternatives(Joi.date(), Joi.string().isoDate()).optional().allow(null),
-  casosIds:         Joi.array().items(Joi.string()).max(500).default([]),
-  bloqueos:         Joi.array().items(bloqueoSchema).max(100).default([]),
-  historial:        Joi.array().max(1000).default([]),
-  comentarios:      Joi.array().items(comentarioSchema).max(200).default([]),
+export const createHistoriaSchema = createHistoriaBase
+export type CreateHistoriaDTO = z.infer<typeof createHistoriaSchema>
+
+export const updateHistoriaSchema = createHistoriaBase.omit({ grupoId: true }).extend({
+  estado:            z.enum(["sin_iniciar", "en_progreso", "exitosa", "fallida", "cancelada"]).optional(),
+  etapa:             z.string().optional(),
+  motivoCancelacion: z.string().nullable().optional(),
+  fechaCierre:       isoDateLike.nullable().optional(),
+  casosIds:          z.array(z.string()).max(500).default([]),
+  bloqueos:          z.array(bloqueoSchema).max(100).default([]),
+  historial:         z.array(z.any()).max(1000).default([]),
+  comentarios:       z.array(comentarioSchema).max(200).default([]),
 })
+export type UpdateHistoriaDTO = z.infer<typeof updateHistoriaSchema>

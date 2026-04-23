@@ -63,3 +63,12 @@ export async function audit(params: AuditParams): Promise<void> {
     logger.error("audit.service", `Error al escribir audit log: ${action} ${resource}`, e)
   }
 }
+
+// ── Interface (v2.78) ─────────────────────────────────────────
+export interface AuditService {
+  write: typeof audit
+}
+
+export const auditService: AuditService = {
+  write: audit,
+}

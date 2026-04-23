@@ -3,8 +3,25 @@ import tsPlugin from "@typescript-eslint/eslint-plugin"
 import tsParser from "@typescript-eslint/parser"
 import reactHooks from "eslint-plugin-react-hooks"
 
+const nodeGlobals = {
+  process: "readonly",
+  __dirname: "readonly",
+  __filename: "readonly",
+  module: "readonly",
+  require: "readonly",
+  Buffer: "readonly",
+}
+
 export default [
   js.configs.recommended,
+  {
+    files: ["**/*.mjs", "**/*.cjs", "**/*.js"],
+    languageOptions: {
+      globals: nodeGlobals,
+      ecmaVersion: "latest",
+      sourceType: "module",
+    },
+  },
   {
     files: ["**/*.ts", "**/*.tsx"],
     languageOptions: {
@@ -33,6 +50,7 @@ export default [
       "prisma/",
       "tests/",
       "scripts/",
+      ".claude/worktrees/**",
     ],
   },
 ]

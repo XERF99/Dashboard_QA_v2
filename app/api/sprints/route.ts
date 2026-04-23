@@ -1,9 +1,10 @@
 // ── GET  /api/sprints — listar todos (acepta ?activo=true para solo el activo)
 // ── POST /api/sprints — crear nuevo sprint
-import { NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import { z } from "zod"
 import { withAuth } from "@/lib/backend/middleware/with-auth"
-import { checkRateLimit, getClientIp, rlKey } from "@/lib/backend/middleware/rate-limit"
+import { requireRateLimit } from "@/lib/backend/middleware/guards"
+import { ValidationError } from "@/lib/backend/errors"
 import {
   getAllSprints,
   getSprintActivo,
@@ -15,7 +16,7 @@ const CreateSprintSchema = z.object({
   fechaInicio: z.string().min(1),
   fechaFin:    z.string().min(1),
   objetivo:    z.string().optional(),
-  grupoId:     z.string().optional(),  // owner lo provee en el body; non-owner usa el del JWT
+  grupoId:     z.string().optional(),
 })
 
 export const GET = withAuth(async (request, payload) => {
@@ -34,30 +35,21 @@ export const GET = withAuth(async (request, payload) => {
 })
 
 export const POST = withAuth(async (request, payload) => {
-  const ip = getClientIp(request.headers)
-  const rl = checkRateLimit(rlKey(ip, "POST /api/sprints"), 60, 60_000)
-  if (!rl.allowed) {
-    return NextResponse.json({ error: "Demasiadas peticiones. Intenta en un momento." }, { status: 429 })
-  }
+  await requireRateLimit(request, "POST /api/sprints", 60, 60_000)
 
-  const parsed = CreateSprintSchema.safeParse(await request.json())
+  const parsed = CreateSprintSchema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) {
-    return NextResponse.json({ error: "Payload inválido", details: parsed.error.flatten() }, { status: 400 })
+    throw new ValidationError("Payload inválido", parsed.error.issues.map(i => i.message))
   }
   const { nombre, fechaInicio, fechaFin, objetivo, grupoId: bodyGrupoId } = parsed.data
 
   if (new Date(fechaInicio) >= new Date(fechaFin)) {
-    return NextResponse.json(
-      { error: "fechaInicio debe ser anterior a fechaFin" },
-      { status: 400 }
-    )
+    throw new ValidationError("fechaInicio debe ser anterior a fechaFin")
   }
 
-  // Non-owner: grupoId del JWT. Owner: debe proveerlo en el body.
   const grupoId = payload.grupoId ?? bodyGrupoId
-  if (!grupoId) {
-    return NextResponse.json({ error: "grupoId es requerido" }, { status: 400 })
-  }
+  if (!grupoId) throw new ValidationError("grupoId es requerido")
+
   const sprint = await createSprint({ nombre, grupoId, fechaInicio, fechaFin, objetivo })
   return NextResponse.json({ sprint }, { status: 201 })
 })

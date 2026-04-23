@@ -89,3 +89,27 @@ export async function getHistoriasByResponsable(responsable: string, grupoId?: s
     orderBy: { fechaCreacion: "desc" },
   })
 }
+
+// ── Interface (v2.73) ─────────────────────────────────────────
+// Expone las funciones como un objeto con shape tipado. Habilita
+// mockeo sin `vi.mock` de módulo entero y prepara el terreno para
+// inyección de dependencias en handlers.
+export interface HistoriaService {
+  getAll:           typeof getAllHistorias
+  getById:          typeof getHistoriaById
+  create:           typeof createHistoria
+  update:           typeof updateHistoria
+  delete:           typeof deleteHistoria
+  getBySprint:      typeof getHistoriasBySprint
+  getByResponsable: typeof getHistoriasByResponsable
+}
+
+export const historiaService: HistoriaService = {
+  getAll:           getAllHistorias,
+  getById:          getHistoriaById,
+  create:           createHistoria,
+  update:           updateHistoria,
+  delete:           deleteHistoria,
+  getBySprint:      getHistoriasBySprint,
+  getByResponsable: getHistoriasByResponsable,
+}

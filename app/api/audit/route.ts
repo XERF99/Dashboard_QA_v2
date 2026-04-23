@@ -1,19 +1,15 @@
 // ── GET /api/audit — consultar audit log (owner ve todo, admin ve su workspace)
-import { NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import { withAuth } from "@/lib/backend/middleware/with-auth"
-import { checkRateLimit, getClientIp, rlKey } from "@/lib/backend/middleware/rate-limit"
+import { requireRateLimit } from "@/lib/backend/middleware/guards"
+import { ForbiddenError } from "@/lib/backend/errors"
 import { prisma } from "@/lib/backend/prisma"
 
 export const GET = withAuth(async (request, payload) => {
   if (!["owner", "admin"].includes(payload.rol)) {
-    return NextResponse.json({ error: "Solo Owner o Admin pueden consultar el audit log" }, { status: 403 })
+    throw new ForbiddenError("Solo Owner o Admin pueden consultar el audit log")
   }
-
-  const ip = getClientIp(request.headers)
-  const rl = checkRateLimit(rlKey(ip, "GET /api/audit"), 30, 60_000)
-  if (!rl.allowed) {
-    return NextResponse.json({ error: "Demasiadas peticiones. Intenta en un momento." }, { status: 429 })
-  }
+  await requireRateLimit(request, "GET /api/audit", 30, 60_000)
 
   const { searchParams } = new URL(request.url)
   const page     = Math.max(1, parseInt(searchParams.get("page")  ?? "1")  || 1)
@@ -25,7 +21,6 @@ export const GET = withAuth(async (request, payload) => {
   const skip     = (page - 1) * limit
 
   const where = {
-    // Admin can only see their own workspace; owner can filter or see all
     ...(payload.grupoId ? { grupoId: payload.grupoId } : grupoId ? { grupoId } : {}),
     ...(resource ? { resource } : {}),
     ...(action   ? { action }   : {}),

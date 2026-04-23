@@ -1,8 +1,9 @@
 // ── GET  /api/notificaciones — listar las del usuario autenticado
 // ── POST /api/notificaciones — crear nueva
-import { NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import { z } from "zod"
 import { withAuth } from "@/lib/backend/middleware/with-auth"
+import { ValidationError } from "@/lib/backend/errors"
 import {
   getNotificacionesByDestinatario,
   createNotificacion,
@@ -14,7 +15,7 @@ const CreateNotificacionSchema = z.object({
   titulo:      z.string().min(1),
   descripcion: z.string().min(1),
   destinatario: z.enum(["admin", "qa"]),
-  grupoId:     z.string().optional(),   // requerido cuando el caller es owner
+  grupoId:     z.string().optional(),
   casoId:      z.string().optional(),
   huId:        z.string().optional(),
   huTitulo:    z.string().optional(),
@@ -32,17 +33,14 @@ export const GET = withAuth(async (request, payload) => {
 })
 
 export const POST = withAuth(async (request, payload) => {
-  const parsed = CreateNotificacionSchema.safeParse(await request.json())
+  const parsed = CreateNotificacionSchema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) {
-    return NextResponse.json({ error: "Payload inválido", details: parsed.error.flatten() }, { status: 400 })
+    throw new ValidationError("Payload inválido", parsed.error.issues.map(i => i.message))
   }
   const { tipo, titulo, descripcion, destinatario, grupoId: bodyGrupoId, casoId, huId, huTitulo, casoTitulo } = parsed.data
 
-  // grupoId: non-owner uses their JWT grupoId; owner must supply it in the body
   const grupoId = payload.grupoId ?? bodyGrupoId
-  if (!grupoId) {
-    return NextResponse.json({ error: "grupoId es requerido" }, { status: 400 })
-  }
+  if (!grupoId) throw new ValidationError("grupoId es requerido")
 
   const notificacion = await createNotificacion({
     tipo, titulo, descripcion, destinatario, grupoId, casoId, huId, huTitulo, casoTitulo,

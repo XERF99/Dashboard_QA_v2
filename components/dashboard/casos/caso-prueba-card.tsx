@@ -5,75 +5,26 @@ import { useTareaForm } from "@/lib/hooks/useTareaForm"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
-  AlertTriangle, Plus, CheckCircle2,
-  Send, ChevronDown, ChevronUp, Lock, Unlock, RefreshCw,
-  Pencil, Trash2, Bell, MessageSquare, XCircle, UserX,
+  AlertTriangle, Plus, Send, ChevronDown, ChevronUp, Unlock, RefreshCw,
+  Pencil, Trash2, Bell, MessageSquare, XCircle,
 } from "lucide-react"
-import { useAuth } from "@/lib/contexts/auth-context"
-import { isResponsableActivo } from "@/lib/utils/asignaciones"
 import {
-  ESTADO_APROBACION_CFG, COMPLEJIDAD_CFG, TIPO_TAREA_LABEL, TIPO_TAREA_COLOR,
+  ESTADO_APROBACION_CFG, COMPLEJIDAD_CFG,
   getEtapaHUCfg,
   getTipoPruebaLabel, getTipoPruebaColor,
-  fmtCorto,
-  TIPO_TAREA_LABEL as TTLABEL,
-  type HistoriaUsuario, type CasoPrueba, type Tarea, type Bloqueo,
-  type EtapaEjecucion, type TipoTarea, type PrioridadTarea,
+  type HistoriaUsuario, type CasoPrueba, type Tarea,
+  type EtapaEjecucion,
 } from "@/lib/types"
 import { CommentThread } from "../shared/comment-thread"
 import { useHUDetail } from "@/lib/contexts/hu-detail-context"
+import { TareaFormFields }       from "./tarea-form-fields"
+import { TareaItem }             from "./tarea-item"
+import { CasoIntentosHistorial } from "./caso-intentos-historial"
 
 // ── Helpers ──
 const PNL: React.CSSProperties = { padding:"13px 15px", borderRadius:10, border:"1px solid var(--border)", background:"var(--background)" }
 const SLBL: React.CSSProperties = { fontSize:"10px", textTransform:"uppercase", letterSpacing:"0.1em", fontWeight:700, color:"var(--muted-foreground)", marginBottom:10, display:"flex", alignItems:"center", gap:5 }
-
-interface TareaFormFieldsProps {
-  titulo: string; onTitulo: (v: string) => void
-  desc: string; onDesc: (v: string) => void
-  tipo: TipoTarea; onTipo: (v: TipoTarea) => void
-  prioridad: PrioridadTarea; onPrioridad: (v: PrioridadTarea) => void
-  horas: number; onHoras: (v: number) => void
-}
-
-function TareaFormFields({ titulo, onTitulo, desc, onDesc, tipo, onTipo, prioridad, onPrioridad, horas, onHoras }: TareaFormFieldsProps) {
-  return (
-    <div className="grid grid-cols-2 gap-1.5 mb-1.5">
-      <div style={{ gridColumn:"1/-1" }}>
-        <Input value={titulo} onChange={e => onTitulo(e.target.value)} placeholder="Título de la tarea *" style={{ fontSize:11 }} />
-      </div>
-      <div style={{ gridColumn:"1/-1" }}>
-        <Input value={desc} onChange={e => onDesc(e.target.value)} placeholder="Descripción (opcional)" style={{ fontSize:11 }} />
-      </div>
-      <div>
-        <Select value={tipo} onValueChange={(v: TipoTarea) => onTipo(v)}>
-          <SelectTrigger style={{ height:28, fontSize:10 }}><SelectValue/></SelectTrigger>
-          <SelectContent>
-            {(Object.keys(TTLABEL) as TipoTarea[]).map(k => (
-              <SelectItem key={k} value={k}>{TTLABEL[k]}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      <div>
-        <Select value={prioridad} onValueChange={(v: PrioridadTarea) => onPrioridad(v)}>
-          <SelectTrigger style={{ height:28, fontSize:10 }}><SelectValue/></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="alta">Alta</SelectItem>
-            <SelectItem value="media">Media</SelectItem>
-            <SelectItem value="baja">Baja</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <div>
-        <Input type="number" min={1} value={horas} onChange={e => onHoras(parseInt(e.target.value)||1)}
-          placeholder="Horas" style={{ height:28, fontSize:10 }} />
-      </div>
-    </div>
-  )
-}
 
 // ── Props: solo datos de instancia; handlers/permisos/config vienen de HUDetailContext ──
 export interface CasoPruebaCardProps {
@@ -297,7 +248,6 @@ export function CasoPruebaCard({ caso, hu, tareasCaso, onAbrirEditar }: CasoPrue
                 <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
                   {configResultados.map(rDef => (
                     rDef.esAceptado ? (
-                      // Resultado aceptado → botón directo
                       <Button key={rDef.id} size="sm" variant="outline"
                         style={{ height:26, fontSize:10, padding:"0 10px" }}
                         className={rDef.id === "exitoso" ? "bg-chart-2 hover:bg-chart-2/90 text-white border-chart-2" : ""}
@@ -306,7 +256,6 @@ export function CasoPruebaCard({ caso, hu, tareasCaso, onAbrirEditar }: CasoPrue
                         {rDef.label}
                       </Button>
                     ) : (
-                      // Resultado no aceptado → abre formulario de comentario
                       <Button key={rDef.id} size="sm" variant="outline"
                         style={{ height:26, fontSize:10, padding:"0 10px", color:"var(--chart-4)", borderColor:"var(--chart-4)" }}
                         onClick={() => { setShowFalloForm(true); setComentarioFallo("") }}>
@@ -317,7 +266,6 @@ export function CasoPruebaCard({ caso, hu, tareasCaso, onAbrirEditar }: CasoPrue
                   ))}
                 </div>
               ) : (
-                // Formulario de comentario para resultado no aceptado
                 (() => {
                   const noAceptados = configResultados.filter(r => !r.esAceptado)
                   return (
@@ -347,7 +295,7 @@ export function CasoPruebaCard({ caso, hu, tareasCaso, onAbrirEditar }: CasoPrue
             </div>
           )}
 
-          {/* Retesteo — disponible cuando el resultado no es aceptado */}
+          {/* Retesteo */}
           {caso.estadoAprobacion === "aprobado" && resultadoEtapaActual?.resultado && resultadoEtapaActual.resultado !== "pendiente" && !getResultadoDef(resultadoEtapaActual.resultado).esAceptado && (isQA || isAdmin || isQALead) && (
             <div style={{ marginBottom:10, marginTop:6 }}>
               {(() => {
@@ -395,43 +343,7 @@ export function CasoPruebaCard({ caso, hu, tareasCaso, onAbrirEditar }: CasoPrue
           )}
 
           {/* Historial de intentos */}
-          {caso.resultadosPorEtapa.some(r => (r.intentos?.length || 0) > 0) && (
-            <div style={{ marginBottom:10, marginTop:4 }}>
-              <p style={{ fontSize:10, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.1em", color:"var(--muted-foreground)", marginBottom:6 }}>
-                Historial de intentos ({caso.resultadosPorEtapa.reduce((s, r) => s + (r.intentos?.length || 0), 0)})
-              </p>
-              <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
-                {caso.resultadosPorEtapa.flatMap(r =>
-                  (r.intentos || []).map((intento, idx) => {
-                    const iDef = getResultadoDef(intento.resultado)
-                    return (
-                      <div key={`${r.etapa}-${idx}`} style={{
-                        padding:"8px 10px", borderRadius:7, fontSize:11, lineHeight:1.5,
-                        border:`1px solid ${iDef.esAceptado ? "color-mix(in oklch, var(--chart-2) 30%, var(--border))" : "color-mix(in oklch, var(--chart-4) 30%, var(--border))"}`,
-                        background: iDef.esAceptado ? "color-mix(in oklch, var(--chart-2) 5%, transparent)" : "color-mix(in oklch, var(--chart-4) 5%, transparent)",
-                      }}>
-                        <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:3, flexWrap:"wrap" }}>
-                          <Badge variant="outline" className="text-[9px] bg-muted text-muted-foreground border-border" style={{ padding:"1px 5px" }}>
-                            {getEtapaHUCfg(r.etapa, configEtapas).label}
-                          </Badge>
-                          <Badge variant="outline" className={`text-[9px] ${iDef.cls}`} style={{ padding:"1px 5px" }}>
-                            Intento #{intento.numero} — {iDef.icono ? `${iDef.icono} ` : ""}{iDef.label}
-                          </Badge>
-                          <span style={{ fontSize:10, color:"var(--muted-foreground)" }}>{fmtCorto(intento.fecha)} · {intento.ejecutadoPor}</span>
-                        </div>
-                        {intento.comentarioFallo && (
-                          <p style={{ color:"var(--chart-4)", fontSize:11 }}><strong>Fallo:</strong> {intento.comentarioFallo}</p>
-                        )}
-                        {intento.comentarioCorreccion && (
-                          <p style={{ color:"var(--chart-2)", fontSize:11 }}><strong>Corrección:</strong> {intento.comentarioCorreccion}</p>
-                        )}
-                      </div>
-                    )
-                  })
-                )}
-              </div>
-            </div>
-          )}
+          <CasoIntentosHistorial caso={caso} configEtapas={configEtapas} getResultadoDef={getResultadoDef} />
 
           {/* Formulario editar tarea */}
           {editandoTarea && (
@@ -511,115 +423,6 @@ export function CasoPruebaCard({ caso, hu, tareasCaso, onAbrirEditar }: CasoPrue
               currentUser={currentUser}
               canComment={isAdmin || isQALead || isQA}
             />
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ══════════════════════════════════════════════════════════════
-// SUB-COMPONENTES
-// ══════════════════════════════════════════════════════════════
-
-interface TareaItemProps {
-  tarea: Tarea
-  casoId: string
-  huCerrada: boolean
-  onAbrirEditar: (tarea: Tarea) => void
-}
-
-function TareaItem({ tarea, casoId, huCerrada, onAbrirEditar }: TareaItemProps) {
-  const { isQA, isAdmin, isQALead, currentUser, onEliminarTarea, onCompletarTarea, onBloquearTarea, onDesbloquearTarea } = useHUDetail()
-  const { users } = useAuth()
-  const [showBloqueoForm, setShowBloqueoForm] = useState(false)
-  const [bloqueoTexto, setBloqueoTexto] = useState("")
-
-  const tareaBloqueos   = tarea.bloqueos.filter(b => !b.resuelto)
-  const puedeManejar    = !huCerrada && (isQA || isAdmin || isQALead) && tarea.estado !== "completada"
-  const puedeEditar     = !huCerrada && (isQA || isAdmin || isQALead) && tarea.estado === "pendiente"
-  const puedeEliminar   = !huCerrada && (isQA || isAdmin || isQALead) && (tarea.estado === "pendiente" || tarea.estado === "en_progreso")
-
-  return (
-    <div style={{ padding:"8px 10px", borderRadius:7, border:"1px solid var(--border)", marginBottom:4, background:"var(--card)" }}>
-      <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-        <div style={{ flex:1, minWidth:0 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:5 }}>
-            <Badge variant="outline" className={`${TIPO_TAREA_COLOR[tarea.tipo]} text-[8px]`} style={{ padding:"0px 4px" }}>
-              {TIPO_TAREA_LABEL[tarea.tipo]}
-            </Badge>
-            <p style={{ fontSize:12, fontWeight:500, color:"var(--foreground)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{tarea.titulo}</p>
-            {tareaBloqueos.length > 0 && <AlertTriangle size={10} style={{ color:"var(--chart-4)", flexShrink:0 }}/>}
-          </div>
-          <p style={{ fontSize:10, color:"var(--muted-foreground)", marginTop:2, display:"flex", alignItems:"center", gap:3 }}>
-            {tarea.asignado} · {tarea.horasEstimadas}h
-            {!isResponsableActivo(tarea.asignado, users) && (
-              <UserX size={9} style={{ color:"var(--chart-4)", flexShrink:0 }} aria-label="Usuario sin workspace activo" />
-            )}
-          </p>
-        </div>
-        <Badge variant="outline" className={`text-[9px] ${
-          tarea.estado === "completada" ? "bg-chart-2/20 text-chart-2 border-chart-2/30" :
-          tarea.estado === "bloqueada"  ? "bg-chart-4/20 text-chart-4 border-chart-4/30" :
-          tarea.estado === "en_progreso"? "bg-chart-1/20 text-chart-1 border-chart-1/30" :
-          "bg-muted text-muted-foreground border-border"
-        }`}>
-          {tarea.estado === "completada" ? "Completada" : tarea.estado === "bloqueada" ? "Bloqueada" : tarea.estado === "en_progreso" ? "En Progreso" : "Pendiente"}
-        </Badge>
-        <div style={{ display:"flex", gap:3, flexShrink:0 }}>
-          {puedeEditar && (
-            <button type="button" title="Editar tarea" onClick={() => onAbrirEditar(tarea)}
-              style={{ background:"none", border:"none", cursor:"pointer", color:"var(--chart-1)", padding:2 }}>
-              <Pencil size={13}/>
-            </button>
-          )}
-          {puedeEliminar && (
-            <button type="button" title="Eliminar tarea" onClick={() => onEliminarTarea(tarea.id, casoId)}
-              style={{ background:"none", border:"none", cursor:"pointer", color:"var(--chart-4)", padding:2 }}>
-              <Trash2 size={13}/>
-            </button>
-          )}
-          {puedeManejar && tarea.estado !== "bloqueada" && (
-            <>
-              <button type="button" title="Completar exitosa" onClick={() => onCompletarTarea(tarea.id, "exitoso")}
-                style={{ background:"none", border:"none", cursor:"pointer", color:"var(--chart-2)", padding:2 }}>
-                <CheckCircle2 size={14}/>
-              </button>
-              <button type="button" title="Marcar como fallida" onClick={() => onCompletarTarea(tarea.id, "fallido")}
-                style={{ background:"none", border:"none", cursor:"pointer", color:"var(--chart-4)", padding:2 }}>
-                <XCircle size={14}/>
-              </button>
-              <button type="button" title="Bloquear tarea" onClick={() => { setShowBloqueoForm(true); setBloqueoTexto("") }}
-                style={{ background:"none", border:"none", cursor:"pointer", color:"var(--chart-3)", padding:2 }}>
-                <Lock size={13}/>
-              </button>
-            </>
-          )}
-          {puedeManejar && tarea.estado === "bloqueada" && tareaBloqueos.length > 0 && (
-            <button type="button" title="Desbloquear tarea" onClick={() => {
-              const bl = tarea.bloqueos.find(b => !b.resuelto)
-              if (bl) onDesbloquearTarea(tarea.id, bl.id)
-            }} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--chart-2)", padding:2 }}>
-              <Unlock size={13}/>
-            </button>
-          )}
-        </div>
-      </div>
-      {showBloqueoForm && (
-        <div style={{ padding:"8px 10px", borderRadius:7, border:"1px solid var(--chart-3)", background:"var(--background)", marginTop:6 }}>
-          <Input value={bloqueoTexto} onChange={e => setBloqueoTexto(e.target.value)}
-            placeholder="Descripción del bloqueo..." style={{ fontSize:11, marginBottom:6 }} />
-          <div style={{ display:"flex", gap:6, justifyContent:"flex-end" }}>
-            <Button variant="outline" size="sm" style={{ height:24, fontSize:10 }}
-              onClick={() => setShowBloqueoForm(false)}>Cancelar</Button>
-            <Button size="sm" style={{ height:24, fontSize:10 }} disabled={!bloqueoTexto.trim()}
-              onClick={() => {
-                onBloquearTarea(tarea.id, {
-                  id: `bl-${Date.now()}`, descripcion: bloqueoTexto.trim(),
-                  reportadoPor: currentUser || "Sistema", fecha: new Date(), resuelto: false,
-                } as Bloqueo)
-                setShowBloqueoForm(false); setBloqueoTexto("")
-              }}>Bloquear</Button>
           </div>
         </div>
       )}

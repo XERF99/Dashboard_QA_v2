@@ -73,3 +73,22 @@ export async function updateSprint(
 export async function deleteSprint(id: string) {
   return prisma.sprint.delete({ where: { id } })
 }
+
+// ── Interface (v2.78) ─────────────────────────────────────────
+export interface SprintService {
+  getAll:       typeof getAllSprints
+  getById:      typeof getSprintById
+  getActivo:    typeof getSprintActivo
+  create:       typeof createSprint
+  update:       typeof updateSprint
+  delete:       typeof deleteSprint
+}
+
+export const sprintService: SprintService = {
+  getAll:    getAllSprints,
+  getById:   getSprintById,
+  getActivo: getSprintActivo,
+  create:    createSprint,
+  update:    updateSprint,
+  delete:    deleteSprint,
+}

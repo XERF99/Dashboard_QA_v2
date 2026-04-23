@@ -1,7 +1,12 @@
 // ═══════════════════════════════════════════════════════════
-//  NEXT.JS EDGE MIDDLEWARE — Centraliza la verificación de
-//  autenticación para todos los endpoints de la API.
+//  NEXT.JS EDGE PROXY (Next 16+) — Centraliza la verificación
+//  de autenticación para todos los endpoints de la API.
 //  Rutas públicas (login, health) quedan exentas.
+//  También genera y propaga `x-request-id` en cada request.
+//
+//  Convención: este archivo se llamaba `middleware.ts` hasta
+//  Next.js 16. Desde v16 la convención oficial es `proxy.ts`
+//  con la función exportada `proxy(request)`.
 // ═══════════════════════════════════════════════════════════
 
 import { NextRequest, NextResponse } from "next/server"
@@ -44,7 +49,6 @@ function isValidOrigin(request: NextRequest): boolean {
 
   if (!host) return false
 
-  // Accept if origin matches host
   if (origin) {
     try {
       const originHost = new URL(origin).host
@@ -52,7 +56,6 @@ function isValidOrigin(request: NextRequest): boolean {
     } catch { return false }
   }
 
-  // Fallback to referer
   if (referer) {
     try {
       const refererHost = new URL(referer).host
@@ -60,50 +63,79 @@ function isValidOrigin(request: NextRequest): boolean {
     } catch { return false }
   }
 
-  // No origin or referer — block in production, allow in dev (for tools like curl/Postman)
   return process.env.NODE_ENV !== "production"
 }
 
-export async function middleware(request: NextRequest) {
+// ── Request ID propagation ────────────────────────────────────
+const REQUEST_ID_HEADER = "x-request-id"
+
+function ensureRequestId(request: NextRequest): string {
+  const existing = request.headers.get(REQUEST_ID_HEADER)
+  if (existing && existing.length > 0 && existing.length <= 128) return existing
+  return crypto.randomUUID()
+}
+
+function withRid(response: NextResponse, id: string): NextResponse {
+  response.headers.set(REQUEST_ID_HEADER, id)
+  return response
+}
+
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
+  const requestId = ensureRequestId(request)
 
-  // No proteger rutas públicas ni assets
-  if (isPublic(pathname)) return NextResponse.next()
+  // Forward request headers downstream so handlers read the same requestId.
+  const forwardedHeaders = new Headers(request.headers)
+  forwardedHeaders.set(REQUEST_ID_HEADER, requestId)
+  const nextOpts = { request: { headers: forwardedHeaders } }
 
-  // ── CSRF protection for mutating requests ──────────────────
+  if (isPublic(pathname)) {
+    return withRid(NextResponse.next(nextOpts), requestId)
+  }
+
   if (MUTATING_METHODS.has(request.method) && !isValidOrigin(request)) {
-    return NextResponse.json(
-      { error: "Solicitud rechazada: origen no valido (CSRF)" },
-      { status: 403 },
+    return withRid(
+      NextResponse.json(
+        { error: "Solicitud rechazada: origen no valido (CSRF)", requestId },
+        { status: 403 },
+      ),
+      requestId,
     )
   }
 
-  // ── Body size limit for mutating requests ────────────���─────
   const contentLength = request.headers.get("content-length")
   if (contentLength && parseInt(contentLength) > MAX_BODY_SIZE) {
-    return NextResponse.json(
-      { error: "El cuerpo de la petición excede el límite permitido (1 MB)" },
-      { status: 413 },
+    return withRid(
+      NextResponse.json(
+        { error: "El cuerpo de la petición excede el límite permitido (1 MB)", requestId },
+        { status: 413 },
+      ),
+      requestId,
     )
   }
 
   const token = extractToken(request)
   if (!token) {
-    return NextResponse.json({ error: "No autenticado" }, { status: 401 })
+    return withRid(
+      NextResponse.json({ error: "No autenticado", requestId }, { status: 401 }),
+      requestId,
+    )
   }
 
   try {
     await jwtVerify(token, JWT_SECRET)
-    return NextResponse.next()
+    return withRid(NextResponse.next(nextOpts), requestId)
   } catch {
-    // Fallback to previous secret during rotation window
     if (JWT_SECRET_PREVIOUS) {
       try {
         await jwtVerify(token, JWT_SECRET_PREVIOUS)
-        return NextResponse.next()
+        return withRid(NextResponse.next(nextOpts), requestId)
       } catch { /* both secrets failed */ }
     }
-    return NextResponse.json({ error: "Token inválido o expirado" }, { status: 401 })
+    return withRid(
+      NextResponse.json({ error: "Token inválido o expirado", requestId }, { status: 401 }),
+      requestId,
+    )
   }
 }
 

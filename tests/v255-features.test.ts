@@ -285,23 +285,23 @@ describe("createHistoriaSchema — límites de tamaño", () => {
   }
 
   it("titulo > 500 chars → error de validación", () => {
-    const { error } = createHistoriaSchema.validate({ ...baseOk, titulo: "x".repeat(501) })
+    const { error } = createHistoriaSchema.safeParse({ ...baseOk, titulo: "x".repeat(501) })
     expect(error).toBeDefined()
     expect(error!.message).toMatch(/500/)
   })
 
   it("codigo > 50 chars → error de validación", () => {
-    const { error } = createHistoriaSchema.validate({ ...baseOk, codigo: "H".repeat(51) })
+    const { error } = createHistoriaSchema.safeParse({ ...baseOk, codigo: "H".repeat(51) })
     expect(error).toBeDefined()
   })
 
   it("descripcion > 10000 chars → error de validación", () => {
-    const { error } = createHistoriaSchema.validate({ ...baseOk, descripcion: "x".repeat(10001) })
+    const { error } = createHistoriaSchema.safeParse({ ...baseOk, descripcion: "x".repeat(10001) })
     expect(error).toBeDefined()
   })
 
   it("payload válido pasa sin errores", () => {
-    const { error } = createHistoriaSchema.validate(baseOk)
+    const { error } = createHistoriaSchema.safeParse(baseOk)
     expect(error).toBeUndefined()
   })
 })
@@ -312,17 +312,17 @@ describe("createCasoSchema — límites de tamaño", () => {
   }
 
   it("titulo > 500 chars → error", () => {
-    const { error } = createCasoSchema.validate({ ...baseOk, titulo: "x".repeat(501) })
+    const { error } = createCasoSchema.safeParse({ ...baseOk, titulo: "x".repeat(501) })
     expect(error).toBeDefined()
   })
 
   it("descripcion > 10000 chars → error", () => {
-    const { error } = createCasoSchema.validate({ ...baseOk, descripcion: "x".repeat(10001) })
+    const { error } = createCasoSchema.safeParse({ ...baseOk, descripcion: "x".repeat(10001) })
     expect(error).toBeDefined()
   })
 
   it("archivosAnalizados > 100 items → error", () => {
-    const { error } = createCasoSchema.validate({
+    const { error } = createCasoSchema.safeParse({
       ...baseOk,
       archivosAnalizados: Array.from({ length: 101 }, (_, i) => `file-${i}.txt`),
     })
@@ -330,7 +330,7 @@ describe("createCasoSchema — límites de tamaño", () => {
   })
 
   it("payload válido pasa sin errores", () => {
-    const { error } = createCasoSchema.validate(baseOk)
+    const { error } = createCasoSchema.safeParse(baseOk)
     expect(error).toBeUndefined()
   })
 })
@@ -342,22 +342,22 @@ describe("createTareaSchema — límites de tamaño", () => {
   }
 
   it("titulo > 500 chars → error", () => {
-    const { error } = createTareaSchema.validate({ ...baseOk, titulo: "x".repeat(501) })
+    const { error } = createTareaSchema.safeParse({ ...baseOk, titulo: "x".repeat(501) })
     expect(error).toBeDefined()
   })
 
   it("horasEstimadas > 9999 → error", () => {
-    const { error } = createTareaSchema.validate({ ...baseOk, horasEstimadas: 10000 })
+    const { error } = createTareaSchema.safeParse({ ...baseOk, horasEstimadas: 10000 })
     expect(error).toBeDefined()
   })
 
   it("descripcion > 5000 chars → error", () => {
-    const { error } = createTareaSchema.validate({ ...baseOk, descripcion: "x".repeat(5001) })
+    const { error } = createTareaSchema.safeParse({ ...baseOk, descripcion: "x".repeat(5001) })
     expect(error).toBeDefined()
   })
 
   it("payload válido pasa sin errores", () => {
-    const { error } = createTareaSchema.validate(baseOk)
+    const { error } = createTareaSchema.safeParse(baseOk)
     expect(error).toBeUndefined()
   })
 })
@@ -368,18 +368,18 @@ describe("createTareaSchema — límites de tamaño", () => {
 
 describe("loginSchema — mínimo 8 chars en contraseña", () => {
   it("contraseña < 8 chars → error de validación", () => {
-    const { error } = loginSchema.validate({ email: "a@b.com", password: "short" })
+    const { error } = loginSchema.safeParse({ email: "a@b.com", password: "short" })
     expect(error).toBeDefined()
     expect(error!.message).toMatch(/8/)
   })
 
   it("contraseña exactamente 8 chars → válida", () => {
-    const { error } = loginSchema.validate({ email: "a@b.com", password: "12345678" })
+    const { error } = loginSchema.safeParse({ email: "a@b.com", password: "12345678" })
     expect(error).toBeUndefined()
   })
 
   it("contraseña vacía → error requerido", () => {
-    const { error } = loginSchema.validate({ email: "a@b.com", password: "" })
+    const { error } = loginSchema.safeParse({ email: "a@b.com", password: "" })
     expect(error).toBeDefined()
   })
 })

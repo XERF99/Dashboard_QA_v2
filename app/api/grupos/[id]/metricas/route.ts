@@ -1,17 +1,15 @@
 // ── GET /api/grupos/[id]/metricas — métricas de un grupo (owner)
-import { NextRequest, NextResponse } from "next/server"
-import { requireAuth } from "@/lib/backend/middleware/auth.middleware"
+import { NextResponse } from "next/server"
+import { withAuth } from "@/lib/backend/middleware/with-auth"
+import { ForbiddenError } from "@/lib/backend/errors"
 import { getMetricasGrupo } from "@/lib/backend/services/grupo.service"
 
-export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const payload = await requireAuth(request)
-  if (payload instanceof NextResponse) return payload
-
+export const GET = withAuth(async (_request, payload, ctx) => {
   if (payload.rol !== "owner") {
-    return NextResponse.json({ error: "Solo el Owner puede consultar métricas de grupos" }, { status: 403 })
+    throw new ForbiddenError("Solo el Owner puede consultar métricas de grupos")
   }
 
-  const { id } = await params
+  const { id } = await ctx!.params
   const metricas = await getMetricasGrupo(id)
   return NextResponse.json({ metricas })
-}
+})

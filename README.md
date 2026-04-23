@@ -1,4 +1,4 @@
-# QAControl — Dashboard de Gestión de Pruebas · v2.68
+# QAControl — Dashboard de Gestión de Pruebas · v2.80
 
 Sistema integral de gestión de calidad para equipos QA. Permite administrar Historias de Usuario, casos de prueba, flujos de aprobación, bloqueos y carga ocupacional del equipo, con control de acceso basado en roles.
 
@@ -442,6 +442,456 @@ Los tests E2E **sí requieren** el servidor en `localhost:3000` y la base de dat
 
 ## Changelog
 
+### v2.80 — `/` migrado a Server Component wrapper
+
+Cierra el item grande del backlog: el dashboard interactivo en `/` ahora tiene un wrapper RSC que hace auth check server-side antes de decidir qué renderizar. El body interactivo se mantiene intacto en un archivo cliente separado.
+
+| Área | Archivo | Cambio |
+|---|---|---|
+| **`/` como Server Component** | [app/page.tsx](app/page.tsx) | 30 LOC. Sin `"use client"`. `export default async function DashboardPage()` hace `await getRscAuth()`. Si no hay sesión → renderiza `<LoginScreen />` directamente (el bundle del dashboard NO se carga en esa rama). Si hay sesión → delega en `<DashboardClient />`. |
+| **Body cliente extraído** | [app/_dashboard-client.tsx](app/_dashboard-client.tsx) (nuevo) | Todo el contenido anterior de `page.tsx` (343 LOC: `useDashboardState`, Header, Tabs, dynamic imports, HUDetailProvider, modales). Mismo comportamiento interactivo, mismo fallback defensivo a `<LoginScreen />` si la sesión expira mid-session. |
+| **Tests de migración** | [tests/v280-dashboard-rsc-split.test.ts](tests/v280-dashboard-rsc-split.test.ts) (22 tests) | Valida la boundary: `page.tsx` no importa `useDashboardState`, no importa `next/dynamic`, no usa hooks cliente. `_dashboard-client.tsx` tiene `"use client"`, conserva dynamic imports y `useDashboardState`. Inventario final: 5 rutas RSC (`/`, `/home`, `/overview`, `/kpi`, `/status`). |
+| **Tests adaptados** | `tests/v266-features.test.ts`, `tests/v276-dynamic-rsc.test.ts` | Los 6 asserts que verificaban imports en `app/page.tsx` apuntan ahora a `app/_dashboard-client.tsx` donde vive el código. |
+
+**Resultado: 1244 tests (1222 → +22), 0 errores TS, 0 errores lint. `pnpm build` marca `/` como `ƒ` (dynamic server-rendered) en vez de `○` (static prerender).**
+
+#### Ganancias concretas
+
+1. **Usuarios no autenticados**: el bundle del dashboard (`@dnd-kit`, `recharts`, `CommandPalette`, CSV modals, `CasoPruebaCard` tree) **no se carga**. Sólo llega `<LoginScreen />` con su JS mínimo. Antes: todo el bundle bajaba sin importar el estado de auth.
+2. **Auth check server-side**: si el token falta o expiró, el servidor decide sin esperar a que el cliente hidrate y llame a `/api/auth/me`. No hay flash de "cargando" antes del login screen.
+3. **Boundary clara**: `page.tsx` es el único punto de entrada; `_dashboard-client.tsx` (prefijo `_` evita que Next lo sirva como ruta) vive al lado. Mantenimiento trivial.
+
+#### Topología final
+
+```
+/              Server wrapper (auth check) → <LoginScreen /> o <DashboardClient />
+/home          RSC landing post-login (v2.79)
+/overview      RSC KPIs del workspace (v2.77)
+/kpi           RSC KPIs globales owner-only (v2.77)
+/status        RSC health público (v2.76)
+
+5 rutas RSC en total. El backlog de "migrar / interactivo a shell RSC + body
+client" queda cerrado — la forma ambiciosa del ítem original.
+```
+
+### v2.79 — Dashboard shell RSC + Server Actions
+
+Aborda el item "RSC: dashboard shell" del backlog con una estrategia **incremental y de bajo riesgo**: en vez de migrar el `/` interactivo (2-3 días + alto riesgo), se introduce un shell RSC compartido, una server action de logout, y una nueva `/home` como landing post-login que vive al lado del dashboard existente. Las tres páginas RSC anteriores (`/status`, `/overview`, `/kpi`) adoptan el mismo shell.
+
+| Área | Archivo | Cambio |
+|---|---|---|
+| **RSC shell compartido** | [components/rsc/rsc-shell.tsx](components/rsc/rsc-shell.tsx) (nuevo) | Server Component con header + nav (enlaces condicionales para owner) + user info + form de logout. El nav lleva a `/home`, `/overview`, `/kpi` (sólo owner), `/status`, y al `/` interactivo. **Sin hooks, sin `"use client"`, 0 JS al cliente.** |
+| **Server Action logout** | [app/actions/auth-actions.ts](app/actions/auth-actions.ts) (nuevo) | `"use server"` function `logoutAction()` que invalida el refresh token en DB, registra audit LOGOUT, limpia cookies `tcs_token` + `tcs_refresh`, y redirige a `/`. Invocable desde `<form action={logoutAction}>` — **funciona sin JS** (POST nativo del navegador). |
+| **Nueva `/home`** | [app/home/page.tsx](app/home/page.tsx) (nuevo) | Landing RSC post-login con saludo dinámico ("Buenos días/tardes/noches"), 4 tarjetas top-line (historias, casos, tareas, bloqueos), y accesos rápidos al resto de vistas RSC + al dashboard interactivo. Scope automático por `payload.grupoId`. |
+| **Refactor RSC existentes** | `/status`, `/overview`, `/kpi` | Los 3 ahora usan `<RscShell user={auth} workspaceName={...}>`. Consistencia visual, nav unificada, logout en todas. |
+| **Tests** | [tests/v279-rsc-shell.test.ts](tests/v279-rsc-shell.test.ts) (28 tests) | Valida: shell sin `"use client"`, shell expone nav + logout form, server action tiene `"use server"` + limpia cookies + redirect + audit, `/home` consulta Prisma, los 3 RSC existentes usan el shell, invariante global "4 páginas RSC". |
+
+**Resultado: 1222 tests (1194 → +28), 0 errores TS, 0 errores lint, `pnpm build` OK con 4 rutas RSC (`/status`, `/overview`, `/kpi`, `/home`).**
+
+#### Topología post-v2.79
+
+```
+/               Dashboard interactivo (client, con tabs + modales)
+                └ intocado en v2.79 — riesgo: 0
+/home           RSC landing post-login (server, 0 KB JS shell)
+/overview       RSC KPIs del workspace del usuario
+/kpi            RSC KPIs globales (owner-only)
+/status         RSC health público
+```
+
+El usuario navega libremente entre las 4 páginas RSC (todas comparten shell) y el dashboard interactivo en `/`. El logout desde cualquier RSC funciona sin cargar JS del dashboard — útil para usuarios con conexiones lentas o dispositivos modestos.
+
+#### Patrón Server Action
+
+Primera vez que el proyecto usa server actions. Ventajas sobre `/api/*`:
+
+- **Zero JS cliente**: un `<form action={serverAction}>` funciona sin hidratación.
+- **Tipos end-to-end**: la firma de la action es TypeScript, no hay que escribir DTOs.
+- **Redirects nativos**: `redirect()` de `next/navigation` redirige desde el servidor.
+- **Cookies directas**: `cookies()` de `next/headers` sin pasar por headers HTTP.
+
+Próximos candidatos para server actions en v2.80+: mutaciones de `/overview` (archivar workspace, marcar HU como completada desde la vista RSC).
+
+### v2.78 — Service interfaces completas (7/7) + guía de provisioning Redis
+
+Cierra el item **service interfaces** del backlog: los 7 servicios restantes (`sprint`, `grupo`, `notificacion`, `auth`, `config`, `metricas`, `audit`) ahora exponen `interface XService` + `const xService: XService = {...}` siguiendo el patrón establecido en v2.73 para `historia`/`caso`/`tarea`. Suma una guía paso a paso para encender Redis en producción.
+
+| Área | Archivo | Cambio |
+|---|---|---|
+| **SprintService** | [sprint.service.ts](lib/backend/services/sprint.service.ts) | 6 métodos (`getAll`, `getById`, `getActivo`, `create`, `update`, `delete`) |
+| **GrupoService** | [grupo.service.ts](lib/backend/services/grupo.service.ts) | 7 métodos incluyendo `getMetricasGrupo` + `getMetricasGlobales` |
+| **NotificacionService** | [notificacion.service.ts](lib/backend/services/notificacion.service.ts) | 5 métodos + helper puro `rolToDestinatario` |
+| **AuthService** | [auth.service.ts](lib/backend/services/auth.service.ts) | 6 métodos (`login`, `logout`, `cambiarPassword`, `createUser`, `resetPassword`, `desbloquearUsuario`) |
+| **ConfigService** | [config.service.ts](lib/backend/services/config.service.ts) | 2 métodos (`get`, `update` con upsert por grupo) |
+| **MetricasService** | [metricas.service.ts](lib/backend/services/metricas.service.ts) | 1 método (`get`) con agregaciones en paralelo |
+| **AuditService** | [audit.service.ts](lib/backend/services/audit.service.ts) | 1 método (`write`) fire-and-forget (nunca lanza) |
+| **Guía Redis** | [docs/REDIS_SETUP.md](docs/REDIS_SETUP.md) (nuevo) | Provisioning paso a paso en Upstash + Vercel, verificación del flip, rollback, coste estimado, troubleshooting |
+
+Todas las interfaces son **aditivas** — los exports individuales (`loginService`, `createGrupo`, `audit`, etc.) siguen existiendo y son referencias al mismo método en el objeto default. Cero cambios en los ~30 call-sites.
+
+**Total: 10/10 servicios con interface + instancia** (excluyendo `base-crud.service.ts` que es utilitario).
+
+#### Antes / Después — test de handler
+
+```ts
+// Antes (patrón v2.73) — mock a nivel módulo
+vi.mock("@/lib/backend/services/sprint.service", () => ({
+  getAllSprints: vi.fn().mockResolvedValue({ sprints: [] }),
+  createSprint:  vi.fn(),
+  // ...
+}))
+
+// Después — inyección vía ctx (migración futura, sin vi.mock)
+const mockSprint: SprintService = {
+  getAll: async () => ({ sprints: [], total: 0, page: 1, limit: 50, pages: 0 }),
+  create: async () => ({ id: "test", nombre: "Test" } as unknown as Sprint),
+  // ...
+}
+// handler recibe mockSprint por dependency injection
+```
+
+**Tests**: [tests/v278-service-interfaces.test.ts](tests/v278-service-interfaces.test.ts) — 19 tests que verifican declaración, shape runtime, preservación de exports sueltos, y el invariante global (10 servicios `.service.ts` tienen interface + instancia, sin contar `base-crud`).
+
+**Resultado: 1194 tests (1175 → +19), 0 errores TS, 0 errores lint, coverage 74.24/86.89/70.45/74.24 sobre gate 70/80/70/70.**
+
+### v2.77 — proxy.ts (Next 16) + Redis dep oficial + RSC expandido
+
+Limpia el deprecation warning de Next 16 (`middleware.ts` → `proxy.ts`), convierte `@upstash/redis` en dep oficial del proyecto (no opcional), y expande el patrón RSC con dos rutas nuevas (`/overview`, `/kpi`) que no dependen del bundle cliente.
+
+| Área | Archivo | Cambio |
+|---|---|---|
+| **Rename** | [proxy.ts](proxy.ts) (antes `middleware.ts`) | Renombrado según la convención Next.js 16. Función exportada: `proxy(request)` en vez de `middleware(request)`. Matcher y lógica (auth JWT, CSRF, body-size, request-id) idénticos. Desaparece el warning `"middleware" file convention is deprecated` del build. |
+| **Redis dep oficial** | [package.json](package.json) | `@upstash/redis` ^1.37.0 añadido a `dependencies`. Ya no es opcional. |
+| **Rate-limit simplificado** | [lib/backend/middleware/rate-limit-store.ts](lib/backend/middleware/rate-limit-store.ts) | Eliminado el hack `new Function("p", "return import(p)")` — ahora es un `await import("@upstash/redis")` estático normal. Fallback a memory preservado cuando faltan env vars o falla la inicialización. |
+| **Env template** | [.env.example](.env.example) | Documenta `RATE_LIMIT_BACKEND`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `JWT_SECRET_PREVIOUS`. |
+| **RSC auth helper** | [lib/backend/rsc-auth.ts](lib/backend/rsc-auth.ts) (nuevo) | `getRscAuth()` lee `cookies()` de `next/headers`, verifica el JWT y devuelve el payload (o null). Los Server Components ahora tienen acceso a la auth sin pasar por las helpers de `NextRequest`. |
+| **RSC /overview** | [app/overview/page.tsx](app/overview/page.tsx) (nuevo) | Vista ejecutiva read-only del workspace del usuario. KPIs de HUs / Casos / Tareas + conteo de bloqueos activos. Scope por `payload.grupoId` (el owner ve global). Redirige a `/` si no hay sesión. |
+| **RSC /kpi** | [app/kpi/page.tsx](app/kpi/page.tsx) (nuevo) | KPIs cross-workspace **owner-only**. Tabla por grupo con totales + % completadas / % aprobados, y agregados globales. Usuarios no-owner ven 403 visual. |
+| **Tests nuevos** | [tests/v277-features.test.ts](tests/v277-features.test.ts) (25 tests), [tests/upstash-redis-shape.test.ts](tests/upstash-redis-shape.test.ts) (4 tests) | Verifica: `middleware.ts` desaparecido, `proxy.ts` con función `proxy`, shape `@upstash/redis` compatible con `RedisLike`, RSC auth helper, `/overview` sin hooks cliente y con Prisma, `/kpi` bloquea no-owners, invariante global RSC (3 rutas sin `"use client"`). |
+
+**Resultado: 1175 tests (1146 → +29), 0 errores TS, 0 errores lint, `pnpm build` sin warnings de Next 16. Coverage gate verde: 73.65/86.98/78.68/73.65.**
+
+#### Rutas RSC del proyecto (ahora 3)
+
+| Ruta | Acceso | Datos | JS al cliente |
+|---|---|---|---|
+| `/status` | público | health del sistema + counts totales | 0 KB |
+| `/overview` | autenticado (workspace) | KPIs del workspace del usuario | 0 KB |
+| `/kpi` | owner-only | agregados cross-workspace | 0 KB |
+
+Todas `dynamic = "force-dynamic"` — cada request consulta Prisma fresco. Útiles para dashboards compartibles con stakeholders que sólo necesitan ver números.
+
+#### Activar Redis en producción
+
+La infraestructura está lista. Para encenderlo:
+
+```env
+RATE_LIMIT_BACKEND=redis
+UPSTASH_REDIS_REST_URL=https://<instance>.upstash.io
+UPSTASH_REDIS_REST_TOKEN=AX...
+```
+
+Si los env vars faltan o la inicialización falla, `logger.warn` + fallback a `MemoryRateLimitStore` — nunca rompe el boot.
+
+### v2.76 — Dynamic imports + React Server Components (proof-of-concept)
+
+Quinta y última fase del plan incremental v2.72 → v2.76. Recorta el JS inicial del cliente moviendo paneles pesados a `next/dynamic` y establece el patrón de React Server Components con una ruta `/status` 100 % server-rendered.
+
+| Área | Archivo | Cambio |
+|---|---|---|
+| **`HistoriasKanban` dinámico** | [components/dashboard/historias/historias-table.tsx](components/dashboard/historias/historias-table.tsx) | `@dnd-kit` (~60 KB) ya no entra al bundle inicial — se carga sólo al activar vista Kanban. `ssr:false` + loading placeholder. |
+| **Modales CSV dinámicos** | [app/page.tsx](app/page.tsx) | `CSVImportModal` + `CSVImportCasosModal` cargan a demanda al abrir el importador (parsers de CSV + lógica de validación pesada). |
+| **`HUForm` dinámico** | [app/page.tsx](app/page.tsx) | Formulario de creación/edición de HU se carga sólo al abrir el drawer. |
+| **`HistoriaUsuarioDetail` dinámico** | [app/page.tsx](app/page.tsx) | Drawer de detalle HU (arrastra el árbol `CasoPruebaCard` + sub-paneles) — evita meter todo al mount inicial. |
+| **RSC proof-of-concept** | [app/status/page.tsx](app/status/page.tsx) (nuevo) | Página `/status` pública 100 % server-rendered: `async function` sin `"use client"`, sin hooks, consulta Prisma directamente y envía HTML estático al cliente (0 KB de JS). `export const dynamic = "force-dynamic"` para tiempo real. |
+| **Tests nuevos** | [tests/v276-dynamic-rsc.test.ts](tests/v276-dynamic-rsc.test.ts) (17 tests) | Verifica cada dynamic import (sintaxis + no-import-estático), el shape RSC de `/status` (sin `"use client"`, usa Prisma, sin hooks), e invariantes de bundle (app/page.tsx no importa `@dnd-kit`/`jspdf`/`html2canvas` estáticamente). |
+
+**Resultado: 1146 tests (1129 → +17), 0 errores TS, 0 errores lint, coverage gate verde. `pnpm build` OK, `/status` listado como ruta dinámica RSC.**
+
+#### Patrón RSC establecido
+
+La página `/status` demuestra que una ruta Next.js puede ser puramente servidor sin perder acceso a datos:
+
+```tsx
+// app/status/page.tsx — sin "use client", sin hooks
+import { prisma } from "@/lib/backend/prisma"
+
+export const dynamic = "force-dynamic"
+
+export default async function StatusPage() {
+  const [h, c, t, u] = await Promise.all([
+    prisma.historiaUsuario.count({ where: { deletedAt: null } }),
+    prisma.casoPrueba.count({ where: { deletedAt: null } }),
+    // ...
+  ])
+  return <main>{/* HTML estático — 0 KB de JS al cliente */}</main>
+}
+```
+
+Los próximos candidatos RSC (v2.77+) son los paneles read-only del dashboard:
+- `components/dashboard/analytics/charts-panel` — datos precomputados.
+- `components/dashboard/owner/global-kpi` — KPIs sin interactividad.
+- Shell estático del dashboard (sidebar sin estado cliente).
+
+La regla: quitar `"use client"` sólo del wrapper; las hojas interactivas (formularios, acciones) lo mantienen. `SidebarProvider` se aísla a la rama que lo necesita.
+
+#### Notas
+
+Next.js 16 introduce deprecation warning: `"middleware.ts" → "proxy.ts"`. Fuera de scope de esta fase — migraremos en su momento. No afecta al comportamiento actual.
+
+### v2.75 — Split de componentes > 500 LOC + memoización
+
+Cuarta fase del plan incremental. Cierra el objetivo de **0 componentes > 500 LOC** (5 archivos partidos en 15 sub-piezas), aplica `React.memo` en filas/items de tablas y reduce boilerplate en el código UI.
+
+| Componente original | LOC antes | LOC después | Sub-piezas nuevas |
+|---|---|---|---|
+| [casos-table.tsx](components/dashboard/casos/casos-table.tsx) | 560 | **329** | `casos-row` (memo), `casos-card-mobile` (memo), `casos-filters-panel`, `caso-aprobacion-cfg` |
+| [caso-prueba-card.tsx](components/dashboard/casos/caso-prueba-card.tsx) | 628 | **431** | `tarea-item`, `tarea-form-fields`, `caso-intentos-historial` |
+| [bloqueos-panel.tsx](components/dashboard/shared/bloqueos-panel.tsx) | 519 | **247** | `bloqueos-row`, `bloqueos-export` (CSV + PDF) |
+| [user-management.tsx](components/dashboard/usuarios/user-management.tsx) | 567 | **368** | `user-row` (memo), `user-workspace-dialogs` |
+| [components/ui/sidebar.tsx](components/ui/sidebar.tsx) | 726 | **353** | `sidebar-provider` (context + provider), `sidebar-menu` (9 piezas Menu*) |
+| **Total** | **3000** | **1728** | **+14 archivos** |
+
+**Beneficios medibles:**
+- `React.memo` en `CasosRow`, `CasosCardMobile`, `UserRow` — filas dejan de re-renderizar al cambiar estado del orchestrador (selección, paginación).
+- `useCallback` en handlers del orchestrador para mantener referencias estables hacia los memoizados.
+- Cada sub-pieza es testeable en aislamiento.
+- `sidebar.tsx` (shadcn primitive) queda limpio: `sidebar-provider` concentra context + shortcut de teclado, `sidebar-menu` concentra las 9 piezas del menú.
+
+**Barrel preservado.** `components/ui/sidebar.tsx` sigue re-exportando los 24 símbolos originales (`Sidebar`, `SidebarProvider`, `SidebarMenu*`, etc.) — cero cambios en los ~40 consumidores.
+
+**Tests nuevos**: [tests/v275-component-splits.test.ts](tests/v275-component-splits.test.ts) (22 tests): verifica cada extracción, uso de `React.memo`, barrel de sidebar, y el invariante global de que **ningún archivo en `components/` o `lib/` supera 500 LOC**.
+
+**Resultado: 1129 tests (1107 → +22), 0 errores TS, 0 errores lint, coverage 73.71/86.81/78.51/73.71 sobre gate 70/80/70/70.**
+
+### v2.74 — Unificación validadores Joi → Zod + tipos inferidos
+
+Tercera fase del plan incremental. Unifica todo el stack de validación en Zod (forms + API), elimina ~50 KB de bundle server-side y hace que los DTOs se inferen automáticamente desde los schemas — fin de la duplicación entre `lib/types/` y `lib/backend/validators/`.
+
+| Área | Archivo | Descripción |
+|---|---|---|
+| **`requireBody` con Zod** | [lib/backend/middleware/guards.ts](lib/backend/middleware/guards.ts) | Acepta `ZodTypeAny` en vez de `Joi.ObjectSchema<T>`. Aplica `.strict()` por defecto (rechaza claves desconocidas, matching semántica Joi). Con `{ allowUnknown: true }` usa `.passthrough()`. Devuelve `z.infer<T>` (tipo autoinferido). Mapea `ZodIssue[]` a `ValidationError.details[]` con el formato `"path: mensaje"`. |
+| **5 validadores migrados** | [auth.validator.ts](lib/backend/validators/auth.validator.ts), [historia.validator.ts](lib/backend/validators/historia.validator.ts), [caso.validator.ts](lib/backend/validators/caso.validator.ts), [tarea.validator.ts](lib/backend/validators/tarea.validator.ts), [config.validator.ts](lib/backend/validators/config.validator.ts) | Todos los schemas de Joi → Zod. Cada archivo exporta `z.infer<typeof schema>` como DTO tipado: `CreateHistoriaDTO`, `UpdateHistoriaDTO`, `CreateCasoDTO`, `UpdateCasoDTO`, `CreateTareaDTO`, `UpdateTareaDTO`, `LoginDTO`, `CreateUserDTO`, `UpdateUserDTO`, `CambiarPasswordDTO`, `UpdateConfigDTO`. Enums tipados (`z.enum([...])`) reemplazan `Joi.valid(...)`. |
+| **Dependencia eliminada** | [package.json](package.json) | `joi` removido (`18.1.2` → ausente). Bundle server-side más liviano. Cero referencias a `Joi` en `lib/` (verificado por test). |
+| **Mocks de test** | `tests/v257-features.test.ts`, `tests/v258-features.test.ts` | 9 mocks del patrón Joi (`validate: vi.fn().mockReturnValue({ error, value })`) migrados al patrón Zod (`safeParse: vi.fn().mockReturnValue({ success, data })`). |
+| **Tests adaptados** | `tests/v255-features.test.ts`, `tests/v257-features.test.ts`, `tests/v259-features.test.ts` | 40+ calls a `.validate()` → `.safeParse()`. El shape `{ error }` se preserva (Zod devuelve `error?: ZodError` cuando `success: false`). |
+| **Test nuevo** | [tests/validators-zod.test.ts](tests/validators-zod.test.ts) | 26 tests — absence de Joi, tipos inferidos exportados, runtime de cada validador (defaults, enums, complejidad password), `requireBody` con Zod (strict, passthrough, error mapping), `package.json` sin joi. |
+
+**Resultado: 1107 tests (1081 → +26), 0 errores TS, 0 errores lint, coverage 73.71/86.81/78.51/73.71 sobre el gate 70/80/70/70.**
+
+#### Antes / Después — DTO inferido
+
+```ts
+// Antes — schema Joi + DTO manual duplicado
+// lib/backend/validators/historia.validator.ts
+export const createHistoriaSchema = Joi.object({
+  codigo:      Joi.string().trim().max(50).required(),
+  titulo:      Joi.string().trim().max(500).required(),
+  prioridad:   Joi.string().valid("critica", "alta", "media", "baja").default("media"),
+  // ...
+})
+// lib/types/index.ts (separado)
+export interface CreateHistoriaDTO {
+  codigo:    string
+  titulo:    string
+  prioridad: "critica" | "alta" | "media" | "baja"
+  // ... ← se desincroniza fácilmente
+}
+
+// Después — schema Zod con tipo inferido; una sola fuente de verdad
+export const createHistoriaSchema = z.object({
+  codigo:      z.string().trim().max(50),
+  titulo:      z.string().trim().max(500),
+  prioridad:   z.enum(["critica", "alta", "media", "baja"]).default("media"),
+  // ...
+})
+export type CreateHistoriaDTO = z.infer<typeof createHistoriaSchema>
+// ← el tipo siempre coincide con el schema
+```
+
+#### Antes / Después — error mapping
+
+```ts
+// Antes — Joi details[].message
+{ error: "codigo es obligatorio, titulo debe ser string",
+  details: ["codigo es obligatorio", "titulo debe ser string"] }
+
+// Después — Zod con path explícito
+{ error: "codigo: Required, titulo: Expected string, received number",
+  details: ["codigo: Required", "titulo: Expected string, received number"],
+  requestId: "abc-123" }
+```
+
+### v2.73 — Rate-limit pluggable + service interfaces + índices Prisma
+
+Segunda fase del plan incremental. Arregla el bug latente del rate-limit in-memory (laxo con N réplicas), habilita tests de handlers sin `vi.mock` de módulo, y acelera tres queries frecuentes del dashboard.
+
+| Área | Archivo | Descripción |
+|---|---|---|
+| **RateLimitStore abstracción** | [lib/backend/middleware/rate-limit-store.ts](lib/backend/middleware/rate-limit-store.ts) | Interface `RateLimitStore.check(key, limit, windowMs): Promise<RateLimitResult>` con dos implementaciones: `MemoryRateLimitStore` (default, delega al `checkRateLimit` in-process) y `RedisRateLimitStore` (INCR + PEXPIRE atómico contra un `RedisLike`). Factory `getRateLimitStore()` lazy + cacheada. Activable con `RATE_LIMIT_BACKEND=redis` + `UPSTASH_REDIS_REST_URL`/`TOKEN`. Dep opcional — import dinámico tolerante a ausencia. |
+| **Guards async** | [lib/backend/middleware/guards.ts](lib/backend/middleware/guards.ts) | `requireRateLimit` pasa a `async` (devuelve `Promise<void>`). Los 22 archivos de rutas API (30 call-sites) actualizados a `await requireRateLimit(...)`. Cambio necesario para permitir backends async (Redis) en runtime Edge/Node. |
+| **Service interfaces** | [historia.service.ts](lib/backend/services/historia.service.ts), [caso.service.ts](lib/backend/services/caso.service.ts), [tarea.service.ts](lib/backend/services/tarea.service.ts) | Añadidas interfaces `HistoriaService`, `CasoService`, `TareaService` + objetos default (`historiaService`, `casoService`, `tareaService`). Puramente aditivo — los exports individuales siguen existiendo. Habilita mockeo por inyección en futuras refactors. |
+| **Índices Prisma** | [prisma/migrations/20260422000000_v2_73_performance_indexes](prisma/migrations/20260422000000_v2_73_performance_indexes/migration.sql) | 3 índices parciales: `audit_log_grupo_timestamp_idx` (admin viewer paginado), `historias_usuario_grupo_fecha_idx` (dashboard principal), `tareas_asignado_estado_idx` ("mis tareas pendientes"). Patrón v2.65 (raw SQL, idempotente con IF NOT EXISTS). |
+| **Tests nuevos** | `tests/rate-limit-store.test.ts` (13), `tests/service-interfaces.test.ts` (11), `tests/guards-async.test.ts` (27) | 51 tests — memory/redis stores, factory lazy, cacheado, fallback, rutas API usan `await`, migración SQL idempotente. |
+| **Tests adaptados** | `tests/backend-guards.test.ts` | Tres tests actualizados a firma async (`.rejects.toBeInstanceOf(RateLimitError)`). |
+
+**Resultado: 1081 tests (1030 → +51), 0 errores TS, 0 errores lint, coverage 73/87/78/73 sobre el gate 70/80/70/70.**
+
+#### Antes / Después — rate-limit backend
+
+```ts
+// Antes — Map in-process compartido entre réplicas vía cold-start azar.
+// Con N instancias en Vercel, el límite efectivo era ~N × el configurado.
+const rl = checkRateLimit(key, 60, 60_000)
+if (!rl.allowed) return NextResponse.json(..., { status: 429 })
+
+// Después — backend pluggable; el mismo call-site funciona sin Redis
+// (memoria) o con Redis (atómico, multi-instancia).
+await requireRateLimit(request, "POST /api/casos", 60, 60_000)
+// Cambiar a Redis: set RATE_LIMIT_BACKEND=redis + credenciales Upstash.
+// Sin cambios de código — `getRateLimitStore()` resuelve el backend.
+```
+
+#### Activar Redis en producción
+
+```env
+RATE_LIMIT_BACKEND=redis
+UPSTASH_REDIS_REST_URL=https://...
+UPSTASH_REDIS_REST_TOKEN=...
+```
+
+Y añadir la dep: `pnpm add @upstash/redis`. Si falla la inicialización, se emite `logger.warn` y cae a `MemoryRateLimitStore` sin romper la petición.
+
+### v2.72 — Observabilidad (request-id tracing) + coverage gate + split de tipos
+
+Primera fase del plan de optimización incremental. Tres cambios de bajo riesgo que desbloquean fases posteriores:
+
+| Área | Archivo | Descripción |
+|---|---|---|
+| **Request ID tracing** | [proxy.ts](proxy.ts) | Genera `x-request-id` si la petición no lo trae (o valida el entrante ≤128 chars). Lo propaga hacia los handlers vía `forwardedHeaders` y lo devuelve en el header de respuesta. Los errores del middleware (401/403/413) incluyen `requestId` en el body. |
+| **Wrappers con ALS** | [lib/backend/middleware/with-auth.ts](lib/backend/middleware/with-auth.ts) | `withAuth`, `withAuthAdmin` y `withErrorHandler` envuelven el handler en `runWithRequestId(requestId, …)`. Todo log emitido durante la petición lleva el `requestId` automáticamente. |
+| **Errores con requestId** | [lib/backend/errors.ts](lib/backend/errors.ts) | `HttpError.toResponse()` lee `getRequestId()` del `AsyncLocalStorage` y lo incluye en el body (`{ error, requestId }`) y en el header `x-request-id`. Funciona para las 7 subclases, incluyendo `ValidationError` (con `details`) y `RateLimitError` (sin pisar `Retry-After`). |
+| **Coverage gate** | [vitest.config.ts](vitest.config.ts), [package.json](package.json) | `include` limitado a `lib/backend/**` + `app/api/**` (scope testeado hoy). Thresholds: lines 70, functions 70, branches 80, statements 70 (baseline ~3 pts por debajo de actual: 73/77/87/73). Script `ci` ahora ejecuta `test:coverage` en vez de `test:run`. |
+| **Split de tipos** | [lib/types/](lib/types/) | `index.ts` (347 LOC) dividido en 10 submódulos: `brand`, `common`, `config`, `historia`, `caso`, `tarea`, `sprint`, `user`, `notificacion`, `api`. Ningún submódulo supera 120 LOC. El barrel file sólo re-exporta, preservando compatibilidad con imports existentes. |
+| **ESLint** | [eslint.config.mjs](eslint.config.mjs) | Ignora `.claude/worktrees/**` (worktrees temporales) + añade Node globals para archivos `.mjs/.cjs/.js` de config raíz. Pipeline `pnpm ci` pasa 100 %. |
+| **Tests nuevos** | `tests/request-id.test.ts`, `tests/middleware-request-id.test.ts`, `tests/types-split.test.ts` | 26 tests: propagación ALS, scopes anidados, serialización de errores con `requestId`, header `x-request-id` en respuesta, re-export del barrel, contenido de cada submódulo de tipos. |
+
+**Resultado: 1030 tests (1004 → +26), 0 errores TS, 0 errores lint, coverage gate verde.**
+
+#### Ejemplo — correlación cliente↔servidor
+
+Request entra sin `x-request-id`:
+
+```
+→ POST /api/historias
+Middleware: genera 7f599ed8-ac22-413d-b43a-08746425a4c3
+Handler: runWithRequestId("7f599ed8…", async () => {
+  // Si algo falla aquí, el log se emite con [7f599ed8…]
+  // y la respuesta 500 incluye { error, requestId: "7f599ed8…" }
+})
+← 500 { error: "DB down", requestId: "7f599ed8…" }
+   header x-request-id: 7f599ed8…
+```
+
+El cliente captura el `requestId` del body o header y lo reporta en soporte; el operador lo busca en los logs y localiza la traza completa.
+
+### v2.71 — Decoradores de ruta + errores HTTP tipados
+
+Se introducen dos nuevas piezas de infraestructura para la capa API: una jerarquía de errores HTTP tipados y una capa de *guards* que encapsulan las validaciones recurrentes (rate-limit, body, workspace) en funciones que lanzan excepciones y se serializan automáticamente en el `withAuth` wrapper. El objetivo es eliminar la duplicación del patrón `if (!ok) return NextResponse.json(...)` que aparecía 4–8 veces por handler.
+
+| Area | Archivo | Descripcion |
+|---|---|---|
+| **Errores tipados** | [lib/backend/errors.ts](lib/backend/errors.ts) | 96 LOC. Clase base `HttpError` + 7 subclases (`UnauthorizedError 401`, `ForbiddenError 403`, `NotFoundError 404`, `ValidationError 400` con `details[]`, `ConflictError 409`, `UnprocessableEntityError 422`, `RateLimitError 429` con `Retry-After` + `X-RateLimit-*`). `NotFoundError` genera mensaje español con género gramatical según la entidad |
+| **Guards** | [lib/backend/middleware/guards.ts](lib/backend/middleware/guards.ts) | `requireRateLimit`, `requireBody` (Joi), `requireHU`/`requireCaso`/`requireTarea` (con opción `asUnprocessable` para 422 en CREATE de recursos dependientes). Cada guard lanza el `HttpError` adecuado y es capturado por `withAuth` |
+| **withAuth + withErrorHandler** | [lib/backend/middleware/with-auth.ts](lib/backend/middleware/with-auth.ts) | `withAuth` y `withAuthAdmin` ahora capturan `HttpError` y lo serializan vía `toResponse()`. Se añade `withErrorHandler` para endpoints públicos (login, refresh, health) |
+| **Migración de rutas API** | [app/api/**/route.ts](app/api/) | ~30 rutas migradas. Eliminados ~25 bloques repetitivos de `checkRateLimit`, ~20 bloques de `request.json().catch(() => null)` + validación manual, ~40 instancias de `NextResponse.json({error}, {status: 4xx})` |
+| **Tests errores** | [tests/backend-errors.test.ts](tests/backend-errors.test.ts) | 13 tests — status codes, serialización, headers de rate limit, género gramatical, cadena `instanceof HttpError` |
+| **Tests guards** | [tests/backend-guards.test.ts](tests/backend-guards.test.ts) | 16 tests — rate limit por IP y por usuario, validación Joi con `allowUnknown`, body inválido, workspace isolation con opción `asUnprocessable` |
+
+**Resultado: 0 errores TypeScript. 1004 tests totales, 1004 pasando (100%).** Se corrigieron 3 tests pre-existentes que quedaron desactualizados por el cambio de patrón (`v256-features.test.ts`, `v263-features.test.ts`, `v266-features.test.ts`, `v267-features.test.ts`).
+
+#### Antes / Después
+
+```ts
+// Antes — ~10 líneas de boilerplate por handler
+export const POST = withAuth(async (request, payload) => {
+  const ip = getClientIp(request.headers)
+  const rl = checkRateLimit(rlKey(ip, "POST /api/casos"), 120, 60_000)
+  if (!rl.allowed) return NextResponse.json({ error: "..." }, { status: 429, headers: {...} })
+
+  const body = await request.json().catch(() => null)
+  if (body === null) return NextResponse.json({ error: "Body JSON inválido" }, { status: 400 })
+  const { error, value } = createCasoSchema.validate(body, { abortEarly: false })
+  if (error) return NextResponse.json({ error: error.details.map(d => d.message).join(", ") }, { status: 400 })
+
+  const hu = await checkHUAccess(value.huId, payload.grupoId)
+  if (!hu) return NextResponse.json({ error: "La Historia de Usuario no existe..." }, { status: 422 })
+
+  const caso = await createCaso(value)
+  return NextResponse.json({ caso }, { status: 201 })
+})
+
+// Después — 4 líneas declarativas
+export const POST = withAuth(async (request, payload) => {
+  requireRateLimit(request, "POST /api/casos", 120, 60_000)
+  const value = await requireBody(request, createCasoSchema)
+  await requireHU(value.huId, payload.grupoId, { asUnprocessable: true })
+
+  const caso = await createCaso(value)
+  return NextResponse.json({ caso }, { status: 201 })
+})
+```
+
+#### Beneficios
+
+- **Menos ruido por handler**: los handlers se leen como pseudocódigo de dominio.
+- **Formato de error consistente**: un solo lugar define `{ error, code?, details? }` + headers de rate-limit.
+- **Status codes semánticos**: 404 vs 422 vs 409 vs 403 ya no dependen de copiar-pegar en cada ruta.
+- **Observabilidad**: cada `HttpError` es traceable por su `name` (ej. `RateLimitError`), facilitando métricas por tipo.
+- **Seguridad**: imposible olvidar el check de workspace — `requireHU` es la única forma "ergonómica" de cargar una HU.
+
+### v2.70 — Command pipeline para handlers de dominio
+
+Se introduce el patrón *Command + Dispatcher* para los handlers de dominio en [lib/hooks/domain/](lib/hooks/domain/). Cada acción ahora se declara como un `CommandResult` con 6 slots opcionales (`historias`, `casos`, `tareas`, `events`, `toast`, `notify`, `api`) y el dispatcher `runCommand` centraliza:
+- combinación de mutación de `historias` + append al `historial` en un solo `setHistorias` (antes: ~20 duplicaciones del patrón `setHistorias(prev => prev.map(h => h.id === huId ? { ...h, historial: [...h.historial, ev] } : h))`).
+- orden fijo de efectos: estado → toast → notify → API (fire-and-forget con `clientWarn` on error).
+- guardas uniformes: un builder que devuelve `null` aborta sin llamar a ningún setter.
+
+| Area | Archivo | Descripcion |
+|---|---|---|
+| **Pipeline** | [lib/hooks/domain/pipeline.ts](lib/hooks/domain/pipeline.ts) | 101 LOC. `CommandResult`, `runCommand`, `defineCommand<Args>()`. Patrón Command + dispatcher |
+| **Migración casos** | [lib/hooks/domain/casoHandlers.ts](lib/hooks/domain/casoHandlers.ts) | 13 handlers convertidos a `defineCommand`. Elimina la duplicación del `setHistorias(prev => prev.map(h => h.id === huId ? { ...h, historial: [...h.historial, ev] } : h))` repetido 12 veces |
+| **Migración HU** | [lib/hooks/domain/huHandlers.ts](lib/hooks/domain/huHandlers.ts) | 11 handlers migrados. Se conservaron imperativos `handleIniciarHU` y `handleAvanzarEtapa` porque la transición depende de estado previo calculado dentro del map |
+| **Migración tareas** | [lib/hooks/domain/tareaHandlers.ts](lib/hooks/domain/tareaHandlers.ts) | 6 handlers migrados — incluye guardas (`return null`) cuando la tarea no existe |
+| **Migración bloqueos** | [lib/hooks/domain/bloqueoHandlers.ts](lib/hooks/domain/bloqueoHandlers.ts) | 4 handlers migrados, `notify` ahora declarativo |
+| **Migración comentarios** | [lib/hooks/domain/comentarioHandlers.ts](lib/hooks/domain/comentarioHandlers.ts) | 2 handlers migrados |
+| **Tests pipeline** | [tests/pipeline.test.ts](tests/pipeline.test.ts) | 10 tests nuevos — cubren mutaciones, events, null-abort, toast, notify, API fire-and-forget |
+
+**Resultado: 0 errores TypeScript. 974 tests totales, 972 pasando (mismo gap pre-existente v267 por CRLF en Windows).** Los 80 tests de handlers existentes siguen pasando sin cambios — la firma pública de `create*Handlers(ctx).handleXxx(...)` se preservó intacta.
+
+#### Beneficios del patrón
+
+- **Observabilidad**: un único punto para instrumentar todas las acciones de dominio (futuro: `redo/undo`, audit trail, analytics de UX).
+- **Consistencia**: imposible olvidar el toast, la notificación o el `clientWarn` del API fallido.
+- **Menos ruido**: los handlers declaran *qué* debe pasar, no *cómo* orquestarlo.
+
+### v2.69 — Split de componentes grandes, memoización, logger estructurado, scripts CI
+
+| Area | Archivo | Descripcion |
+|---|---|---|
+| **Split HistoriasTable** | `components/dashboard/historias/historias-row.tsx` | Fila memoizada con `React.memo` — evita re-render por cambio de selección en otras filas |
+| **Split HistoriasTable** | `components/dashboard/historias/historias-filters-panel.tsx` | Panel de filtros extraído (8 selects + rango de fechas) |
+| **Split HistoriasTable** | `components/dashboard/historias/historias-bulk-action-select.tsx` | Dropdown de acción masiva reutilizable |
+| **Split HistoriasTable** | `components/dashboard/historias/historia-urgencia-badge.tsx` | Badge de urgencia por fecha límite |
+| **Split HistoriasTable** | `components/dashboard/historias/historias-table.tsx` | De 735 → 429 LOC (orquestador delgado). `toggleSelect` y `clearSelection` con `useCallback` para estabilidad de referencia en el memo de la fila |
+| **Logger estructurado** | `lib/client-logger.ts` | Añadido `clientWarn` además de `clientError` — JSON estructurado en producción, formato legible en dev |
+| **Logger estructurado** | `lib/hooks/useConfig.ts`, `lib/hooks/useApiMirroredState.ts`, `lib/hooks/domain/{casoHandlers,tareaHandlers,huHandlers}.ts` | Reemplazados `console.warn` ad-hoc por `clientWarn(context, msg, err)` para observabilidad uniforme |
+| **Scripts CI** | `package.json` | Agregados `typecheck`, `format`, `test:coverage`, `ci` (typecheck + lint + test + build) |
+| **Documentación** | `docs/ARCHITECTURE.md`, `docs/OPTIMIZATIONS.md` | Arquitectura modular con diagramas y plan de optimización priorizado |
+| **Tests** | `tests/historias-table-split.test.tsx` | 18 tests de regresión que validan el contrato público de los 4 sub-componentes extraídos |
+
+**Resultado: 0 errores TypeScript. 964 tests totales, 962 pasando (2 pre-existentes `v267` por CRLF en Windows, no introducidos por v2.69).**
+
 ### v2.68 — Type Safety, Centralized Parsers, API Route Constants, Refactoring Roadmap
 
 #### Cambios completados
@@ -571,7 +1021,7 @@ Los tests E2E **sí requieren** el servidor en `localhost:3000` y la base de dat
 | **Refresh Token** | `app/api/auth/login/route.ts` | Login ahora emite cookie `tcs_refresh` (httpOnly, strict, scoped a `/api/auth/refresh`) |
 | **Refresh Token** | `lib/contexts/auth-context.tsx` | Silent refresh: polling 401 intenta refresh antes de marcar `sessionExpired` |
 | **Refresh Token** | `app/api/auth/logout/route.ts` | Logout limpia cookie `tcs_refresh` |
-| **CSRF** | `middleware.ts` | Validacion Origin/Referer en requests mutantes (POST/PUT/PATCH/DELETE) — 403 si origen no coincide con host |
+| **CSRF** | `proxy.ts` | Validacion Origin/Referer en requests mutantes (POST/PUT/PATCH/DELETE) — 403 si origen no coincide con host |
 | **Docker** | `Dockerfile` | Multi-stage build (deps → builder → runner) con standalone output, non-root user, migrations en startup |
 | **Docker** | `docker-compose.yml` | Produccion: app + PostgreSQL con healthcheck, variables requeridas via `${VAR:?error}` |
 | **Docker** | `.dockerignore` | Excluye node_modules, .next, tests, .git del contexto de build |
@@ -630,8 +1080,8 @@ Los tests E2E **sí requieren** el servidor en `localhost:3000` y la base de dat
 | Área | Archivo | Descripción |
 |---|---|---|
 | **Integridad de datos** | `lib/backend/services/historia.service.ts` | `deleteHistoria()` ahora usa `$transaction()` para soft-delete en cascada: HU + todos sus casos + todas sus tareas en una operación atómica |
-| **Seguridad** | `middleware.ts` | Límite de body size (1 MB) — requests con `Content-Length` > 1 MB reciben 413 antes de procesarse |
-| **Seguridad** | `middleware.ts`, `lib/backend/middleware/auth.middleware.ts` | Rotación de JWT: soporta `JWT_SECRET_PREVIOUS` para verificar tokens firmados con el secreto anterior durante ventana de rotación |
+| **Seguridad** | `proxy.ts` | Límite de body size (1 MB) — requests con `Content-Length` > 1 MB reciben 413 antes de procesarse |
+| **Seguridad** | `proxy.ts`, `lib/backend/middleware/auth.middleware.ts` | Rotación de JWT: soporta `JWT_SECRET_PREVIOUS` para verificar tokens firmados con el secreto anterior durante ventana de rotación |
 | **Observabilidad** | `app/api/health/route.ts` | Health check profundo: valida conectividad DB (`SELECT 1`), accesibilidad de tablas (`user.count`), variables de entorno, versión de Node. Status `degraded` (503) si algún check falla |
 | **Búsqueda** | `app/api/historias/route.ts`, `lib/backend/services/historia.service.ts` | Full-text search: parámetro `?q=` busca en `codigo`, `titulo`, `descripcion`, `responsable`, `aplicacion` (case-insensitive, multi-término) |
 | **Export** | `app/api/export/pdf/route.ts` | Nuevo endpoint `GET /api/export/pdf?tipo=historias\|casos` — genera PDF server-side con jsPDF (paginado, con footer, rate limited) |
@@ -661,7 +1111,7 @@ Los tests E2E **sí requieren** el servidor en `localhost:3000` y la base de dat
 
 | Área | Archivo | Descripción |
 |---|---|---|
-| **Seguridad** | `middleware.ts` | Nuevo Next.js Edge Middleware centralizado — verifica JWT antes de llegar a cualquier handler; rutas públicas `/api/auth/login` y `/api/health` exentas |
+| **Seguridad** | `proxy.ts` | Nuevo Next.js Edge Middleware centralizado — verifica JWT antes de llegar a cualquier handler; rutas públicas `/api/auth/login` y `/api/health` exentas |
 | **Seguridad** | `app/api/historias/route.ts`, `casos/route.ts`, `auth/password/route.ts`, `config/route.ts` | `request.json()` protegido con `.catch(() => null)` — body malformado retorna 400 en vez de 500 |
 | **Seguridad** | `app/api/export/route.ts` | `sanitizeFilename()` — parámetros `sprint`/`estado` sanitizados con regex `[^a-zA-Z0-9_-]` antes de inyectar en `Content-Disposition` |
 | **Observabilidad** | `lib/backend/logger.ts` | `AsyncLocalStorage` reemplaza variable global mutable — el `requestId` es thread-safe para requests concurrentes |

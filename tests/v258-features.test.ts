@@ -94,16 +94,16 @@ vi.mock("@/lib/backend/services/auth.service", () => ({
   cambiarPasswordService: vi.fn(),
 }))
 vi.mock("@/lib/backend/validators/caso.validator", () => ({
-  createCasoSchema: { validate: vi.fn().mockReturnValue({ error: null, value: {} }) },
-  updateCasoSchema: { validate: vi.fn().mockReturnValue({ error: null, value: {} }) },
+  createCasoSchema: { safeParse: vi.fn().mockReturnValue({ success: true, data: {} }) },
+  updateCasoSchema: { safeParse: vi.fn().mockReturnValue({ success: true, data: {} }) },
 }))
 vi.mock("@/lib/backend/validators/tarea.validator", () => ({
-  createTareaSchema: { validate: vi.fn().mockReturnValue({ error: null, value: {} }) },
-  updateTareaSchema: { validate: vi.fn().mockReturnValue({ error: null, value: {} }) },
+  createTareaSchema: { safeParse: vi.fn().mockReturnValue({ success: true, data: {} }) },
+  updateTareaSchema: { safeParse: vi.fn().mockReturnValue({ success: true, data: {} }) },
 }))
 vi.mock("@/lib/backend/validators/historia.validator", () => ({
-  createHistoriaSchema: { validate: vi.fn().mockReturnValue({ error: null, value: { titulo: "T" } }) },
-  updateHistoriaSchema: { validate: vi.fn().mockReturnValue({ error: null, value: {} }) },
+  createHistoriaSchema: { safeParse: vi.fn().mockReturnValue({ success: true, data: { titulo: "T" } }) },
+  updateHistoriaSchema: { safeParse: vi.fn().mockReturnValue({ success: true, data: {} }) },
 }))
 vi.mock("@/lib/backend/services/historia.service", () => ({
   getAllHistorias:  vi.fn().mockResolvedValue({ historias: [], total: 0, page: 1, limit: 50, pages: 0 }),

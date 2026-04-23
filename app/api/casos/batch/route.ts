@@ -1,8 +1,9 @@
 // ── PATCH /api/casos/batch — aprobar o rechazar múltiples casos
-import { NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import { z } from "zod"
 import { withAuthAdmin } from "@/lib/backend/middleware/with-auth"
-import { checkRateLimit, getClientIp, rlKey } from "@/lib/backend/middleware/rate-limit"
+import { requireRateLimit } from "@/lib/backend/middleware/guards"
+import { ValidationError } from "@/lib/backend/errors"
 import { prisma } from "@/lib/backend/prisma"
 import { invalidateMetricasCache } from "@/lib/backend/metricas-cache"
 import { audit } from "@/lib/backend/services/audit.service"
@@ -14,31 +15,14 @@ const BatchSchema = z.object({
 })
 
 export const PATCH = withAuthAdmin(async (request, payload) => {
-  const ip = getClientIp(request.headers)
-  const rl = checkRateLimit(rlKey(ip, "POST /api/casos/batch"), 20, 60_000)
-  if (!rl.allowed) {
-    const retryAfterSecs = Math.ceil((rl.resetAt - Date.now()) / 1000)
-    return NextResponse.json(
-      { error: "Demasiadas peticiones. Intenta en un momento." },
-      {
-        status: 429,
-        headers: {
-          "Retry-After":           String(retryAfterSecs),
-          "X-RateLimit-Limit":     "20",
-          "X-RateLimit-Remaining": "0",
-        },
-      }
-    )
-  }
+  await requireRateLimit(request, "POST /api/casos/batch", 20, 60_000)
 
-  const body = await request.json().catch(() => null)
-  const parsed = BatchSchema.safeParse(body)
+  const parsed = BatchSchema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) {
-    return NextResponse.json({ error: "Payload inválido", details: parsed.error.flatten() }, { status: 400 })
+    throw new ValidationError("Payload inválido", parsed.error.issues.map(i => i.message))
   }
   const { ids, accion, motivo } = parsed.data
 
-  // Workspace isolation: only process casos that belong to the admin's workspace
   const whereWorkspace = payload.grupoId
     ? { id: { in: ids }, hu: { grupoId: payload.grupoId } }
     : { id: { in: ids } }

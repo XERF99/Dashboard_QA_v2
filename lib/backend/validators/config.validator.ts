@@ -1,31 +1,32 @@
-import Joi from "joi"
+import { z } from "zod"
 
-const etapaDefSchema = Joi.object({
-  id:    Joi.string().required(),
-  label: Joi.string().required(),
-  cls:   Joi.string().allow("").default(""),
+const etapaDefSchema = z.object({
+  id:    z.string(),
+  label: z.string(),
+  cls:   z.string().default(""),
 })
 
-const resultadoDefSchema = Joi.object({
-  id:            Joi.string().required(),
-  label:         Joi.string().required(),
-  esAceptado:    Joi.boolean().required(),
-  esBase:        Joi.boolean().default(false),
-  cls:           Joi.string().allow("").default(""),
-  icono:         Joi.string().optional().allow(""),
-  maxRetesteos:  Joi.number().integer().min(1).optional().allow(null),
+const resultadoDefSchema = z.object({
+  id:           z.string(),
+  label:        z.string(),
+  esAceptado:   z.boolean(),
+  esBase:       z.boolean().default(false),
+  cls:          z.string().default(""),
+  icono:        z.string().optional(),
+  maxRetesteos: z.number().int().min(1).nullable().optional(),
 })
 
-const tipoDefSchema = Joi.object({
-  id:    Joi.string().required(),
-  label: Joi.string().required(),
+const tipoDefSchema = z.object({
+  id:    z.string(),
+  label: z.string(),
 })
 
-export const updateConfigSchema = Joi.object({
-  etapas:          Joi.object().pattern(Joi.string(), Joi.array().items(etapaDefSchema)).optional(),
-  resultados:      Joi.array().items(resultadoDefSchema).optional(),
-  tiposAplicacion: Joi.array().items(tipoDefSchema).optional(),
-  ambientes:       Joi.array().items(tipoDefSchema).optional(),
-  tiposPrueba:     Joi.array().items(tipoDefSchema).optional(),
-  aplicaciones:    Joi.array().items(Joi.string()).optional(),
+export const updateConfigSchema = z.object({
+  etapas:          z.record(z.string(), z.array(etapaDefSchema)).optional(),
+  resultados:      z.array(resultadoDefSchema).optional(),
+  tiposAplicacion: z.array(tipoDefSchema).optional(),
+  ambientes:       z.array(tipoDefSchema).optional(),
+  tiposPrueba:     z.array(tipoDefSchema).optional(),
+  aplicaciones:    z.array(z.string()).optional(),
 })
+export type UpdateConfigDTO = z.infer<typeof updateConfigSchema>

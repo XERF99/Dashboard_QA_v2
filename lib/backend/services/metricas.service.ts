@@ -124,3 +124,12 @@ export async function getMetricas(grupoId?: string) {
     },
   }
 }
+
+// ── Interface (v2.78) ─────────────────────────────────────────
+export interface MetricasService {
+  get: typeof getMetricas
+}
+
+export const metricasService: MetricasService = {
+  get: getMetricas,
+}

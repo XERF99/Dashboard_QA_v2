@@ -56,3 +56,20 @@ export async function marcarTodasLeidas(destinatario: string, grupoId?: string) 
     data:  { leida: true },
   })
 }
+
+// ── Interface (v2.78) ─────────────────────────────────────────
+export interface NotificacionService {
+  rolToDestinatario:            typeof rolToDestinatario
+  getByDestinatario:            typeof getNotificacionesByDestinatario
+  create:                       typeof createNotificacion
+  marcarLeida:                  typeof marcarLeida
+  marcarTodasLeidas:            typeof marcarTodasLeidas
+}
+
+export const notificacionService: NotificacionService = {
+  rolToDestinatario:            rolToDestinatario,
+  getByDestinatario:            getNotificacionesByDestinatario,
+  create:                       createNotificacion,
+  marcarLeida:                  marcarLeida,
+  marcarTodasLeidas:            marcarTodasLeidas,
+}

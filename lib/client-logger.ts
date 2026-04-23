@@ -10,8 +10,10 @@
 //  Sentry.captureException(err) cuando se configure la telemetría.
 // ═══════════════════════════════════════════════════════════
 
+type ClientLogLevel = "error" | "warn"
+
 interface ClientLogEntry {
-  level:     "error"
+  level:     ClientLogLevel
   context:   string
   message:   string
   timestamp: string
@@ -19,9 +21,9 @@ interface ClientLogEntry {
   stack?:    string
 }
 
-export function clientError(context: string, message: string, err?: unknown): void {
+function emit(level: ClientLogLevel, context: string, message: string, err?: unknown): void {
   const entry: ClientLogEntry = {
-    level:     "error",
+    level,
     context,
     message,
     timestamp: new Date().toISOString(),
@@ -29,10 +31,19 @@ export function clientError(context: string, message: string, err?: unknown): vo
     ...(err != null && !(err instanceof Error) && { error: String(err) }),
   }
 
+  const sink = level === "error" ? console.error : console.warn
+
   if (process.env.NODE_ENV === "production") {
-    // JSON estructurado → capturable por Sentry / Datadog Browser SDK
-    console.error(JSON.stringify(entry))
+    sink(JSON.stringify(entry))
   } else {
-    console.error(`[${entry.timestamp}] ERROR [${context}] ${message}`, err ?? "")
+    sink(`[${entry.timestamp}] ${level.toUpperCase()} [${context}] ${message}`, err ?? "")
   }
+}
+
+export function clientError(context: string, message: string, err?: unknown): void {
+  emit("error", context, message, err)
+}
+
+export function clientWarn(context: string, message: string, err?: unknown): void {
+  emit("warn", context, message, err)
 }

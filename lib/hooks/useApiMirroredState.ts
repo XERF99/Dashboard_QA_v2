@@ -15,6 +15,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { cargarDeStorage, guardarEnStorage } from "@/lib/storage"
+import { clientWarn } from "@/lib/client-logger"
 import type { Dispatch, SetStateAction } from "react"
 
 // Tiempo de espera antes de enviar el sync a la API (ms).
@@ -93,7 +94,7 @@ export function useApiMirroredState<T>(
       syncWithRetry(syncer, state).catch((err: unknown) => {
         const msg = err instanceof Error ? err.message : "Error al sincronizar"
         setSyncError(msg)
-        console.warn(`[ApiMirror] Sync fallido tras reintentos (${storageKey}):`, msg)
+        clientWarn("ApiMirror", `Sync fallido tras reintentos (${storageKey})`, err)
       })
     }, SYNC_DEBOUNCE_MS)
 

@@ -76,7 +76,7 @@ vi.mock("@/lib/backend/services/config.service", () => ({
   updateConfig: vi.fn().mockResolvedValue({}),
 }))
 vi.mock("@/lib/backend/validators/config.validator", () => ({
-  updateConfigSchema: { validate: vi.fn().mockReturnValue({ error: null, value: {} }) },
+  updateConfigSchema: { safeParse: vi.fn().mockReturnValue({ success: true, data: {} }) },
 }))
 vi.mock("@/lib/backend/services/auth.service", () => ({
   loginService:          vi.fn(),
@@ -104,8 +104,8 @@ vi.mock("@/lib/backend/services/historia.service", () => ({
   deleteHistoria:  vi.fn().mockResolvedValue({}),
 }))
 vi.mock("@/lib/backend/validators/historia.validator", () => ({
-  createHistoriaSchema: { validate: vi.fn().mockReturnValue({ error: null, value: {} }) },
-  updateHistoriaSchema: { validate: vi.fn().mockReturnValue({ error: null, value: {} }) },
+  createHistoriaSchema: { safeParse: vi.fn().mockReturnValue({ success: true, data: {} }) },
+  updateHistoriaSchema: { safeParse: vi.fn().mockReturnValue({ success: true, data: {} }) },
 }))
 
 import { checkRateLimit as mockRL } from "@/lib/backend/middleware/rate-limit"
@@ -366,12 +366,12 @@ describe("Auth validators — límites .max()", () => {
     // local(4) + @(1) + domain(247) + .com(4) = 256 — valid format but over .max(254)
     const email = "user@" + "a".repeat(63) + "." + "a".repeat(63) + "." + "a".repeat(63) + "." + "a".repeat(55) + ".com"
     expect(email.length).toBe(256)
-    const { error } = loginSchema.validate({ email, password: "pass1234" })
+    const { error } = loginSchema.safeParse({ email, password: "pass1234" })
     expect(error).toBeDefined()
   })
 
   it("loginSchema: password > 128 chars → error", () => {
-    const { error } = loginSchema.validate({ email: "a@t.com", password: "x".repeat(129) })
+    const { error } = loginSchema.safeParse({ email: "a@t.com", password: "x".repeat(129) })
     expect(error).toBeDefined()
     expect(error!.message).toMatch(/128/)
   })
@@ -380,22 +380,22 @@ describe("Auth validators — límites .max()", () => {
     // local(4) + @(1) + domain(245) + .com(4) = 254 — exactly at limit
     const email = "user@" + "a".repeat(63) + "." + "a".repeat(63) + "." + "a".repeat(63) + "." + "a".repeat(53) + ".com"
     expect(email.length).toBe(254)
-    const { error } = loginSchema.validate({ email, password: "x".repeat(128) })
+    const { error } = loginSchema.safeParse({ email, password: "x".repeat(128) })
     expect(error).toBeUndefined()
   })
 
   it("cambiarPasswordSchema: actual > 128 → error", () => {
-    const { error } = cambiarPasswordSchema.validate({ actual: "x".repeat(129), nueva: "newPass1!" })
+    const { error } = cambiarPasswordSchema.safeParse({ actual: "x".repeat(129), nueva: "newPass1!" })
     expect(error).toBeDefined()
   })
 
   it("cambiarPasswordSchema: nueva > 128 → error", () => {
-    const { error } = cambiarPasswordSchema.validate({ actual: "old1!", nueva: "x".repeat(129) })
+    const { error } = cambiarPasswordSchema.safeParse({ actual: "old1!", nueva: "x".repeat(129) })
     expect(error).toBeDefined()
   })
 
   it("createUserSchema: nombre > 200 chars → error", () => {
-    const { error } = createUserSchema.validate({
+    const { error } = createUserSchema.safeParse({
       nombre: "A".repeat(201), email: "a@t.com", rol: "qa",
     })
     expect(error).toBeDefined()
@@ -403,12 +403,12 @@ describe("Auth validators — límites .max()", () => {
 
   it("createUserSchema: email > 254 chars → error", () => {
     const email = "user@" + "a".repeat(63) + "." + "a".repeat(63) + "." + "a".repeat(63) + "." + "a".repeat(55) + ".com"
-    const { error } = createUserSchema.validate({ nombre: "Ana", email, rol: "qa" })
+    const { error } = createUserSchema.safeParse({ nombre: "Ana", email, rol: "qa" })
     expect(error).toBeDefined()
   })
 
   it("updateUserSchema: nombre > 200 chars → error", () => {
-    const { error } = updateUserSchema.validate({
+    const { error } = updateUserSchema.safeParse({
       id: "u-1", nombre: "A".repeat(201),
     })
     expect(error).toBeDefined()
@@ -416,14 +416,14 @@ describe("Auth validators — límites .max()", () => {
 
   it("updateUserSchema: email > 254 chars → error", () => {
     const email = "user@" + "a".repeat(63) + "." + "a".repeat(63) + "." + "a".repeat(63) + "." + "a".repeat(55) + ".com"
-    const { error } = updateUserSchema.validate({ id: "u-1", email })
+    const { error } = updateUserSchema.safeParse({ id: "u-1", email })
     expect(error).toBeDefined()
   })
 
   it("updateUserSchema: valores válidos exactos en límite → sin error", () => {
     const email = "user@" + "a".repeat(63) + "." + "a".repeat(63) + "." + "a".repeat(63) + "." + "a".repeat(53) + ".com"
     expect(email.length).toBe(254)
-    const { error } = updateUserSchema.validate({ id: "u-1", nombre: "A".repeat(200), email })
+    const { error } = updateUserSchema.safeParse({ id: "u-1", nombre: "A".repeat(200), email })
     expect(error).toBeUndefined()
   })
 })

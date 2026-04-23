@@ -1,11 +1,12 @@
 // ── POST /api/tareas/sync
 // Estrategia batch: deleteMany + findMany (IDs existentes) + createMany + Promise.all(updates)
 // → 4 queries fijas en lugar de N+1 secuenciales.
-import { NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import { z } from "zod"
 import { Prisma } from "@prisma/client"
 import { withAuth } from "@/lib/backend/middleware/with-auth"
-import { checkRateLimit, getClientIp, rlKey } from "@/lib/backend/middleware/rate-limit"
+import { requireRateLimit } from "@/lib/backend/middleware/guards"
+import { ValidationError, ForbiddenError } from "@/lib/backend/errors"
 import { prisma } from "@/lib/backend/prisma"
 import { invalidateMetricasCache } from "@/lib/backend/metricas-cache"
 import type { Tarea } from "@/lib/types"
@@ -18,26 +19,11 @@ const SyncBodySchema = z.object({
 })
 
 export const POST = withAuth(async (request, payload) => {
-  const ip = getClientIp(request.headers)
-  const rl = checkRateLimit(rlKey(ip, "POST /api/tareas/sync"), 10, 60_000)
-  if (!rl.allowed) {
-    const retryAfterSecs = Math.ceil((rl.resetAt - Date.now()) / 1000)
-    return NextResponse.json(
-      { error: "Demasiadas peticiones. Intenta en un momento." },
-      {
-        status: 429,
-        headers: {
-          "Retry-After":           String(retryAfterSecs),
-          "X-RateLimit-Limit":     "10",
-          "X-RateLimit-Remaining": "0",
-        },
-      }
-    )
-  }
+  await requireRateLimit(request, "POST /api/tareas/sync", 10, 60_000)
 
-  const parsed = SyncBodySchema.safeParse(await request.json())
+  const parsed = SyncBodySchema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) {
-    return NextResponse.json({ error: "Payload inválido", details: parsed.error.flatten() }, { status: 400 })
+    throw new ValidationError("Payload inválido", parsed.error.issues.map(i => i.message))
   }
   const tareas = parsed.data.tareas as unknown as Tarea[]
 
@@ -71,7 +57,7 @@ export const POST = withAuth(async (request, payload) => {
         const validSet = new Set(validCasos.map(c => c.id))
         const unauthorized = toCreate.filter(t => t.casoPruebaId && !validSet.has(t.casoPruebaId))
         if (unauthorized.length > 0) {
-          throw new Error("Acceso denegado: tareas fuera del workspace")
+          throw new ForbiddenError("Acceso denegado: tareas fuera del workspace")
         }
       }
       // skipDuplicates evita fallos si el caso padre aún no fue persistido (race con casos/sync)

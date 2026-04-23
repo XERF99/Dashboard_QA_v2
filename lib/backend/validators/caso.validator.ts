@@ -1,27 +1,34 @@
-import Joi from "joi"
+import { z } from "zod"
 
-export const createCasoSchema = Joi.object({
-  huId:                  Joi.string().required(),
-  titulo:                Joi.string().trim().max(500).required(),
-  descripcion:           Joi.string().allow("").max(10000).default(""),
-  entorno:               Joi.string().valid("test", "preproduccion").default("test"),
-  tipoPrueba:            Joi.string().allow("").default(""),
-  horasEstimadas:        Joi.number().min(0).default(0),
-  complejidad:           Joi.string().valid("alta", "media", "baja").default("media"),
-  archivosAnalizados:    Joi.array().items(Joi.string().max(500)).max(100).default([]),
-  creadoPor:             Joi.string().required(),
+const isoDateLike = z.union([z.string().datetime({ offset: true }), z.string().datetime(), z.date()])
+  .or(z.string().refine(v => !isNaN(Date.parse(v)), "Fecha inválida"))
+
+const createCasoBase = z.object({
+  huId:               z.string(),
+  titulo:             z.string().trim().max(500),
+  descripcion:        z.string().max(10_000).default(""),
+  entorno:            z.enum(["test", "preproduccion"]).default("test"),
+  tipoPrueba:         z.string().default(""),
+  horasEstimadas:     z.number().min(0).default(0),
+  complejidad:        z.enum(["alta", "media", "baja"]).default("media"),
+  archivosAnalizados: z.array(z.string().max(500)).max(100).default([]),
+  creadoPor:          z.string(),
 })
 
-export const updateCasoSchema = createCasoSchema.keys({
-  estadoAprobacion:       Joi.string().valid("borrador", "pendiente_aprobacion", "aprobado", "rechazado").optional(),
-  aprobadoPor:            Joi.string().optional().allow(null, ""),
-  fechaAprobacion:        Joi.alternatives(Joi.date(), Joi.string().isoDate()).optional().allow(null),
-  motivoRechazo:          Joi.string().optional().allow(null, ""),
-  modificacionHabilitada: Joi.boolean().optional(),
-  motivoModificacion:     Joi.string().optional().allow(null, ""),
-  modificacionSolicitada: Joi.boolean().optional(),
-  resultadosPorEtapa:     Joi.array().max(100).default([]),
-  tareasIds:              Joi.array().items(Joi.string()).max(500).default([]),
-  bloqueos:               Joi.array().max(100).default([]),
-  comentarios:            Joi.array().max(200).default([]),
+export const createCasoSchema = createCasoBase
+export type CreateCasoDTO = z.infer<typeof createCasoSchema>
+
+export const updateCasoSchema = createCasoBase.extend({
+  estadoAprobacion:       z.enum(["borrador", "pendiente_aprobacion", "aprobado", "rechazado"]).optional(),
+  aprobadoPor:            z.string().nullable().optional(),
+  fechaAprobacion:        isoDateLike.nullable().optional(),
+  motivoRechazo:          z.string().nullable().optional(),
+  modificacionHabilitada: z.boolean().optional(),
+  motivoModificacion:     z.string().nullable().optional(),
+  modificacionSolicitada: z.boolean().optional(),
+  resultadosPorEtapa:     z.array(z.any()).max(100).default([]),
+  tareasIds:              z.array(z.string()).max(500).default([]),
+  bloqueos:               z.array(z.any()).max(100).default([]),
+  comentarios:            z.array(z.any()).max(200).default([]),
 })
+export type UpdateCasoDTO = z.infer<typeof updateCasoSchema>

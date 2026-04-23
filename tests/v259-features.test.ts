@@ -119,34 +119,34 @@ describe("cambiarPasswordSchema — complejidad de contraseña", () => {
   const valid = { actual: "currentPass", nueva: "Secure@123" }
 
   it("contraseña solo dígitos → error de complejidad", () => {
-    const { error } = cambiarPasswordSchema.validate({ ...valid, nueva: "12345678" })
+    const { error } = cambiarPasswordSchema.safeParse({ ...valid, nueva: "12345678" })
     expect(error).toBeDefined()
     expect(error!.message).toMatch(/mayúscula|complejidad|carácter especial/i)
   })
 
   it("contraseña sin mayúscula → error de complejidad", () => {
-    const { error } = cambiarPasswordSchema.validate({ ...valid, nueva: "secure@123" })
+    const { error } = cambiarPasswordSchema.safeParse({ ...valid, nueva: "secure@123" })
     expect(error).toBeDefined()
   })
 
   it("contraseña sin símbolo → error de complejidad", () => {
-    const { error } = cambiarPasswordSchema.validate({ ...valid, nueva: "Secure1234" })
+    const { error } = cambiarPasswordSchema.safeParse({ ...valid, nueva: "Secure1234" })
     expect(error).toBeDefined()
   })
 
   it("contraseña corta (< 8 chars) → error de longitud", () => {
-    const { error } = cambiarPasswordSchema.validate({ ...valid, nueva: "Se@1" })
+    const { error } = cambiarPasswordSchema.safeParse({ ...valid, nueva: "Se@1" })
     expect(error).toBeDefined()
     expect(error!.message).toMatch(/8 caracteres/i)
   })
 
   it("contraseña válida con todos los requisitos → sin error", () => {
-    const { error } = cambiarPasswordSchema.validate({ ...valid, nueva: "Secure@123" })
+    const { error } = cambiarPasswordSchema.safeParse({ ...valid, nueva: "Secure@123" })
     expect(error).toBeUndefined()
   })
 
   it("contraseña con caracteres especiales variados → sin error", () => {
-    const { error } = cambiarPasswordSchema.validate({ ...valid, nueva: "P@ssw0rd!" })
+    const { error } = cambiarPasswordSchema.safeParse({ ...valid, nueva: "P@ssw0rd!" })
     expect(error).toBeUndefined()
   })
 })

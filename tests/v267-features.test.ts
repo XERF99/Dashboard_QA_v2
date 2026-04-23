@@ -71,12 +71,12 @@ describe("Services — use base-crud utilities", () => {
 
   it("caso.service uses softDelete for simple delete", () => {
     const src = read("lib/backend/services/caso.service.ts")
-    expect(src).toMatch(/export async function deleteCaso.*\n.*softDelete/)
+    expect(src).toMatch(/export async function deleteCaso[\s\S]*?softDelete/)
   })
 
   it("tarea.service uses softDelete for simple delete", () => {
     const src = read("lib/backend/services/tarea.service.ts")
-    expect(src).toMatch(/export async function deleteTarea.*\n.*softDelete/)
+    expect(src).toMatch(/export async function deleteTarea[\s\S]*?softDelete/)
   })
 
   it("services no longer declare their own notDeleted", () => {

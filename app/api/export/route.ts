@@ -7,9 +7,10 @@
 //
 //  Ejemplo: GET /api/export?tipo=historias&sprint=Sprint+3
 
-import { NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import { withAuth } from "@/lib/backend/middleware/with-auth"
-import { checkRateLimit, getClientIp, rlKey } from "@/lib/backend/middleware/rate-limit"
+import { requireRateLimit } from "@/lib/backend/middleware/guards"
+import { ValidationError } from "@/lib/backend/errors"
 import { prisma } from "@/lib/backend/prisma"
 
 // ── Utilidades CSV ────────────────────────────────────────
@@ -37,22 +38,7 @@ function toCsv(headers: string[], rows: unknown[][]): string {
 // ── Handler ───────────────────────────────────────────────
 
 export const GET = withAuth(async (request, payload) => {
-  const ip = getClientIp(request.headers)
-  const rl = checkRateLimit(rlKey(ip, "GET /api/export"), 20, 60_000) // 20 exports per minute
-  if (!rl.allowed) {
-    const retryAfterSecs = Math.ceil((rl.resetAt - Date.now()) / 1000)
-    return NextResponse.json(
-      { error: "Demasiadas peticiones. Intenta en un momento." },
-      {
-        status: 429,
-        headers: {
-          "Retry-After":           String(retryAfterSecs),
-          "X-RateLimit-Limit":     "20",
-          "X-RateLimit-Remaining": "0",
-        },
-      }
-    )
-  }
+  await requireRateLimit(request, "GET /api/export", 20, 60_000)
 
   const { searchParams } = request.nextUrl
   const tipo       = searchParams.get("tipo")
@@ -61,10 +47,7 @@ export const GET = withAuth(async (request, payload) => {
   const exportLimit = Math.min(5000, Math.max(1, parseInt(searchParams.get("limit") ?? "5000") || 5000))
 
   if (tipo !== "historias" && tipo !== "casos") {
-    return NextResponse.json(
-      { error: "El parámetro 'tipo' debe ser 'historias' o 'casos'" },
-      { status: 400 }
-    )
+    throw new ValidationError("El parámetro 'tipo' debe ser 'historias' o 'casos'")
   }
 
   let csv: string

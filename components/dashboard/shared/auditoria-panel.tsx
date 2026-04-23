@@ -152,7 +152,7 @@ export function AuditoriaPanel({ historias, onVerHU }: Props) {
         <thead><tr><th>Fecha</th><th>Tipo</th><th>Descripción</th><th>Usuario</th><th>Historia</th></tr></thead>
         <tbody>${filas}</tbody>
       </table>
-      <script>window.onload=()=>{window.print();setTimeout(()=>window.close(),500)}<\/script>
+      <script>window.onload=()=>{window.print();setTimeout(()=>window.close(),500)}</script>
       </body></html>`
     const w = window.open("", "_blank", "width=900,height=700")
     if (w) { w.document.write(html); w.document.close() }

@@ -218,13 +218,13 @@ describe("POST /api/casos/sync", () => {
     expect(data.count).toBe(0)
   })
 
-  it("workspace isolation: HU de otro grupo → 500 (tx rechaza)", async () => {
+  it("workspace isolation: HU de otro grupo → 403 (ForbiddenError)", async () => {
     // No hay HUs válidas para el grupoId del usuario
     mockPrismaSync.casoPrueba.findMany.mockResolvedValue([])
     mockPrismaSync.historiaUsuario.findMany.mockResolvedValue([])
     const casos = [{ id: "c-x", titulo: "Hack", huId: "hu-otro-grupo" }]
     const res = await syncCasos(makeReq({ casos }, adminToken))
-    expect(res.status).toBe(500)
+    expect(res.status).toBe(403)
   })
 })
 
@@ -271,12 +271,12 @@ describe("POST /api/tareas/sync", () => {
     expect(data.count).toBe(1)
   })
 
-  it("workspace isolation: caso de otro grupo → 500 (tx rechaza)", async () => {
+  it("workspace isolation: caso de otro grupo → 403 (ForbiddenError)", async () => {
     // No hay casos válidos para el grupoId del usuario
     mockPrismaSync.tarea.findMany.mockResolvedValue([])
     mockPrismaSync.casoPrueba.findMany.mockResolvedValue([])
     const tareas = [{ id: "t-x", titulo: "Hack", casoPruebaId: "c-otro" }]
     const res = await syncTareas(makeReq({ tareas }, adminToken))
-    expect(res.status).toBe(500)
+    expect(res.status).toBe(403)
   })
 })

@@ -42,8 +42,10 @@ describe("Command Palette", () => {
     expect(src).toContain("Tema")
   })
 
-  it("is integrated in page.tsx", () => {
-    const src = read("app/page.tsx")
+  it("is integrated in the dashboard client body", () => {
+    // v2.80 — migrado a app/_dashboard-client.tsx cuando page.tsx
+    // pasó a Server Component.
+    const src = read("app/_dashboard-client.tsx")
     expect(src).toContain("CommandPalette")
     expect(src).toContain("cmdPaletteOpen")
     expect(src).toContain("onOpenCommandPalette")
@@ -96,7 +98,8 @@ describe("Refresh Token mechanism", () => {
 describe("POST /api/auth/refresh route", () => {
   it("route file exists with POST handler", () => {
     const src = read("app/api/auth/refresh/route.ts")
-    expect(src).toContain("export async function POST")
+    // v2.71: POST migrado a decorador withErrorHandler
+    expect(src).toMatch(/export\s+(async\s+function|const)\s+POST/)
     expect(src).toContain("tcs_refresh")
     expect(src).toContain("signRefreshToken")
   })
@@ -115,7 +118,7 @@ describe("POST /api/auth/refresh route", () => {
   })
 
   it("is listed as a public route in Edge middleware", () => {
-    const src = read("middleware.ts")
+    const src = read("proxy.ts")
     expect(src).toContain("/api/auth/refresh")
   })
 })
@@ -148,21 +151,21 @@ describe("Logout — clears refresh token", () => {
 // ── 7. CSRF protection ─────────────────────────────────
 describe("CSRF protection in Edge middleware", () => {
   it("validates origin/referer for mutating methods", () => {
-    const src = read("middleware.ts")
+    const src = read("proxy.ts")
     expect(src).toContain("MUTATING_METHODS")
     expect(src).toContain("isValidOrigin")
     expect(src).toMatch(/POST.*PUT.*PATCH.*DELETE/)
   })
 
   it("checks origin header against host", () => {
-    const src = read("middleware.ts")
+    const src = read("proxy.ts")
     expect(src).toContain('request.headers.get("origin")')
     expect(src).toContain('request.headers.get("referer")')
     expect(src).toContain('request.headers.get("host")')
   })
 
   it("returns 403 for invalid origin", () => {
-    const src = read("middleware.ts")
+    const src = read("proxy.ts")
     expect(src).toContain("CSRF")
     expect(src).toContain("403")
   })

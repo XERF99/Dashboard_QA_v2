@@ -45,15 +45,15 @@ describe("Logger — AsyncLocalStorage", () => {
 })
 
 // ══════════════════════════════════════════════════════════
-//  2. Middleware centralizado — /middleware.ts
+//  2. Middleware centralizado — /proxy.ts
 // ══════════════════════════════════════════════════════════
 describe("Next.js middleware centralizado", () => {
-  it("existe middleware.ts en la raíz del proyecto", () => {
-    expect(fs.existsSync(path.resolve("middleware.ts"))).toBe(true)
+  it("existe proxy.ts en la raíz del proyecto", () => {
+    expect(fs.existsSync(path.resolve("proxy.ts"))).toBe(true)
   })
 
   it("protege rutas de API y permite rutas públicas", () => {
-    const src = read("middleware.ts")
+    const src = read("proxy.ts")
     expect(src).toContain("/api/auth/login")
     expect(src).toContain("/api/health")
     expect(src).toContain("jwtVerify")
@@ -61,7 +61,7 @@ describe("Next.js middleware centralizado", () => {
   })
 
   it("extrae token de Authorization header y cookie", () => {
-    const src = read("middleware.ts")
+    const src = read("proxy.ts")
     expect(src).toContain("Bearer ")
     expect(src).toContain("tcs_token")
   })
@@ -70,7 +70,10 @@ describe("Next.js middleware centralizado", () => {
 // ══════════════════════════════════════════════════════════
 //  3. request.json() protegido con .catch()
 // ══════════════════════════════════════════════════════════
-describe("request.json() con .catch() — 4 rutas", () => {
+describe("body JSON inválido — 4 rutas (delegado a requireBody en v2.71)", () => {
+  // v2.71: la lógica request.json().catch + ValidationError vive en el guard
+  // `requireBody` (lib/backend/middleware/guards.ts). Las rutas ya no repiten
+  // el patrón; solo invocan requireBody(request, schema).
   const routes = [
     "app/api/historias/route.ts",
     "app/api/casos/route.ts",
@@ -79,11 +82,16 @@ describe("request.json() con .catch() — 4 rutas", () => {
   ]
 
   routes.forEach(route => {
-    it(`${route} — usa request.json().catch()`, () => {
+    it(`${route} — delega el parseo de body a requireBody`, () => {
       const src = read(route)
-      expect(src).toContain("request.json().catch(() => null)")
-      expect(src).toContain("Body JSON inválido")
+      expect(src).toContain("requireBody(request")
     })
+  })
+
+  it("requireBody centraliza el manejo de body inválido", () => {
+    const src = read("lib/backend/middleware/guards.ts")
+    expect(src).toContain("request.json().catch(() => null)")
+    expect(src).toContain("Body JSON inválido")
   })
 })
 

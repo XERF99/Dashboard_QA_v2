@@ -12,6 +12,7 @@ import type { ConfigEtapas, TipoAplicacionDef, AmbienteDef, TipoPruebaDef, Resul
 import { APLICACIONES_PREDETERMINADAS } from "@/components/dashboard/config/aplicaciones-config"
 import { useState, useEffect, useRef } from "react"
 import { api } from "@/lib/services/api/client"
+import { clientWarn } from "@/lib/client-logger"
 
 /**
  * Gestiona toda la configuración de la aplicación:
@@ -77,7 +78,7 @@ export function useConfig({ isAuthenticated = false }: { isAuthenticated?: boole
       })
       .finally(() => { if (!controller.signal.aborted) setSprintsLoading(false) })
     return () => controller.abort()
-  }, [isAuthenticated]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isAuthenticated])  
 
   // ── Carga inicial de config desde API — cancelable al desmontar ──
   const initialLoadDone = useRef(false)
@@ -121,7 +122,7 @@ export function useConfig({ isAuthenticated = false }: { isAuthenticated?: boole
         aplicaciones:    aplicaciones.filter(a => a.trim() !== ""),
       }).catch((err: unknown) => {
         const msg = err instanceof Error ? err.message : "Error al sincronizar configuración"
-        console.warn("[Config] Error sincronizando config:", msg)
+        clientWarn("Config", "Error sincronizando config", err)
         setConfigSyncError(msg)
       })
     }, 600)
@@ -143,8 +144,8 @@ export function useConfig({ isAuthenticated = false }: { isAuthenticated?: boole
       objetivo: data.objetivo,
     }).then(r => {
       setSprints(p => p.map(s => s.id === tempId ? r.sprint : s))
-    }).catch(() => {
-      console.warn("[Sprints] Error al crear sprint en API")
+    }).catch(err => {
+      clientWarn("Sprints", "Error al crear sprint en API", err)
     })
     return { success: true }
   }
@@ -155,15 +156,15 @@ export function useConfig({ isAuthenticated = false }: { isAuthenticated?: boole
       fechaInicio: s.fechaInicio,
       fechaFin: s.fechaFin,
       objetivo: s.objetivo,
-    }).catch(() => {
-      console.warn("[Sprints] Error al actualizar sprint en API")
+    }).catch(err => {
+      clientWarn("Sprints", "Error al actualizar sprint en API", err)
     })
     return { success: true }
   }
   const deleteSprint = (id: string) => {
     setSprints(p => p.filter(s => s.id !== id))
     api.delete(`/api/sprints/${id}`)
-      .catch(() => console.warn("[Sprints] Error al eliminar sprint en API"))
+      .catch(err => clientWarn("Sprints", "Error al eliminar sprint en API", err))
     return { success: true }
   }
 

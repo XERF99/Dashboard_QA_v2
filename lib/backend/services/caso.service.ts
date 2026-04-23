@@ -33,3 +33,22 @@ export async function updateCaso(id: string, data: Prisma.CasoPruebaUncheckedUpd
 export async function deleteCaso(id: string) {
   return softDelete(prisma.casoPrueba, id)
 }
+
+// ── Interface (v2.73) ─────────────────────────────────────────
+export interface CasoService {
+  getAll:   typeof getAllCasos
+  getById:  typeof getCasoById
+  getByHU:  typeof getCasosByHU
+  create:   typeof createCaso
+  update:   typeof updateCaso
+  delete:   typeof deleteCaso
+}
+
+export const casoService: CasoService = {
+  getAll:   getAllCasos,
+  getById:  getCasoById,
+  getByHU:  getCasosByHU,
+  create:   createCaso,
+  update:   updateCaso,
+  delete:   deleteCaso,
+}
